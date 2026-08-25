@@ -292,7 +292,8 @@ function ProfilePanel() {
 
       {error && <p style={{ fontSize: 12.5, color: P.danger, margin: "0 0 12px" }}>{error}</p>}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+      <style>{`@media (max-width: 640px) { .settings-profile-grid { grid-template-columns: 1fr !important; } }`}</style>
+      <div className="settings-profile-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <Field label="Business Name">
           <div style={{ display: "flex", gap: 8 }}>
             <input value={name} onChange={(e) => setName(e.target.value)} disabled={bizLoading} style={{ ...inputStyle, flex: 1 }} />
@@ -583,7 +584,8 @@ function BookingPanel() {
 
           <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, marginBottom: 8 }}>Booking rules</div>
           <Card style={{ padding: 16, marginBottom: 16 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+            <style>{`@media (max-width: 640px) { .settings-booking-grid { grid-template-columns: 1fr !important; } }`}</style>
+            <div className="settings-booking-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
               <Field label="Minimum lead time">
                 <select value={leadTime} onChange={(e) => setLeadTime(e.target.value)} style={inputStyle}>
                   {["Same day", "24 hours", "48 hours", "1 week"].map((o) => <option key={o}>{o}</option>)}

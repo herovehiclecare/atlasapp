@@ -416,7 +416,8 @@ function TiersPreview({ tiers, vehicle, services, addonsAll, taxRate, light }) {
   const textMuted = light ? "#555" : P.textMuted;
   const border = light ? "#ddd" : P.border;
   return (
-    <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(tiers.length, 1)}, minmax(0,1fr))`, gap: 10 }}>
+    <div className="tiers-preview-grid" style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(tiers.length, 1)}, minmax(0,1fr))`, gap: 10 }}>
+      <style>{`@media (max-width: 640px) { .tiers-preview-grid { grid-template-columns: 1fr !important; } }`}</style>
       {tiers.map((tier) => {
         const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, taxRate);
         const names = [
@@ -678,7 +679,8 @@ function StepCustomize({ addonsAll, addons, toggleAddon, discount, setDiscount, 
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 12 }}>
+      <style>{`@media (max-width: 640px) { .customize-discount-tax-grid { grid-template-columns: 1fr !important; } }`}</style>
+      <div className="customize-discount-tax-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 12 }}>
         <div>
           <label style={{ fontSize: 12, fontWeight: 600, color: P.textSecondary, display: "block", marginBottom: 6 }}>Discount ($)</label>
           <input type="number" min="0" value={discount} onChange={(e) => setDiscount(Number(e.target.value) || 0)} style={{ width: "100%", background: P.surface, border: `1px solid ${P.border}`, borderRadius: 9, padding: "9px 12px", color: P.textPrimary, fontSize: 13.5, outline: "none" }} />
