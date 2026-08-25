@@ -152,7 +152,7 @@ function FollowUpsQuickAdd({ customers, onAdd }) {
   return (
     <form onSubmit={submit} style={{ display: "flex", gap: 6, padding: "12px 18px", borderBottom: `1px solid ${P.border}`, flexWrap: "wrap" }}>
       <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a follow-up…" style={{ flex: "1 1 160px", background: P.bgTop, border: `1px solid ${P.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 12.5, color: P.textPrimary, outline: "none" }} />
-      <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ background: P.bgTop, border: `1px solid ${P.border}`, borderRadius: 8, padding: "7px 8px", fontSize: 12, color: P.textPrimary, outline: "none", width: 132 }} />
+      <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ background: P.bgTop, border: `1px solid ${P.border}`, borderRadius: 8, padding: "7px 8px", fontSize: 12, color: P.textPrimary, outline: "none", width: 132, colorScheme: "dark" }} />
       {customers.length > 0 && (
         <select value={customerId} onChange={(e) => setCustomerId(e.target.value)} style={{ background: P.bgTop, border: `1px solid ${P.border}`, borderRadius: 8, padding: "7px 8px", fontSize: 12, color: customerId ? P.textPrimary : P.textMuted, outline: "none", maxWidth: 120 }}>
           <option value="">No customer</option>

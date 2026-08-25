@@ -441,7 +441,7 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label style={labelStyle}>Due date</label>
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={inputStyle} />
+              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ ...inputStyle, colorScheme: "dark" }} />
             </div>
             <div style={{ flex: 1 }}>
               <label style={labelStyle}>Status</label>

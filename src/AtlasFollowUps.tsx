@@ -177,7 +177,7 @@ function FollowUpModal({ businessId, customers, followUp, onClose, onSaved }) {
           </div>
           <div>
             <label style={labelStyle}>Due date</label>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={inputStyle} />
+            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ ...inputStyle, colorScheme: "dark" }} />
           </div>
           <div>
             <label style={labelStyle}>Customers {customerIds.length > 0 ? `(${customerIds.length} selected)` : "(optional — pick one or several)"}</label>

@@ -439,11 +439,11 @@ function AddJobModal({ businessId, customers, vehicles, services, initialDate, o
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label style={labelStyle}>Date</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={inputStyle} />
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ ...inputStyle, colorScheme: "dark" }} />
             </div>
             <div style={{ flex: 1 }}>
               <label style={labelStyle}>Time</label>
-              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} style={inputStyle} />
+              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} style={{ ...inputStyle, colorScheme: "dark" }} />
             </div>
             <div style={{ flex: 1 }}>
               <label style={labelStyle}>Status</label>

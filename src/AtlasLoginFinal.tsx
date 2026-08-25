@@ -54,6 +54,12 @@ export default function AtlasLogin() {
     setStatus("idle");
   }
 
+  function goHome() {
+    setMode("signin");
+    setErrors({});
+    setStatus("idle");
+  }
+
   function validate() {
     const next = {};
     if (!email.trim()) next.email = "Enter your email address.";
@@ -127,10 +133,15 @@ export default function AtlasLogin() {
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');`}</style>
 
       <div style={{ width: "100%", maxWidth: 400 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 36 }}>
+        <button
+          type="button"
+          onClick={goHome}
+          title="Back to sign in"
+          style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 36, background: "transparent", border: "none", padding: 0, cursor: "pointer" }}
+        >
           <AtlasMark size={32} />
           <span style={{ fontSize: 19, fontWeight: 700, color: P.textPrimary, letterSpacing: "0.01em" }}>Atlas</span>
-        </div>
+        </button>
 
         {status === "success" ? (
           <div style={{ textAlign: "center", padding: "24px 0" }}>
