@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings, Sparkles,
   MoreHorizontal, Pencil, Camera, Plus, ChevronLeft, ChevronRight,
-  X, Eye, EyeOff, Loader2, ListChecks,
+  X, Eye, EyeOff, Loader2, ListChecks, Check, Copy, MessageSquare,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
@@ -360,7 +360,26 @@ function DayView({ jobs, selectedDate, servicesById }) {
 
 /* ---------------------------------- Add Job modal ---------------------------------- */
 
-function AddJobModal({ businessId, customers, vehicles, services, initialDate, onClose, onAdded }) {
+const DEFAULT_BOOKING_SCRIPT =
+  "Hi {customer_first}, this confirms your appointment with {business} for {vehicle} on {date} at {time}. See you then!";
+
+function fillJobScript(template, ctx) {
+  return (template || "")
+    .replace(/\{customer_first\}/g, ctx.customerFirst || "there")
+    .replace(/\{vehicle\}/g, ctx.vehicle || "your vehicle")
+    .replace(/\{date\}/g, ctx.date || "")
+    .replace(/\{time\}/g, ctx.time || "")
+    .replace(/\{business\}/g, ctx.business || "us");
+}
+
+function formatJobDateTime(d) {
+  return {
+    date: d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
+    time: d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+  };
+}
+
+function AddJobModal({ businessId, businessName, customers, vehicles, services, initialDate, onClose, onAdded }) {
   const [customerId, setCustomerId] = useState("");
   const [vehicleId, setVehicleId] = useState("");
   const [serviceIds, setServiceIds] = useState([]);
@@ -369,6 +388,13 @@ function AddJobModal({ businessId, customers, vehicles, services, initialDate, o
   const [status, setStatus] = useState("scheduled");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Set once the job is created — switches this modal from the booking form
+  // to a "here's what the customer gets" confirmation-text preview instead
+  // of just closing, since sending that text is still a manual step today.
+  const [createdJob, setCreatedJob] = useState(null);
+  const [script, setScript] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const vehiclesForCustomer = customerId ? vehicles.filter((v) => v.customer_id === customerId) : vehicles;
   const categories = [...new Set(services.map((s) => s.category))];
@@ -397,7 +423,7 @@ function AddJobModal({ businessId, customers, vehicles, services, initialDate, o
         scheduled_at: scheduledAt,
         status,
       })
-      .select("*, customers(name), vehicles(label, size_class)")
+      .select("*, customers(name, phone), vehicles(label, size_class)")
       .single();
 
     setSaving(false);
@@ -406,6 +432,22 @@ function AddJobModal({ businessId, customers, vehicles, services, initialDate, o
       return;
     }
     onAdded(data);
+
+    const { date: dLabel, time: tLabel } = formatJobDateTime(new Date(data.scheduled_at));
+    setScript(fillJobScript(DEFAULT_BOOKING_SCRIPT, {
+      customerFirst: data.customers?.name?.split(" ")[0] || "there",
+      vehicle: data.vehicles?.label || "your vehicle",
+      date: dLabel,
+      time: tLabel,
+      business: businessName || "us",
+    }));
+    setCreatedJob(data);
+  }
+
+  function copyScript() {
+    navigator.clipboard?.writeText(script).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
 
   return (
@@ -413,9 +455,54 @@ function AddJobModal({ businessId, customers, vehicles, services, initialDate, o
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 50 }} />
       <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(460px, calc(100vw - 32px))", maxHeight: "calc(100vh - 40px)", overflowY: "auto", background: P.bg, border: `1px solid ${P.border}`, borderRadius: 16, zIndex: 51, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: P.textPrimary }}>New job</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: P.textPrimary }}>{createdJob ? "Job scheduled" : "New job"}</span>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", display: "flex" }}><X size={18} /></button>
         </div>
+        {createdJob ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ textAlign: "center", padding: "4px 0 2px" }}>
+              <div style={{ width: 46, height: 46, borderRadius: "50%", background: P.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
+                <Check size={20} color={P.accent} />
+              </div>
+              <p style={{ fontSize: 13, color: P.textSecondary, margin: 0 }}>This is what {createdJob.customers?.name?.split(" ")[0] || "the customer"} would get — sending is still manual for now.</p>
+            </div>
+
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <label style={labelStyle}>Confirmation text preview</label>
+                <button type="button" onClick={copyScript} style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "none", color: P.accent, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>
+                  {copied ? <Check size={12} /> : <Copy size={12} />} {copied ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <textarea value={script} onChange={(e) => setScript(e.target.value)} rows={4} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "10px 12px" }}>
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: P.textPrimary }}>Send automatically</div>
+                <div style={{ fontSize: 11, color: P.textMuted, marginTop: 2 }}>Needs a texting service connected first — coming soon.</div>
+              </div>
+              <div title="Not connected yet" style={{ width: 34, height: 20, borderRadius: 20, background: P.border, position: "relative", opacity: 0.5, flexShrink: 0 }}>
+                <div style={{ width: 16, height: 16, borderRadius: "50%", background: P.textMuted, position: "absolute", top: 2, left: 2 }} />
+              </div>
+            </div>
+
+            {createdJob.customers?.phone ? (
+              <a
+                href={`sms:${createdJob.customers.phone}?body=${encodeURIComponent(script)}`}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: `linear-gradient(120deg, ${P.accent}, ${P.secondary})`, color: P.bg, borderRadius: 10, padding: "11px 16px", fontSize: 13.5, fontWeight: 700, textDecoration: "none" }}
+              >
+                <MessageSquare size={15} /> Text this to {createdJob.customers.name?.split(" ")[0] || "customer"}
+              </a>
+            ) : (
+              <p style={{ fontSize: 12, color: P.textMuted, textAlign: "center", margin: 0, fontStyle: "italic" }}>No phone number on file for this customer — copy the message above to send it another way.</p>
+            )}
+
+            <button type="button" onClick={onClose} style={{ background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 10, padding: "10px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              Done
+            </button>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {error && <div style={{ fontSize: 12.5, color: P.danger }}>{error}</div>}
 
@@ -480,6 +567,7 @@ function AddJobModal({ businessId, customers, vehicles, services, initialDate, o
             {saving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : "Create job"}
           </button>
         </form>
+        )}
       </div>
     </>
   );
@@ -528,7 +616,7 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
       setLoadingJobs(true);
       const [jobsResult, customersResult, vehiclesResult, servicesResult] = await Promise.all([
         supabase.from("jobs").select("*, customers(name), vehicles(label, size_class)").eq("business_id", businessId).order("scheduled_at", { ascending: true }),
-        supabase.from("customers").select("id, name").eq("business_id", businessId).order("name", { ascending: true }),
+        supabase.from("customers").select("id, name, phone").eq("business_id", businessId).order("name", { ascending: true }),
         supabase.from("vehicles").select("id, label, customer_id, size_class").eq("business_id", businessId).order("label", { ascending: true }),
         supabase.from("services").select("id, name, category, price_car_low, price_suv_low").eq("business_id", businessId).order("sort_order", { ascending: true }),
       ]);
@@ -560,7 +648,8 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
 
   function handleAdded(job) {
     setJobs((js) => [...js, job].sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at)));
-    setAddOpen(false);
+    // Modal stays open after this — it switches itself to a confirmation-text
+    // preview screen and closes only when the user dismisses it from there.
   }
 
   async function moveJob(id, newDate) {
@@ -758,6 +847,7 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
       {addOpen && (
         <AddJobModal
           businessId={businessId}
+          businessName={businessName}
           customers={customers}
           vehicles={vehicles}
           services={services}

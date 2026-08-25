@@ -193,11 +193,11 @@ function FollowUpsList({ items, customersById, onComplete }) {
 
 /* ---------------------------------- KPI tile (colored circles, no pills, overlap-safe) ---------------------------------- */
 
-function Tile({ stat, span, big, earnings }) {
+function Tile({ stat, tileClass, big, earnings }) {
   const color = HUES[stat.hue];
   const tint = `${color}22`;
   return (
-    <div style={{ gridColumn: span.col, gridRow: span.row, minWidth: 0, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 18, padding: big ? 18 : 14, display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 0, overflow: "hidden" }}>
+    <div className={tileClass} style={{ minWidth: 0, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 18, padding: big ? 18 : 14, display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 0, overflow: "hidden" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
         <div style={{ fontSize: big ? 11 : 10, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, minWidth: 0, flex: 1, lineHeight: 1.35 }}>
           {stat.label}
@@ -303,14 +303,39 @@ function ProfitBanner({ editMode, visible, onToggle, jobsToday, revenueToday }) 
 
 function BentoGrid({ kpi, earnings }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0,1fr))", gridAutoRows: "minmax(132px, auto)", gap: 12 }}>
-      <Tile stat={kpi.revenue} span={{ col: "1 / 3", row: "1 / 3" }} big earnings={earnings} />
-      <Tile stat={kpi.jobs} span={{ col: "3", row: "1" }} />
-      <Tile stat={kpi.customers} span={{ col: "4", row: "1" }} />
-      <Tile stat={kpi.pipeline} span={{ col: "3 / 5", row: "2" }} />
-      <Tile stat={kpi.outstanding} span={{ col: "1 / 3", row: "3" }} />
-      <Tile stat={kpi.avgTicket} span={{ col: "3 / 5", row: "3" }} />
-    </div>
+    <>
+      {/* Fixed at 4 columns, this squeezed the single-column tiles (Jobs,
+          Customers, Outstanding, Avg. Ticket) to ~90px wide on a phone,
+          wrapping their uppercase labels onto a second line that then
+          collided with the icon badge. Below 640px this drops to a 2-column
+          layout instead, with each tile given its own full-width row. */}
+      <style>{`
+        .atlas-bento { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); grid-auto-rows: minmax(132px, auto); gap: 12px; }
+        .atlas-bento .t-revenue { grid-column: 1 / 3; grid-row: 1 / 3; }
+        .atlas-bento .t-jobs { grid-column: 3; grid-row: 1; }
+        .atlas-bento .t-customers { grid-column: 4; grid-row: 1; }
+        .atlas-bento .t-pipeline { grid-column: 3 / 5; grid-row: 2; }
+        .atlas-bento .t-outstanding { grid-column: 1 / 3; grid-row: 3; }
+        .atlas-bento .t-avgticket { grid-column: 3 / 5; grid-row: 3; }
+        @media (max-width: 640px) {
+          .atlas-bento { grid-template-columns: repeat(2, minmax(0,1fr)); grid-auto-rows: minmax(110px, auto); }
+          .atlas-bento .t-revenue { grid-column: 1 / 3; grid-row: 1; }
+          .atlas-bento .t-jobs { grid-column: 1; grid-row: 2; }
+          .atlas-bento .t-customers { grid-column: 2; grid-row: 2; }
+          .atlas-bento .t-pipeline { grid-column: 1 / 3; grid-row: 3; }
+          .atlas-bento .t-outstanding { grid-column: 1; grid-row: 4; }
+          .atlas-bento .t-avgticket { grid-column: 2; grid-row: 4; }
+        }
+      `}</style>
+      <div className="atlas-bento">
+        <Tile stat={kpi.revenue} tileClass="t-revenue" big earnings={earnings} />
+        <Tile stat={kpi.jobs} tileClass="t-jobs" />
+        <Tile stat={kpi.customers} tileClass="t-customers" />
+        <Tile stat={kpi.pipeline} tileClass="t-pipeline" />
+        <Tile stat={kpi.outstanding} tileClass="t-outstanding" />
+        <Tile stat={kpi.avgTicket} tileClass="t-avgticket" />
+      </div>
+    </>
   );
 }
 
@@ -382,11 +407,11 @@ function BrandLockup({ size = 34, businessId, realName, realLogoUrl }) {
 function ActionButtons({ compact, onNewJob, onNewQuote }) {
   return (
     <div style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
-      <button onClick={onNewJob} style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 8, padding: compact ? "6px 10px" : "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", transform: "translateY(3px)" }}>
-        <Plus size={13} /> <span className="hidden sm:inline">New Job</span>
+      <button onClick={onNewJob} title="New Job" aria-label="New Job" style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 8, padding: compact ? "6px 10px" : "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", transform: "translateY(3px)" }}>
+        <Calendar size={13} /> <span className="hidden sm:inline">New Job</span>
       </button>
-      <button onClick={onNewQuote} style={{ display: "flex", alignItems: "center", gap: 5, background: `linear-gradient(120deg, ${P.accent}, ${P.secondary})`, color: P.bg, border: "none", borderRadius: 8, padding: compact ? "7px 12px" : "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
-        <Plus size={14} /> <span className="hidden sm:inline">New Quote</span>
+      <button onClick={onNewQuote} title="New Quote" aria-label="New Quote" style={{ display: "flex", alignItems: "center", gap: 5, background: `linear-gradient(120deg, ${P.accent}, ${P.secondary})`, color: P.bg, border: "none", borderRadius: 8, padding: compact ? "7px 12px" : "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+        <Sparkles size={14} /> <span className="hidden sm:inline">New Quote</span>
       </button>
     </div>
   );
