@@ -3,11 +3,11 @@ import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings, Plus,
   Sparkles, Search, MoreHorizontal, SlidersHorizontal,
   Phone, MessageSquare, ChevronRight, Download, ChevronDown, Pencil, Camera,
-  X, Loader2, ListChecks,
+  X, Loader2, ListChecks, Navigation, Check,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { formatDate, downloadCsv, resizeImageToDataUrl, useLiveClock, formatDateTime } from "./lib";
+import { formatDate, downloadCsv, resizeImageToDataUrl, useLiveClock, formatDateTime, directionsUrl } from "./lib";
 
 const P = {
   bg: "#06100C", bgTop: "#0B1813", surface: "#0F1B15", surfaceHover: "#132018",
@@ -169,9 +169,30 @@ function RowsView({ list, selected, toggleSelect, onOpenDetail }) {
 
 /* ---------------------------------- Customer Detail drawer ---------------------------------- */
 
-function CustomerDetail({ customer, onClose }) {
+function CustomerDetail({ customer, onClose, onUpdated }) {
+  const [editingAddress, setEditingAddress] = useState(false);
+  const [address, setAddress] = useState(customer?.address || "");
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [addressSaved, setAddressSaved] = useState(false);
+
+  useEffect(() => { setAddress(customer?.address || ""); setEditingAddress(false); }, [customer?.id]);
+
   if (!customer) return null;
   const color = colorForId(customer.id);
+
+  async function commitAddress() {
+    setEditingAddress(false);
+    if (address === (customer.address || "")) return;
+    setSavingAddress(true);
+    const { data, error } = await supabase.from("customers").update({ address: address.trim() || null }).eq("id", customer.id).select().single();
+    setSavingAddress(false);
+    if (!error && data) {
+      onUpdated?.(data);
+      setAddressSaved(true);
+      setTimeout(() => setAddressSaved(false), 1500);
+    }
+  }
+
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 40 }} />
@@ -199,6 +220,11 @@ function CustomerDetail({ customer, onClose }) {
             ) : (
               <span title="No phone on file" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textMuted, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, opacity: 0.5, cursor: "default" }}><MessageSquare size={13} /> Text</span>
             )}
+            {customer.address ? (
+              <a href={directionsUrl(customer.address)} target="_blank" rel="noopener noreferrer" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", textDecoration: "none" }}><Navigation size={13} /> Directions</a>
+            ) : (
+              <span title="No address on file" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textMuted, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, opacity: 0.5, cursor: "default" }}><Navigation size={13} /> Directions</span>
+            )}
           </div>
 
           <div>
@@ -206,6 +232,25 @@ function CustomerDetail({ customer, onClose }) {
             <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
               <div style={{ fontSize: 12.5, color: P.textSecondary }}>Phone: {customer.phone || "—"}</div>
               <div style={{ fontSize: 12.5, color: P.textSecondary }}>Email: {customer.email || "—"}</div>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
+                <span style={{ fontSize: 12.5, color: P.textSecondary, flexShrink: 0 }}>Address:</span>
+                {editingAddress ? (
+                  <input
+                    autoFocus
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    onBlur={commitAddress}
+                    onKeyDown={(e) => e.key === "Enter" && commitAddress()}
+                    placeholder="123 Main St, City, ST 12345"
+                    style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${P.accent}`, color: P.textPrimary, fontSize: 12.5, outline: "none", padding: 0, minWidth: 0 }}
+                  />
+                ) : (
+                  <button onClick={() => setEditingAddress(true)} style={{ flex: 1, display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "none", color: P.textSecondary, fontSize: 12.5, cursor: "pointer", padding: 0, textAlign: "left", minWidth: 0 }}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{customer.address || "—"}</span>
+                    {savingAddress ? <Loader2 size={11} className="animate-spin" style={{ flexShrink: 0 }} /> : addressSaved ? <Check size={11} color={P.accent} style={{ flexShrink: 0 }} /> : <Pencil size={10} color={P.textMuted} style={{ flexShrink: 0 }} />}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -220,6 +265,7 @@ function AddCustomerModal({ businessId, onClose, onAdded }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -234,7 +280,7 @@ function AddCustomerModal({ businessId, onClose, onAdded }) {
 
     const { data, error: insertError } = await supabase
       .from("customers")
-      .insert({ business_id: businessId, name: name.trim(), email: email.trim() || null, phone: phone.trim() || null })
+      .insert({ business_id: businessId, name: name.trim(), email: email.trim() || null, phone: phone.trim() || null, address: address.trim() || null })
       .select()
       .single();
 
@@ -268,6 +314,11 @@ function AddCustomerModal({ businessId, onClose, onAdded }) {
             <label style={{ display: "block", fontSize: 12.5, fontWeight: 500, color: P.textSecondary, marginBottom: 6 }}>Phone</label>
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="(555) 123-4567" style={inputStyle} />
           </div>
+          <div>
+            <label style={{ display: "block", fontSize: 12.5, fontWeight: 500, color: P.textSecondary, marginBottom: 6 }}>Address</label>
+            <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="123 Main St, City, ST 12345" style={inputStyle} />
+            <p style={{ fontSize: 11, color: P.textMuted, margin: "6px 0 0" }}>Used for one-tap directions on their scheduled jobs.</p>
+          </div>
           <button type="submit" disabled={saving} style={{ marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: `linear-gradient(120deg, ${P.accent}, ${P.secondary})`, color: P.bg, border: "none", borderRadius: 10, padding: "11px 16px", fontSize: 13.5, fontWeight: 700, cursor: saving ? "default" : "pointer", opacity: saving ? 0.85 : 1 }}>
             {saving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : "Add customer"}
           </button>
@@ -290,6 +341,11 @@ export default function AtlasCustomers({ onNavigate, currentPage = "customers" }
   const [detailCustomer, setDetailCustomer] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+
+  function handleCustomerUpdated(updated) {
+    setCustomers((cs) => cs.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
+    setDetailCustomer((c) => (c && c.id === updated.id ? { ...c, ...updated } : c));
+  }
 
   useEffect(() => {
     if (!businessId) return;
@@ -429,7 +485,7 @@ export default function AtlasCustomers({ onNavigate, currentPage = "customers" }
       )}
 
       {addOpen && <AddCustomerModal businessId={businessId} onClose={() => setAddOpen(false)} onAdded={handleAdded} />}
-      {detailCustomer && <CustomerDetail customer={detailCustomer} onClose={() => setDetailCustomer(null)} />}
+      {detailCustomer && <CustomerDetail customer={detailCustomer} onClose={() => setDetailCustomer(null)} onUpdated={handleCustomerUpdated} />}
     </div>
   );
 }

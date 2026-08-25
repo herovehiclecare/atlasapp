@@ -44,6 +44,12 @@ export function shortId(id) { return id ? id.slice(0, 8).toUpperCase() : "NEW"; 
 
 export function findService(services, id) { return services.find((s) => s.id === id); }
 
+// A plain Google Maps URL rather than an iOS-only maps:// link — it opens
+// the Google Maps app when installed (Android or iOS) and falls back to
+// Maps in the browser otherwise, so it works regardless of which map app
+// the customer's phone actually has.
+export function directionsUrl(address) { return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`; }
+
 // Services are priced per size class (car vs. suv/truck/van) rather than a
 // single flat number, so every price lookup needs the vehicle it applies to.
 // Shared by Quick Quote and Invoices so both itemize services identically.

@@ -2,11 +2,11 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings, Sparkles,
   MoreHorizontal, Pencil, Camera, Plus, ChevronLeft, ChevronRight,
-  X, Eye, EyeOff, Loader2, ListChecks, Check, Copy, MessageSquare, Trash2,
+  X, Eye, EyeOff, Loader2, ListChecks, Check, Copy, MessageSquare, Trash2, Navigation,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { resizeImageToDataUrl, useLiveClock, formatDateTime, mergeBusinessJsonb } from "./lib";
+import { resizeImageToDataUrl, useLiveClock, formatDateTime, mergeBusinessJsonb, directionsUrl } from "./lib";
 
 const P = {
   bg: "#06100C", bgTop: "#0B1813", surface: "#0F1B15", surfaceHover: "#132018",
@@ -274,6 +274,18 @@ function DayPreview({ date, jobs, servicesById, openFullDay, onClose, onAddJob, 
                 <div style={{ fontSize: 13, fontWeight: 600, color: P.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{j.customers?.name || "No customer"}</div>
                 <div style={{ fontSize: 11, color: P.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{j.vehicles?.label || "No vehicle"} · {jobServiceNames(j, servicesById)}</div>
               </div>
+              {j.customers?.address && (
+                <a
+                  href={directionsUrl(j.customers.address)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  title={`Directions to ${j.customers.address}`}
+                  style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 7, border: `1px solid ${P.border}`, color: P.accent, flexShrink: 0, textDecoration: "none" }}
+                >
+                  <Navigation size={12} />
+                </a>
+              )}
               {(() => { const est = estimateJobPrice(j, servicesById); return <div style={{ fontSize: 12.5, fontWeight: 700, color: est != null ? P.textPrimary : P.textMuted, flexShrink: 0 }}>{est != null ? money(est) : "—"}</div>; })()}
             </div>
           ))}
@@ -349,6 +361,18 @@ function DayView({ jobs, selectedDate, servicesById, onEditJob }) {
               <div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>{j.customers?.name || "No customer"}</div>
               <div style={{ fontSize: 12, color: P.textMuted }}>{j.vehicles?.label || "No vehicle"} · {jobServiceNames(j, servicesById)}</div>
             </div>
+            {j.customers?.address && (
+              <a
+                href={directionsUrl(j.customers.address)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                title={`Directions to ${j.customers.address}`}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 8, border: `1px solid ${P.border}`, color: P.accent, flexShrink: 0, textDecoration: "none" }}
+              >
+                <Navigation size={14} />
+              </a>
+            )}
             <span style={{ fontSize: 10.5, fontWeight: 700, padding: "3px 9px", borderRadius: 20, background: `${STATUS[j.status]}22`, color: STATUS[j.status], flexShrink: 0 }}>{STATUS_LABEL[j.status]}</span>
             <div style={{ fontSize: 13, fontWeight: 700, color: est != null ? P.textPrimary : P.textMuted, width: 64, textAlign: "right", flexShrink: 0 }}>{est != null ? money(est) : "—"}</div>
           </div>
@@ -472,7 +496,7 @@ function AddJobModal({ businessId, businessName, customers, vehicles, services, 
       ? supabase.from("jobs").update(payload).eq("id", job.id)
       : supabase.from("jobs").insert(payload);
     const { data, error: saveError } = await query
-      .select("*, customers(name, phone), vehicles(label, size_class)")
+      .select("*, customers(name, phone, address), vehicles(label, size_class)")
       .single();
 
     setSaving(false);
@@ -722,7 +746,7 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
     async function load() {
       setLoadingJobs(true);
       const [jobsResult, customersResult, vehiclesResult, servicesResult] = await Promise.all([
-        supabase.from("jobs").select("*, customers(name), vehicles(label, size_class)").eq("business_id", businessId).order("scheduled_at", { ascending: true }),
+        supabase.from("jobs").select("*, customers(name, phone, address), vehicles(label, size_class)").eq("business_id", businessId).order("scheduled_at", { ascending: true }),
         supabase.from("customers").select("id, name, phone").eq("business_id", businessId).order("name", { ascending: true }),
         supabase.from("vehicles").select("id, label, customer_id, size_class").eq("business_id", businessId).order("label", { ascending: true }),
         supabase.from("services").select("id, name, category, price_car_low, price_suv_low").eq("business_id", businessId).order("sort_order", { ascending: true }),
