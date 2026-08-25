@@ -100,7 +100,7 @@ function BrandLockup({ size = 30, businessId, realName, realLogoUrl }) {
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       <button onClick={() => fileRef.current?.click()} title="Change logo" style={{ position: "relative", width: size, height: size, borderRadius: "50%", border: `1px solid ${P.border}`, background: logo ? `url(${logo}) center/cover` : P.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, padding: 0 }}>
         {!logo && <span style={{ fontSize: size * 0.36, fontWeight: 700, color: P.accent }}>{initials(name)}</span>}
-        <div style={{ position: "absolute", bottom: -2, right: -2, width: 16, height: 16, borderRadius: "50%", background: P.accent, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${P.bg}` }}><Camera size={9} color={P.bg} /></div>
+        {!logo && <div style={{ position: "absolute", bottom: -2, right: -2, width: 16, height: 16, borderRadius: "50%", background: P.accent, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${P.bg}` }}><Camera size={9} color={P.bg} /></div>}
       </button>
       <input ref={fileRef} type="file" accept="image/*" onChange={onPick} style={{ display: "none" }} />
       {editingName ? (
@@ -108,7 +108,6 @@ function BrandLockup({ size = 30, businessId, realName, realLogoUrl }) {
       ) : (
         <button onClick={() => setEditingName(true)} style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, padding: 0 }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: P.textPrimary }}>{name}</span>
-          <Pencil size={11} color={P.textMuted} />
         </button>
       )}
     </div>

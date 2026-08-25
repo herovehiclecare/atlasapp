@@ -257,7 +257,7 @@ function BrandLockup({ size = 30, businessId, realName, realLogoUrl }) {
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       <button onClick={() => fileRef.current?.click()} title="Change logo" style={{ position: "relative", width: size, height: size, borderRadius: "50%", border: `1px solid ${P.border}`, background: logo ? `url(${logo}) center/cover` : P.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, padding: 0 }}>
         {!logo && <span style={{ fontSize: size * 0.36, fontWeight: 700, color: P.accent }}>{initials(name)}</span>}
-        <div style={{ position: "absolute", bottom: -2, right: -2, width: 16, height: 16, borderRadius: "50%", background: P.accent, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${P.bg}` }}><Camera size={9} color={P.bg} /></div>
+        {!logo && <div style={{ position: "absolute", bottom: -2, right: -2, width: 16, height: 16, borderRadius: "50%", background: P.accent, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${P.bg}` }}><Camera size={9} color={P.bg} /></div>}
       </button>
       <input ref={fileRef} type="file" accept="image/*" onChange={onPick} style={{ display: "none" }} />
       {editingName ? (
@@ -265,7 +265,6 @@ function BrandLockup({ size = 30, businessId, realName, realLogoUrl }) {
       ) : (
         <button onClick={() => setEditingName(true)} style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, padding: 0 }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: P.textPrimary }}>{name}</span>
-          <Pencil size={11} color={P.textMuted} />
         </button>
       )}
     </div>
@@ -478,16 +477,71 @@ function StepCustomer({ customers, customer, setCustomer, onNavigate }) {
 
 /* ---------------------------------- step 2: vehicles (multi-select) ---------------------------------- */
 
-function StepVehicles({ customer, vehiclesAll, vehicles, toggleVehicle, onNavigate }) {
+function StepVehicles({ customer, vehiclesAll, vehicles, toggleVehicle, businessId, onVehicleAdded }) {
+  const [addingVehicle, setAddingVehicle] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newType, setNewType] = useState("Car");
+  const [newSize, setNewSize] = useState("car");
+  const [savingVehicle, setSavingVehicle] = useState(false);
+  const [vehicleError, setVehicleError] = useState("");
+
   const options = customer ? vehiclesAll.filter((v) => v.customer_id === customer.id) : [];
+
+  async function handleAddVehicle(e) {
+    e.preventDefault();
+    if (!newLabel.trim()) { setVehicleError('Enter a description, like "2021 VW ID4".'); return; }
+    setSavingVehicle(true);
+    setVehicleError("");
+    const { data, error: insertError } = await supabase
+      .from("vehicles")
+      .insert({ business_id: businessId, label: newLabel.trim(), vehicle_type: newType, size_class: newSize, customer_id: customer?.id || null })
+      .select()
+      .single();
+    setSavingVehicle(false);
+    if (insertError) { setVehicleError(insertError.message); return; }
+    onVehicleAdded(data);
+    setAddingVehicle(false);
+    setNewLabel(""); setNewType("Car"); setNewSize("car");
+  }
+
   return (
     <div>
       <h2 style={{ fontSize: 18, fontWeight: 700, color: P.textPrimary, margin: "0 0 4px" }}>Which vehicle(s)?</h2>
       <p style={{ fontSize: 13, color: P.textSecondary, margin: "0 0 16px" }}>
         {customer ? `${customer.name}'s vehicles — select as many as this quote covers.` : "Select a customer first"}
       </p>
+      {addingVehicle ? (
+        <div style={{ border: `1px solid ${P.border}`, borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 10, marginBottom: 10 }}>
+          {vehicleError && <div style={{ fontSize: 12, color: P.danger }}>{vehicleError}</div>}
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: P.textSecondary, display: "block", marginBottom: 6 }}>Description</label>
+            <input autoFocus value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="2021 VW ID4" style={{ width: "100%", background: P.surface, border: `1px solid ${P.border}`, borderRadius: 9, padding: "9px 12px", color: P.textPrimary, fontSize: 13.5, outline: "none", boxSizing: "border-box" }} />
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: P.textSecondary, display: "block", marginBottom: 6 }}>Type</label>
+              <select value={newType} onChange={(e) => setNewType(e.target.value)} style={{ width: "100%", background: P.surface, border: `1px solid ${P.border}`, borderRadius: 9, padding: "9px 12px", color: P.textPrimary, fontSize: 13.5, outline: "none" }}>
+                {["Car", "Motorcycle", "Boat", "RV & Trailer", "Aircraft", "Other"].map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: P.textSecondary, display: "block", marginBottom: 6 }}>Size class</label>
+              <select value={newSize} onChange={(e) => setNewSize(e.target.value)} style={{ width: "100%", background: P.surface, border: `1px solid ${P.border}`, borderRadius: 9, padding: "9px 12px", color: P.textPrimary, fontSize: 13.5, outline: "none" }}>
+                <option value="car">Car</option>
+                <option value="suv_truck_van">SUV / Truck / Van</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={() => { setAddingVehicle(false); setVehicleError(""); }} style={{ flex: 1, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+            <button type="button" onClick={handleAddVehicle} disabled={savingVehicle} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: savingVehicle ? "default" : "pointer" }}>
+              {savingVehicle ? <Loader2 size={13} className="animate-spin" /> : "Save vehicle"}
+            </button>
+          </div>
+        </div>
+      ) : (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
-        <button onClick={() => onNavigate("vehicles")} style={{ display: "flex", alignItems: "center", gap: 10, background: "transparent", border: `1px dashed ${P.border}`, borderRadius: 12, padding: "13px 14px", cursor: "pointer", color: P.textMuted }}>
+        <button onClick={() => setAddingVehicle(true)} disabled={!customer} title={customer ? "" : "Select a customer first"} style={{ display: "flex", alignItems: "center", gap: 10, background: "transparent", border: `1px dashed ${P.border}`, borderRadius: 12, padding: "13px 14px", cursor: customer ? "pointer" : "default", color: P.textMuted, opacity: customer ? 1 : 0.5 }}>
           <div style={{ width: 34, height: 34, borderRadius: 10, border: `1px dashed ${P.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Plus size={15} /></div>
           <span style={{ fontSize: 13, fontWeight: 600 }}>New vehicle</span>
         </button>
@@ -507,8 +561,9 @@ function StepVehicles({ customer, vehiclesAll, vehicles, toggleVehicle, onNaviga
           );
         })}
       </div>
-      {customer && options.length === 0 && (
-        <p style={{ fontSize: 12.5, color: P.textMuted, fontStyle: "italic", marginTop: 14 }}>{customer.name} has no vehicles on file yet — add one from the Vehicles page.</p>
+      )}
+      {customer && options.length === 0 && !addingVehicle && (
+        <p style={{ fontSize: 12.5, color: P.textMuted, fontStyle: "italic", marginTop: 14 }}>{customer.name} has no vehicles on file yet — add one above.</p>
       )}
       {vehicles.length > 1 && (
         <div style={{ marginTop: 14, fontSize: 12, color: P.accent, display: "flex", alignItems: "center", gap: 6 }}>
@@ -1370,6 +1425,10 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
       return next;
     });
   }
+  function handleVehicleAddedInQuote(vehicle) {
+    setVehiclesAll((vs) => [...vs, vehicle]);
+    toggleVehicle(vehicle);
+  }
   function togglePackage(vehicleId, pkgId) {
     setLineItems((li) => {
       const current = li[vehicleId] || [];
@@ -1685,7 +1744,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
           ) : (
             <>
               {step === 0 && <StepCustomer customers={customersAll} customer={customer} setCustomer={selectCustomer} onNavigate={onNavigate} />}
-              {step === 1 && <StepVehicles customer={customer} vehiclesAll={vehiclesAll} vehicles={vehicles} toggleVehicle={toggleVehicle} onNavigate={onNavigate} />}
+              {step === 1 && <StepVehicles customer={customer} vehiclesAll={vehiclesAll} vehicles={vehicles} toggleVehicle={toggleVehicle} businessId={businessId} onVehicleAdded={handleVehicleAddedInQuote} />}
               {step === 2 && (
                 <StepServices
                   vehicles={vehicles} services={services} addonsAll={addonsAll} lineItems={lineItems} togglePackage={togglePackage}

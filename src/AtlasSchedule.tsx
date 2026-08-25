@@ -135,7 +135,7 @@ function BrandLockup({ size = 30, businessId, realName, realLogoUrl }) {
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       <button onClick={() => fileRef.current?.click()} title="Change logo" style={{ position: "relative", width: size, height: size, borderRadius: "50%", border: `1px solid ${P.border}`, background: logo ? `url(${logo}) center/cover` : P.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, padding: 0 }}>
         {!logo && <span style={{ fontSize: size * 0.36, fontWeight: 700, color: P.accent }}>{initials(name)}</span>}
-        <div style={{ position: "absolute", bottom: -2, right: -2, width: 16, height: 16, borderRadius: "50%", background: P.accent, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${P.bg}` }}><Camera size={9} color={P.bg} /></div>
+        {!logo && <div style={{ position: "absolute", bottom: -2, right: -2, width: 16, height: 16, borderRadius: "50%", background: P.accent, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${P.bg}` }}><Camera size={9} color={P.bg} /></div>}
       </button>
       <input ref={fileRef} type="file" accept="image/*" onChange={onPick} style={{ display: "none" }} />
       {editingName ? (
@@ -143,7 +143,6 @@ function BrandLockup({ size = 30, businessId, realName, realLogoUrl }) {
       ) : (
         <button onClick={() => setEditingName(true)} style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, padding: 0 }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: P.textPrimary }}>{name}</span>
-          <Pencil size={11} color={P.textMuted} />
         </button>
       )}
     </div>
@@ -191,6 +190,13 @@ function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate }) {
   const [dragId, setDragId] = useState(null);
   const cells = useMemo(() => buildMonthGrid(viewMonth), [viewMonth]);
   const today = new Date();
+  // The native HTML5 drag-and-drop API (`draggable`) only really works with
+  // a mouse — on a touchscreen it doesn't enable working drag-to-reschedule,
+  // but it can still make WebKit treat a tap on the element as the start of
+  // a drag gesture rather than a plain tap, which is what was still eating
+  // taps on job chips even after removing their own onClick. Only mark chips
+  // draggable on devices with a mouse-like (fine) pointer.
+  const supportsDrag = typeof window !== "undefined" && window.matchMedia?.("(pointer: fine)").matches;
 
   return (
     <div>
@@ -224,8 +230,8 @@ function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate }) {
                 {dayJobs.slice(0, 3).map((j) => (
                   <div
                     key={j.id}
-                    draggable
-                    onDragStart={() => setDragId(j.id)}
+                    draggable={supportsDrag}
+                    onDragStart={supportsDrag ? () => setDragId(j.id) : undefined}
                     title={`${formatTime(j.scheduled_at)} · ${j.customers?.name || "No customer"}`}
                     style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, background: `${STATUS[j.status]}1F`, borderRadius: 5, padding: "2px 4px", cursor: "pointer" }}
                   >

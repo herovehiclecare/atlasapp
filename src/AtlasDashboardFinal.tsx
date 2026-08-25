@@ -389,9 +389,11 @@ function BrandLockup({ size = 34, businessId, realName, realLogoUrl }) {
         }}
       >
         {!logo && <span style={{ fontSize: size * 0.36, fontWeight: 700, color: P.accent }}>{initials(name)}</span>}
-        <div style={{ position: "absolute", bottom: -2, right: -2, width: 16, height: 16, borderRadius: "50%", background: P.accent, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${P.bg}` }}>
-          <Camera size={9} color={P.bg} />
-        </div>
+        {!logo && (
+          <div style={{ position: "absolute", bottom: -2, right: -2, width: 16, height: 16, borderRadius: "50%", background: P.accent, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${P.bg}` }}>
+            <Camera size={9} color={P.bg} />
+          </div>
+        )}
       </button>
       <input ref={fileRef} type="file" accept="image/*" onChange={onPick} style={{ display: "none" }} />
       {editingName ? (
@@ -403,7 +405,6 @@ function BrandLockup({ size = 34, businessId, realName, realLogoUrl }) {
       ) : (
         <button onClick={() => setEditingName(true)} style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, padding: 0 }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: P.textPrimary }}>{name}</span>
-          <Pencil size={11} color={P.textMuted} />
         </button>
       )}
     </div>
