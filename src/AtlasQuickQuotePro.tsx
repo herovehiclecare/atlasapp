@@ -1562,8 +1562,12 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
     if (!printQuote) return;
     const handleAfterPrint = () => setPrintQuote(null);
     window.addEventListener("afterprint", handleAfterPrint);
-    const t = setTimeout(() => printWhenReady(), 0);
-    return () => { clearTimeout(t); window.removeEventListener("afterprint", handleAfterPrint); };
+    // See the matching comment in AtlasInvoices.tsx — calling this directly
+    // instead of behind an extra setTimeout hop keeps it as close as
+    // possible to the click that triggered it, which matters for browsers'
+    // print/dialog-throttling heuristics.
+    printWhenReady();
+    return () => window.removeEventListener("afterprint", handleAfterPrint);
   }, [printQuote]);
 
   function addToCalendar() {

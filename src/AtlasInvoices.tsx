@@ -705,8 +705,15 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
     if (!printInvoice) return;
     const handleAfterPrint = () => setPrintInvoice(null);
     window.addEventListener("afterprint", handleAfterPrint);
-    const t = setTimeout(() => printWhenReady(), 0);
-    return () => { clearTimeout(t); window.removeEventListener("afterprint", handleAfterPrint); };
+    // Calling window.print() straight from this effect (rather than behind an
+    // extra setTimeout hop) keeps it as close as possible to the click that
+    // triggered it — Chrome silently blocks print/dialog calls it judges too
+    // disconnected from a direct user gesture, especially after several in a
+    // short span, which is what "This page has been blocked from opening
+    // dialogs" means. It's a browser-level throttle, not something app code
+    // can override; closing and reopening the tab resets it.
+    printWhenReady();
+    return () => window.removeEventListener("afterprint", handleAfterPrint);
   }, [printInvoice]);
 
   const filtered = invoices.filter((inv) => {

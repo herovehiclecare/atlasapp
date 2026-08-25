@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings, Sparkles,
   MoreHorizontal, Pencil, Camera, Plus, ChevronLeft, ChevronRight,
-  X, Eye, EyeOff, Loader2, ListChecks, Check, Copy, MessageSquare,
+  X, Eye, EyeOff, Loader2, ListChecks, Check, Copy, MessageSquare, Trash2,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
@@ -58,6 +58,7 @@ function money(n) { return `$${Math.round(n).toLocaleString()}`; }
 function sameDay(a, b) { return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
 function sameMonth(a, b) { return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth(); }
 function toInputDate(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+function toInputTime(d) { return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; }
 function formatTime(iso) { return iso ? new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "—"; }
 function jobDate(job) { return job.scheduled_at ? new Date(job.scheduled_at) : null; }
 
@@ -186,7 +187,7 @@ function Legend() {
 
 /* ---------------------------------- Month view (drag to reschedule) ---------------------------------- */
 
-function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate }) {
+function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate, onEditJob }) {
   const [dragId, setDragId] = useState(null);
   const cells = useMemo(() => buildMonthGrid(viewMonth), [viewMonth]);
   const today = new Date();
@@ -225,9 +226,9 @@ function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate }) {
                     key={j.id}
                     draggable
                     onDragStart={() => setDragId(j.id)}
-                    onClick={(e) => e.stopPropagation()}
-                    title={`${formatTime(j.scheduled_at)} · ${j.customers?.name || "No customer"}`}
-                    style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, background: `${STATUS[j.status]}1F`, borderRadius: 5, padding: "2px 4px", cursor: "grab" }}
+                    onClick={(e) => { e.stopPropagation(); onEditJob?.(j); }}
+                    title={`${formatTime(j.scheduled_at)} · ${j.customers?.name || "No customer"} — click to edit`}
+                    style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, background: `${STATUS[j.status]}1F`, borderRadius: 5, padding: "2px 4px", cursor: "pointer" }}
                   >
                     <span style={{ width: 5, height: 5, borderRadius: "50%", background: STATUS[j.status], flexShrink: 0 }} />
                     <span style={{ fontSize: 9.5, color: P.textSecondary, minWidth: 0, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{(j.customers?.name || "No customer").split(" ")[0]}</span>
@@ -244,7 +245,7 @@ function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate }) {
   );
 }
 
-function DayPreview({ date, jobs, servicesById, openFullDay, onClose, onAddJob }) {
+function DayPreview({ date, jobs, servicesById, openFullDay, onClose, onAddJob, onEditJob }) {
   const dayJobs = jobs.filter((j) => sameDay(jobDate(j), date)).sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
   const dateLabel = date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
   return (
@@ -267,7 +268,7 @@ function DayPreview({ date, jobs, servicesById, openFullDay, onClose, onAddJob }
       ) : (
         <div>
           {dayJobs.map((j, i) => (
-            <div key={j.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: i < dayJobs.length - 1 ? `1px solid ${P.border}` : "none" }}>
+            <div key={j.id} onClick={() => onEditJob?.(j)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: i < dayJobs.length - 1 ? `1px solid ${P.border}` : "none", cursor: onEditJob ? "pointer" : "default" }}>
               <div style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS[j.status], flexShrink: 0 }} />
               <div style={{ fontSize: 11.5, color: P.textMuted, width: 78, flexShrink: 0 }}>{formatTime(j.scheduled_at)}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -323,7 +324,7 @@ function WeekView({ jobs, selectedDate, goToDate }) {
 
 /* ---------------------------------- Day view ---------------------------------- */
 
-function DayView({ jobs, selectedDate, servicesById }) {
+function DayView({ jobs, selectedDate, servicesById, onEditJob }) {
   const dayJobs = jobs.filter((j) => sameDay(jobDate(j), selectedDate)).sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
   const dateLabel = selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
@@ -342,7 +343,7 @@ function DayView({ jobs, selectedDate, servicesById }) {
       {dayJobs.map((j) => {
         const est = estimateJobPrice(j, servicesById);
         return (
-          <div key={j.id} style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 12, padding: "13px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+          <div key={j.id} onClick={() => onEditJob?.(j)} style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 12, padding: "13px 16px", display: "flex", alignItems: "center", gap: 12, cursor: onEditJob ? "pointer" : "default" }}>
             <div style={{ width: 9, height: 9, borderRadius: "50%", background: STATUS[j.status], flexShrink: 0 }} />
             <div style={{ fontSize: 12, color: P.textMuted, width: 84, flexShrink: 0 }}>{formatTime(j.scheduled_at)}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -379,15 +380,17 @@ function formatJobDateTime(d) {
   };
 }
 
-function AddJobModal({ businessId, businessName, customers, vehicles, services, initialDate, onClose, onAdded }) {
-  const [customerId, setCustomerId] = useState("");
-  const [vehicleId, setVehicleId] = useState("");
-  const [serviceIds, setServiceIds] = useState([]);
-  const [date, setDate] = useState(toInputDate(initialDate || new Date()));
-  const [time, setTime] = useState("09:00");
-  const [status, setStatus] = useState("scheduled");
+function AddJobModal({ businessId, businessName, customers, vehicles, services, initialDate, job, onClose, onAdded, onDelete }) {
+  const isEdit = !!job;
+  const [customerId, setCustomerId] = useState(job?.customer_id || "");
+  const [vehicleId, setVehicleId] = useState(job?.vehicle_id || "");
+  const [serviceIds, setServiceIds] = useState(job?.service_ids || []);
+  const [date, setDate] = useState(toInputDate(job ? new Date(job.scheduled_at) : (initialDate || new Date())));
+  const [time, setTime] = useState(job ? toInputTime(new Date(job.scheduled_at)) : "09:00");
+  const [status, setStatus] = useState(job?.status || "scheduled");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // Set once the job is created — switches this modal from the booking form
   // to a "here's what the customer gets" confirmation-text preview instead
@@ -413,25 +416,32 @@ function AddJobModal({ businessId, businessName, customers, vehicles, services, 
     setError("");
 
     const scheduledAt = new Date(`${date}T${time}`).toISOString();
-    const { data, error: insertError } = await supabase
-      .from("jobs")
-      .insert({
-        business_id: businessId,
-        customer_id: customerId || null,
-        vehicle_id: vehicleId || null,
-        service_ids: serviceIds,
-        scheduled_at: scheduledAt,
-        status,
-      })
+    const payload = {
+      business_id: businessId,
+      customer_id: customerId || null,
+      vehicle_id: vehicleId || null,
+      service_ids: serviceIds,
+      scheduled_at: scheduledAt,
+      status,
+    };
+    const query = isEdit
+      ? supabase.from("jobs").update(payload).eq("id", job.id)
+      : supabase.from("jobs").insert(payload);
+    const { data, error: saveError } = await query
       .select("*, customers(name, phone), vehicles(label, size_class)")
       .single();
 
     setSaving(false);
-    if (insertError) {
-      setError(insertError.message);
+    if (saveError) {
+      setError(saveError.message);
       return;
     }
     onAdded(data);
+
+    if (isEdit) {
+      onClose();
+      return;
+    }
 
     const { date: dLabel, time: tLabel } = formatJobDateTime(new Date(data.scheduled_at));
     setScript(fillJobScript(DEFAULT_BOOKING_SCRIPT, {
@@ -442,6 +452,13 @@ function AddJobModal({ businessId, businessName, customers, vehicles, services, 
       business: businessName || "us",
     }));
     setCreatedJob(data);
+  }
+
+  async function handleDelete() {
+    if (!job) return;
+    setDeleting(true);
+    await onDelete?.(job.id);
+    setDeleting(false);
   }
 
   function copyScript() {
@@ -455,7 +472,7 @@ function AddJobModal({ businessId, businessName, customers, vehicles, services, 
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 50 }} />
       <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(460px, calc(100vw - 32px))", maxHeight: "calc(100vh - 40px)", overflowY: "auto", background: P.bg, border: `1px solid ${P.border}`, borderRadius: 16, zIndex: 51, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: P.textPrimary }}>{createdJob ? "Job scheduled" : "New job"}</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: P.textPrimary }}>{createdJob ? "Job scheduled" : isEdit ? "Edit job" : "New job"}</span>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", display: "flex" }}><X size={18} /></button>
         </div>
         {createdJob ? (
@@ -563,9 +580,16 @@ function AddJobModal({ businessId, businessName, customers, vehicles, services, 
             </div>
           </div>
 
-          <button type="submit" disabled={saving} style={{ marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: `linear-gradient(120deg, ${P.accent}, ${P.secondary})`, color: P.bg, border: "none", borderRadius: 10, padding: "11px 16px", fontSize: 13.5, fontWeight: 700, cursor: saving ? "default" : "pointer", opacity: saving ? 0.85 : 1 }}>
-            {saving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : "Create job"}
-          </button>
+          <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+            {isEdit && (
+              <button type="button" onClick={handleDelete} disabled={deleting || saving} title="Delete job" style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: `1px solid ${P.border}`, color: P.danger, borderRadius: 10, padding: "0 14px", cursor: deleting ? "default" : "pointer", opacity: deleting ? 0.6 : 1 }}>
+                {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+              </button>
+            )}
+            <button type="submit" disabled={saving} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: `linear-gradient(120deg, ${P.accent}, ${P.secondary})`, color: P.bg, border: "none", borderRadius: 10, padding: "11px 16px", fontSize: 13.5, fontWeight: 700, cursor: saving ? "default" : "pointer", opacity: saving ? 0.85 : 1 }}>
+              {saving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : isEdit ? "Save changes" : "Create job"}
+            </button>
+          </div>
         </form>
         )}
       </div>
@@ -598,6 +622,7 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
   }, [businessUiPrefs]);
   const [addOpen, setAddOpen] = useState(false);
   const [addDate, setAddDate] = useState(null);
+  const [editingJob, setEditingJob] = useState(null);
   function toggleVisible(key) {
     setVisible((v) => {
       const next = { ...v, [key]: !v[key] };
@@ -647,9 +672,25 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
   }
 
   function handleAdded(job) {
-    setJobs((js) => [...js, job].sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at)));
-    // Modal stays open after this — it switches itself to a confirmation-text
-    // preview screen and closes only when the user dismisses it from there.
+    // Handles both a new job and an edit to an existing one — if the id
+    // already exists in state this replaces it in place instead of
+    // appending a duplicate.
+    setJobs((js) => {
+      const exists = js.some((j) => j.id === job.id);
+      const next = exists ? js.map((j) => (j.id === job.id ? job : j)) : [...js, job];
+      return next.sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
+    });
+    // For a brand-new job the modal stays open — it switches itself to a
+    // confirmation-text preview screen and closes only when dismissed from
+    // there. Edits close immediately since there's no "just booked" moment.
+  }
+
+  async function handleDeleteJob(id) {
+    const previous = jobs;
+    setJobs((js) => js.filter((j) => j.id !== id));
+    setEditingJob(null);
+    const { error: deleteError } = await supabase.from("jobs").delete().eq("id", id);
+    if (deleteError) setJobs(previous);
   }
 
   async function moveJob(id, newDate) {
@@ -809,12 +850,12 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
             <div style={{ background: "rgba(255,107,94,0.1)", border: `1px solid ${P.danger}`, borderRadius: 14, padding: "18px", fontSize: 13, color: P.danger }}>{error}</div>
           ) : (
             <>
-              {view === "month" && <MonthView jobs={jobs} viewMonth={viewMonth} moveJob={moveJob} previewDate={previewDate} setPreviewDate={setPreviewDate} />}
+              {view === "month" && <MonthView jobs={jobs} viewMonth={viewMonth} moveJob={moveJob} previewDate={previewDate} setPreviewDate={setPreviewDate} onEditJob={setEditingJob} />}
               {view === "month" && previewDate && (
-                <DayPreview date={previewDate} jobs={jobs} servicesById={servicesById} openFullDay={() => goToDate(previewDate)} onClose={() => setPreviewDate(null)} onAddJob={openAddJob} />
+                <DayPreview date={previewDate} jobs={jobs} servicesById={servicesById} openFullDay={() => goToDate(previewDate)} onClose={() => setPreviewDate(null)} onAddJob={openAddJob} onEditJob={setEditingJob} />
               )}
               {view === "week" && <WeekView jobs={jobs} selectedDate={selectedDate} goToDate={goToDate} />}
-              {view === "day" && <DayView jobs={jobs} selectedDate={selectedDate} servicesById={servicesById} />}
+              {view === "day" && <DayView jobs={jobs} selectedDate={selectedDate} servicesById={servicesById} onEditJob={setEditingJob} />}
             </>
           )}
         </div>
@@ -844,7 +885,7 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
         </>
       )}
 
-      {addOpen && (
+      {(addOpen || editingJob) && (
         <AddJobModal
           businessId={businessId}
           businessName={businessName}
@@ -852,8 +893,10 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
           vehicles={vehicles}
           services={services}
           initialDate={addDate}
-          onClose={() => setAddOpen(false)}
+          job={editingJob}
+          onClose={() => { setAddOpen(false); setEditingJob(null); }}
           onAdded={handleAdded}
+          onDelete={handleDeleteJob}
         />
       )}
     </div>
