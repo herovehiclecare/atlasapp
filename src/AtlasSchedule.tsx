@@ -187,7 +187,7 @@ function Legend() {
 
 /* ---------------------------------- Month view (drag to reschedule) ---------------------------------- */
 
-function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate, onEditJob }) {
+function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate }) {
   const [dragId, setDragId] = useState(null);
   const cells = useMemo(() => buildMonthGrid(viewMonth), [viewMonth]);
   const today = new Date();
@@ -226,8 +226,7 @@ function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate, onEd
                     key={j.id}
                     draggable
                     onDragStart={() => setDragId(j.id)}
-                    onClick={(e) => { e.stopPropagation(); onEditJob?.(j); }}
-                    title={`${formatTime(j.scheduled_at)} · ${j.customers?.name || "No customer"} — click to edit`}
+                    title={`${formatTime(j.scheduled_at)} · ${j.customers?.name || "No customer"}`}
                     style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, background: `${STATUS[j.status]}1F`, borderRadius: 5, padding: "2px 4px", cursor: "pointer" }}
                   >
                     <span style={{ width: 5, height: 5, borderRadius: "50%", background: STATUS[j.status], flexShrink: 0 }} />
@@ -380,7 +379,7 @@ function formatJobDateTime(d) {
   };
 }
 
-function AddJobModal({ businessId, businessName, customers, vehicles, services, initialDate, job, onClose, onAdded, onDelete }) {
+function AddJobModal({ businessId, businessName, customers, vehicles, services, initialDate, job, onClose, onAdded, onDelete, onVehicleAdded }) {
   const isEdit = !!job;
   const [customerId, setCustomerId] = useState(job?.customer_id || "");
   const [vehicleId, setVehicleId] = useState(job?.vehicle_id || "");
@@ -391,6 +390,17 @@ function AddJobModal({ businessId, businessName, customers, vehicles, services, 
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // A customer with no vehicles on file left this form with nowhere to go —
+  // the Vehicle dropdown just showed "No vehicle" and there was no way to
+  // add one without abandoning the job and going to the Vehicles page. This
+  // lets a vehicle get added right here, inline, without leaving the form.
+  const [addingVehicle, setAddingVehicle] = useState(false);
+  const [newVehicleLabel, setNewVehicleLabel] = useState("");
+  const [newVehicleType, setNewVehicleType] = useState("Car");
+  const [newVehicleSize, setNewVehicleSize] = useState("car");
+  const [savingVehicle, setSavingVehicle] = useState(false);
+  const [vehicleError, setVehicleError] = useState("");
 
   // Set once the job is created — switches this modal from the booking form
   // to a "here's what the customer gets" confirmation-text preview instead
@@ -404,6 +414,40 @@ function AddJobModal({ businessId, businessName, customers, vehicles, services, 
 
   function toggleService(id) {
     setServiceIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+  }
+
+  async function handleAddVehicle(e) {
+    e.preventDefault();
+    if (!newVehicleLabel.trim()) {
+      setVehicleError('Enter a description, like "2021 VW ID4".');
+      return;
+    }
+    setSavingVehicle(true);
+    setVehicleError("");
+
+    const { data, error: insertError } = await supabase
+      .from("vehicles")
+      .insert({
+        business_id: businessId,
+        label: newVehicleLabel.trim(),
+        vehicle_type: newVehicleType,
+        size_class: newVehicleSize,
+        customer_id: customerId || null,
+      })
+      .select("*, customers(name)")
+      .single();
+
+    setSavingVehicle(false);
+    if (insertError) {
+      setVehicleError(insertError.message);
+      return;
+    }
+    onVehicleAdded?.(data);
+    setVehicleId(data.id);
+    setAddingVehicle(false);
+    setNewVehicleLabel("");
+    setNewVehicleType("Car");
+    setNewVehicleSize("car");
   }
 
   async function handleSubmit(e) {
@@ -532,13 +576,51 @@ function AddJobModal({ businessId, businessName, customers, vehicles, services, 
               </select>
             </div>
             <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Vehicle</label>
-              <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} style={inputStyle}>
-                <option value="">No vehicle</option>
-                {vehiclesForCustomer.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-              </select>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <label style={labelStyle}>Vehicle</label>
+                {!addingVehicle && (
+                  <button type="button" onClick={() => setAddingVehicle(true)} style={{ background: "transparent", border: "none", color: P.accent, fontSize: 11, fontWeight: 600, cursor: "pointer", marginBottom: 6 }}>+ Add</button>
+                )}
+              </div>
+              {!addingVehicle && (
+                <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} style={inputStyle}>
+                  <option value="">No vehicle</option>
+                  {vehiclesForCustomer.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                </select>
+              )}
             </div>
           </div>
+
+          {addingVehicle && (
+            <div style={{ border: `1px solid ${P.border}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+              {vehicleError && <div style={{ fontSize: 12, color: P.danger }}>{vehicleError}</div>}
+              <div>
+                <label style={labelStyle}>Description</label>
+                <input autoFocus value={newVehicleLabel} onChange={(e) => setNewVehicleLabel(e.target.value)} placeholder="2021 VW ID4" style={inputStyle} />
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>Type</label>
+                  <select value={newVehicleType} onChange={(e) => setNewVehicleType(e.target.value)} style={inputStyle}>
+                    {["Car", "Motorcycle", "Boat", "RV & Trailer", "Aircraft", "Other"].map((t) => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={labelStyle}>Size class</label>
+                  <select value={newVehicleSize} onChange={(e) => setNewVehicleSize(e.target.value)} style={inputStyle}>
+                    <option value="car">Car</option>
+                    <option value="suv_truck_van">SUV / Truck / Van</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="button" onClick={() => { setAddingVehicle(false); setVehicleError(""); }} style={{ flex: 1, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                <button type="button" onClick={handleAddVehicle} disabled={savingVehicle} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: savingVehicle ? "default" : "pointer" }}>
+                  {savingVehicle ? <Loader2 size={13} className="animate-spin" /> : "Save vehicle"}
+                </button>
+              </div>
+            </div>
+          )}
 
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
@@ -683,6 +765,10 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
     // For a brand-new job the modal stays open — it switches itself to a
     // confirmation-text preview screen and closes only when dismissed from
     // there. Edits close immediately since there's no "just booked" moment.
+  }
+
+  function handleVehicleAdded(vehicle) {
+    setVehicles((vs) => [...vs, vehicle].sort((a, b) => a.label.localeCompare(b.label)));
   }
 
   async function handleDeleteJob(id) {
@@ -850,7 +936,7 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
             <div style={{ background: "rgba(255,107,94,0.1)", border: `1px solid ${P.danger}`, borderRadius: 14, padding: "18px", fontSize: 13, color: P.danger }}>{error}</div>
           ) : (
             <>
-              {view === "month" && <MonthView jobs={jobs} viewMonth={viewMonth} moveJob={moveJob} previewDate={previewDate} setPreviewDate={setPreviewDate} onEditJob={setEditingJob} />}
+              {view === "month" && <MonthView jobs={jobs} viewMonth={viewMonth} moveJob={moveJob} previewDate={previewDate} setPreviewDate={setPreviewDate} />}
               {view === "month" && previewDate && (
                 <DayPreview date={previewDate} jobs={jobs} servicesById={servicesById} openFullDay={() => goToDate(previewDate)} onClose={() => setPreviewDate(null)} onAddJob={openAddJob} onEditJob={setEditingJob} />
               )}
@@ -897,6 +983,7 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
           onClose={() => { setAddOpen(false); setEditingJob(null); }}
           onAdded={handleAdded}
           onDelete={handleDeleteJob}
+          onVehicleAdded={handleVehicleAdded}
         />
       )}
     </div>
