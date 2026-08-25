@@ -401,11 +401,8 @@ function ServiceCard({ service, onUpdateLocal, onPersist, onDelete }) {
       </div>
 
       <div style={{ padding: "0 16px 14px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: 8 }}>
-        <PriceField label="Car — low" value={service.price_car_low} onChange={(e) => setNum("price_car_low", e.target.value)} onBlur={commit} />
-        <PriceField label="Car — high" value={service.price_car_high} onChange={(e) => setNum("price_car_high", e.target.value)} onBlur={commit} />
-        <PriceField label="SUV/Truck/Van — low" value={service.price_suv_low} onChange={(e) => setNum("price_suv_low", e.target.value)} onBlur={commit} />
-        <PriceField label="SUV/Truck/Van — high" value={service.price_suv_high} onChange={(e) => setNum("price_suv_high", e.target.value)} onBlur={commit} />
-        <PriceField label="Deposit" value={service.deposit_required} onChange={(e) => setNum("deposit_required", e.target.value)} onBlur={commit} />
+        <PriceField label="Car" value={service.price_car_low} onChange={(e) => setNum("price_car_low", e.target.value)} onBlur={commit} />
+        <PriceField label="SUV/Truck/Van" value={service.price_suv_low} onChange={(e) => setNum("price_suv_low", e.target.value)} onBlur={commit} />
       </div>
 
       <button onClick={() => setExpanded((v) => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", background: "transparent", border: "none", borderTop: `1px solid ${P.border}`, padding: "9px 16px", cursor: "pointer", color: P.textSecondary, fontSize: 12, fontWeight: 600 }}>

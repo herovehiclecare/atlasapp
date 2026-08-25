@@ -25,11 +25,22 @@ const PAGES = {
   settings: AtlasSettings,
 };
 
+// Supabase's password-reset email links back to this app with a recovery
+// token in the URL (hash for the implicit flow, query string for PKCE) —
+// checking for it synchronously, before any async auth call resolves, means
+// a reset-link visitor never risks a frame of the real dashboard rendering
+// ahead of the recovery screen while getSession() and onAuthStateChange
+// race each other.
+function isRecoveryUrl() {
+  if (typeof window === "undefined") return false;
+  return /type=recovery/.test(window.location.hash) || /type=recovery/.test(window.location.search);
+}
+
 export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState("dashboard");
-  const [recovery, setRecovery] = useState(false);
+  const [recovery, setRecovery] = useState(isRecoveryUrl);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {

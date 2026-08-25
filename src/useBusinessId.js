@@ -26,33 +26,43 @@ export function useBusinessId() {
       setLoading(true);
       setError("");
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || cancelled) return;
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (cancelled) return;
+        if (userError || !user) {
+          setError("Couldn't verify your account. Try signing in again.");
+          setLoading(false);
+          return;
+        }
 
-      const { data, error: memberError } = await supabase
-        .from("business_members")
-        .select("business_id, businesses(name, logo_url, tagline, quote_label, invoice_label, hours, notification_prefs, ui_prefs, default_tax_rate, tax_enabled)")
-        .eq("user_id", user.id)
-        .limit(1)
-        .single();
+        const { data, error: memberError } = await supabase
+          .from("business_members")
+          .select("business_id, businesses(name, logo_url, tagline, quote_label, invoice_label, hours, notification_prefs, ui_prefs, default_tax_rate, tax_enabled)")
+          .eq("user_id", user.id)
+          .limit(1)
+          .single();
 
-      if (cancelled) return;
-      if (memberError || !data) {
-        setError("Couldn't find a business linked to your account.");
-      } else {
-        setBusinessId(data.business_id);
-        setBusinessName(data.businesses?.name || "");
-        setBusinessLogoUrl(data.businesses?.logo_url || "");
-        setBusinessTagline(data.businesses?.tagline || "");
-        setBusinessQuoteLabel(data.businesses?.quote_label || "");
-        setBusinessInvoiceLabel(data.businesses?.invoice_label || "");
-        setBusinessHours(data.businesses?.hours || []);
-        setBusinessNotificationPrefs(data.businesses?.notification_prefs || {});
-        setBusinessUiPrefs(data.businesses?.ui_prefs || {});
-        setBusinessDefaultTaxRate(data.businesses?.default_tax_rate ?? 7);
-        setBusinessTaxEnabled(data.businesses?.tax_enabled ?? true);
+        if (cancelled) return;
+        if (memberError || !data) {
+          setError("Couldn't find a business linked to your account.");
+        } else {
+          setBusinessId(data.business_id);
+          setBusinessName(data.businesses?.name || "");
+          setBusinessLogoUrl(data.businesses?.logo_url || "");
+          setBusinessTagline(data.businesses?.tagline || "");
+          setBusinessQuoteLabel(data.businesses?.quote_label || "");
+          setBusinessInvoiceLabel(data.businesses?.invoice_label || "");
+          setBusinessHours(data.businesses?.hours || []);
+          setBusinessNotificationPrefs(data.businesses?.notification_prefs || {});
+          setBusinessUiPrefs(data.businesses?.ui_prefs || {});
+          setBusinessDefaultTaxRate(data.businesses?.default_tax_rate ?? 7);
+          setBusinessTaxEnabled(data.businesses?.tax_enabled ?? true);
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.message || "Something went wrong loading your business.");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setLoading(false);
     }
 
     load();

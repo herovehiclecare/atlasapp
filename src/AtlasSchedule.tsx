@@ -459,13 +459,18 @@ function AddJobModal({ businessId, customers, vehicles, services, initialDate, o
               {categories.map((cat) => (
                 <div key={cat}>
                   <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: P.textMuted, marginBottom: 6 }}>{cat}</div>
-                  {services.filter((s) => s.category === cat).map((s) => (
-                    <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", cursor: "pointer" }}>
-                      <input type="checkbox" checked={serviceIds.includes(s.id)} onChange={() => toggleService(s.id)} style={{ accentColor: P.accent }} />
-                      <span style={{ fontSize: 12.5, color: P.textSecondary, flex: 1 }}>{s.name}</span>
-                      <span style={{ fontSize: 11.5, color: P.textMuted }}>from ${s.price_car_low}</span>
-                    </label>
-                  ))}
+                  {services.filter((s) => s.category === cat).map((s) => {
+                    const selectedVehicle = vehiclesForCustomer.find((v) => v.id === vehicleId);
+                    const isSuv = selectedVehicle?.size_class === "suv_truck_van";
+                    const price = isSuv ? (s.price_suv_low ?? s.price_car_low) : s.price_car_low;
+                    return (
+                      <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", cursor: "pointer" }}>
+                        <input type="checkbox" checked={serviceIds.includes(s.id)} onChange={() => toggleService(s.id)} style={{ accentColor: P.accent }} />
+                        <span style={{ fontSize: 12.5, color: P.textSecondary, flex: 1 }}>{s.name}</span>
+                        <span style={{ fontSize: 11.5, color: P.textMuted }}>from ${price}</span>
+                      </label>
+                    );
+                  })}
                 </div>
               ))}
             </div>
@@ -583,8 +588,8 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
     let scoped;
     if (view === "day") scoped = active.filter((j) => sameDay(jobDate(j), selectedDate));
     else if (view === "week") {
-      const start = new Date(selectedDate); start.setDate(start.getDate() - start.getDay());
-      const end = new Date(start); end.setDate(end.getDate() + 6);
+      const start = new Date(selectedDate); start.setDate(start.getDate() - start.getDay()); start.setHours(0, 0, 0, 0);
+      const end = new Date(start); end.setDate(end.getDate() + 6); end.setHours(23, 59, 59, 999);
       scoped = active.filter((j) => { const d = jobDate(j); return d >= start && d <= end; });
     } else {
       scoped = active.filter((j) => sameMonth(jobDate(j), viewMonth));

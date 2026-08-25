@@ -125,12 +125,21 @@ function StatCard({ label, value, sub }) {
   );
 }
 
-function QuickActions({ size = 32, iconSize = 13, onOpen }) {
+function QuickActions({ size = 32, iconSize = 13, phone, onOpen }) {
+  const actionStyle = { width: size, height: size, borderRadius: 8, border: `1px solid ${P.border}`, background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-      <button style={{ width: size, height: size, borderRadius: 8, border: `1px solid ${P.border}`, background: "transparent", color: P.textSecondary, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><Phone size={iconSize} /></button>
-      <button style={{ width: size, height: size, borderRadius: 8, border: `1px solid ${P.border}`, background: "transparent", color: P.textSecondary, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><MessageSquare size={iconSize} /></button>
-      <button onClick={onOpen} style={{ width: size, height: size, borderRadius: 8, border: `1px solid ${P.border}`, background: "transparent", color: P.textMuted, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><ChevronRight size={iconSize + 1} /></button>
+      {phone ? (
+        <a href={`tel:${phone}`} title={`Call ${phone}`} style={{ ...actionStyle, color: P.textSecondary, textDecoration: "none", cursor: "pointer" }}><Phone size={iconSize} /></a>
+      ) : (
+        <span title="No phone on file" style={{ ...actionStyle, color: P.textMuted, opacity: 0.4, cursor: "default" }}><Phone size={iconSize} /></span>
+      )}
+      {phone ? (
+        <a href={`sms:${phone}`} title={`Text ${phone}`} style={{ ...actionStyle, color: P.textSecondary, textDecoration: "none", cursor: "pointer" }}><MessageSquare size={iconSize} /></a>
+      ) : (
+        <span title="No phone on file" style={{ ...actionStyle, color: P.textMuted, opacity: 0.4, cursor: "default" }}><MessageSquare size={iconSize} /></span>
+      )}
+      <button onClick={onOpen} style={{ ...actionStyle, color: P.textMuted, cursor: "pointer" }}><ChevronRight size={iconSize + 1} /></button>
     </div>
   );
 }
@@ -151,7 +160,7 @@ function RowsView({ list, selected, toggleSelect, onOpenDetail }) {
           <div className="hidden lg:block" style={{ textAlign: "right", flexShrink: 0, marginRight: 8 }}>
             <div style={{ fontSize: 11, color: P.textMuted }}>Added {formatDate(c.created_at)}</div>
           </div>
-          <QuickActions onOpen={() => onOpenDetail(c)} />
+          <QuickActions phone={c.phone} onOpen={() => onOpenDetail(c)} />
         </div>
       ))}
     </div>
@@ -180,8 +189,16 @@ function CustomerDetail({ customer, onClose }) {
 
         <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 18 }}>
           <div style={{ display: "flex", gap: 6 }}>
-            <button style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}><Phone size={13} /> Call</button>
-            <button style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}><MessageSquare size={13} /> Text</button>
+            {customer.phone ? (
+              <a href={`tel:${customer.phone}`} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", textDecoration: "none" }}><Phone size={13} /> Call</a>
+            ) : (
+              <span title="No phone on file" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textMuted, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, opacity: 0.5, cursor: "default" }}><Phone size={13} /> Call</span>
+            )}
+            {customer.phone ? (
+              <a href={`sms:${customer.phone}`} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", textDecoration: "none" }}><MessageSquare size={13} /> Text</a>
+            ) : (
+              <span title="No phone on file" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textMuted, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, opacity: 0.5, cursor: "default" }}><MessageSquare size={13} /> Text</span>
+            )}
           </div>
 
           <div>

@@ -62,6 +62,20 @@ function initials(name) { return name.split(" ").map((n) => n[0]).slice(0, 2).jo
 function money(n) { return `$${(Number(n) || 0).toLocaleString()}`; }
 function daysBetween(a, b) { return Math.round((a - b) / (1000 * 60 * 60 * 24)); }
 
+// "Overdue" is never a status someone sets — it's just an unpaid invoice
+// whose due date has passed. Deriving it here (instead of only via the
+// stored `status` column) means the Overdue stat/filter/styling actually
+// update as time passes, rather than staying frozen until someone manually
+// reopens and re-saves the invoice after its due date.
+function effectiveStatus(inv) {
+  if (inv.status === "unpaid" && inv.due_date) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (parseDate(inv.due_date) < today) return "overdue";
+  }
+  return inv.status;
+}
+
 // `amount` always means the final total owed (unchanged everywhere else in
 // this file); subtotal/tax are derived from it and the stored tax_rate
 // rather than a separate stored subtotal, so they can never drift apart.
@@ -147,7 +161,8 @@ function StatusBadge({ status }) {
 }
 
 function InvoiceRow({ inv, i, onMarkPaid, onPreview, onEdit, marking }) {
-  const overdueDays = inv.status === "overdue" && inv.due_date ? daysBetween(new Date(), parseDate(inv.due_date)) * -1 : null;
+  const status = effectiveStatus(inv);
+  const overdueDays = status === "overdue" && inv.due_date ? daysBetween(new Date(), parseDate(inv.due_date)) : null;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", flexWrap: "wrap" }}>
       <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${hue(i)}22`, color: hue(i), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>{initials(inv.customers?.name || "—")}</div>
@@ -158,12 +173,12 @@ function InvoiceRow({ inv, i, onMarkPaid, onPreview, onEdit, marking }) {
           <span style={{ fontSize: 11, color: P.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>INV-{shortId(inv.id)}</span>
           {inv.quote_id && <span style={{ fontSize: 9.5, fontWeight: 700, color: P.accent, background: P.accentSoft, borderRadius: 20, padding: "1px 7px" }}>from quote</span>}
         </div>
-        {inv.status === "paid" && <div style={{ fontSize: 11, color: P.textMuted, marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}><CreditCard size={11} /> Marked paid · {formatDate(inv.created_at)}</div>}
-        {inv.status === "overdue" && <div style={{ fontSize: 11, color: P.danger, marginTop: 3 }}>{overdueDays > 0 ? `${overdueDays} days overdue · ` : ""}was due {formatDate(inv.due_date)}</div>}
-        {inv.status === "unpaid" && <div style={{ fontSize: 11, color: P.textMuted, marginTop: 3 }}>{inv.due_date ? `Due ${formatDate(inv.due_date)}` : "No due date set"}</div>}
+        {status === "paid" && <div style={{ fontSize: 11, color: P.textMuted, marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}><CreditCard size={11} /> Marked paid · {formatDate(inv.paid_at || inv.created_at)}</div>}
+        {status === "overdue" && <div style={{ fontSize: 11, color: P.danger, marginTop: 3 }}>{overdueDays > 0 ? `${overdueDays} days overdue · ` : ""}was due {formatDate(inv.due_date)}</div>}
+        {status === "unpaid" && <div style={{ fontSize: 11, color: P.textMuted, marginTop: 3 }}>{inv.due_date ? `Due ${formatDate(inv.due_date)}` : "No due date set"}</div>}
       </div>
 
-      <StatusBadge status={inv.status} />
+      <StatusBadge status={status} />
 
       <div style={{ fontSize: 15, fontWeight: 700, color: P.textPrimary, width: 74, textAlign: "right", flexShrink: 0 }}>{money(inv.amount)}</div>
 
@@ -174,7 +189,7 @@ function InvoiceRow({ inv, i, onMarkPaid, onPreview, onEdit, marking }) {
         <button onClick={() => onPreview(inv)} style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 8, padding: "6px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>
           <FileText size={12} /> PDF
         </button>
-        {(inv.status === "unpaid" || inv.status === "overdue") && (
+        {(status === "unpaid" || status === "overdue") && (
           <button onClick={() => onMarkPaid(inv.id)} disabled={marking} style={{ display: "flex", alignItems: "center", gap: 5, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 8, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: marking ? "default" : "pointer", opacity: marking ? 0.7 : 1 }}>
             {marking ? <Loader2 size={12} className="animate-spin" /> : <CreditCard size={12} />} Mark paid
           </button>
@@ -256,6 +271,10 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
       setError("Enter a valid amount.");
       return;
     }
+    if (itemized && !vehicleId) {
+      setError("Select a vehicle before itemizing services — pricing depends on the vehicle's size class.");
+      return;
+    }
     setSaving(true);
     setError("");
 
@@ -270,12 +289,25 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
       }
     }
 
+    // Snapshotting name/price at save time (rather than only storing
+    // service_ids and looking them up live) means a service that's later
+    // renamed or deleted in Settings can't silently change or blank out
+    // what this invoice's PDF shows — it always reflects what the customer
+    // actually agreed to pay at the time.
+    const lineItemsSnapshot = itemized
+      ? serviceIds.map((id) => {
+          const s = findService(services, id);
+          return { id, name: s?.name || "Service", price: svcPrice(s, selectedVehicle), includes: s?.includes || [] };
+        })
+      : null;
+
     const payload = {
       business_id: businessId,
       customer_id: customerId || null,
       quote_id: quoteId || null,
       vehicle_id: vehicleId || null,
       service_ids: serviceIds,
+      line_items: lineItemsSnapshot,
       tax_rate: Number(taxRate) || 0,
       amount: amt,
       status,
@@ -338,7 +370,8 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
 
           <div>
             <label style={labelStyle}>Services (optional — itemizes the PDF)</label>
-            <div style={{ border: `1px solid ${P.border}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 10, maxHeight: 180, overflowY: "auto" }}>
+            {!vehicleId && <p style={{ fontSize: 11, color: P.textMuted, margin: "-2px 0 8px", fontStyle: "italic" }}>Select a vehicle above first — pricing depends on vehicle size.</p>}
+            <div style={{ border: `1px solid ${P.border}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 10, maxHeight: 180, overflowY: "auto", opacity: vehicleId ? 1 : 0.5, pointerEvents: vehicleId ? "auto" : "none" }}>
               {services.length === 0 ? (
                 <p style={{ fontSize: 12, color: P.textMuted, margin: 0, fontStyle: "italic" }}>No services set up yet.</p>
               ) : categories.map((cat) => (
@@ -471,12 +504,18 @@ function PrintableInvoice({ inv, services, business }) {
   const { subtotal, tax, total } = invoiceBreakdown(inv.amount, inv.tax_rate);
   const vehicle = inv.vehicles;
   const serviceIds = inv.service_ids || [];
-  const lineItems = serviceIds.length > 0
-    ? serviceIds.map((id) => {
-        const s = findService(services, id);
-        return { name: s?.name || "Service", price: svcPrice(s, vehicle), includes: s?.includes || [] };
-      })
-    : [{ name: "Detailing service", price: subtotal, includes: [] }];
+  // Prefer the name/price snapshot taken when the invoice was saved — a
+  // service renamed or deleted afterward in Settings shouldn't change what
+  // an already-issued invoice shows. Older invoices saved before this
+  // snapshot existed fall back to a live lookup.
+  const lineItems = inv.line_items && inv.line_items.length > 0
+    ? inv.line_items.map((li) => ({ name: li.name, price: Number(li.price) || 0, includes: li.includes || [] }))
+    : serviceIds.length > 0
+      ? serviceIds.map((id) => {
+          const s = findService(services, id);
+          return { name: s?.name || "Service", price: svcPrice(s, vehicle), includes: s?.includes || [] };
+        })
+      : [{ name: "Detailing service", price: subtotal, includes: [] }];
   const paymentTerms = inv.due_date ? `Payment due by ${formatDate(inv.due_date)}` : "Due on receipt";
 
   return (
@@ -493,7 +532,7 @@ function PrintableInvoice({ inv, services, business }) {
         )}
         {inv.customers?.phone && <div style={{ fontSize: 12, color: "#444", marginTop: 3 }}>{inv.customers.phone}</div>}
         {inv.customers?.email && <div style={{ fontSize: 12, color: "#444", marginTop: 3 }}>{inv.customers.email}</div>}
-        <div style={{ fontSize: 11, color: "#777", marginTop: 6, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.04em" }}>{inv.status}</div>
+        <div style={{ fontSize: 11, color: "#777", marginTop: 6, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.04em" }}>{effectiveStatus(inv)}</div>
       </PrintSection>
 
       {inv.notes && (
@@ -609,9 +648,10 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
 
   async function markPaid(id) {
     const previous = invoices;
+    const paidAt = new Date().toISOString();
     setMarkingId(id);
-    setInvoices((list) => list.map((inv) => (inv.id === id ? { ...inv, status: "paid" } : inv)));
-    const { error: updateError } = await supabase.from("invoices").update({ status: "paid" }).eq("id", id);
+    setInvoices((list) => list.map((inv) => (inv.id === id ? { ...inv, status: "paid", paid_at: paidAt } : inv)));
+    const { error: updateError } = await supabase.from("invoices").update({ status: "paid", paid_at: paidAt }).eq("id", id);
     setMarkingId(null);
     if (updateError) setInvoices(previous);
   }
@@ -639,14 +679,14 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
 
   const filtered = invoices.filter((inv) => {
     const matchesQuery = `${inv.customers?.name || ""} ${inv.id}`.toLowerCase().includes(query.toLowerCase());
-    const matchesFilter = filter === "All" || inv.status === filter.toLowerCase();
+    const matchesFilter = filter === "All" || effectiveStatus(inv) === filter.toLowerCase();
     return matchesQuery && matchesFilter;
   });
 
   const totalInvoiced = invoices.reduce((s, i) => s + Number(i.amount), 0);
   const totalPaid = invoices.filter((i) => i.status === "paid").reduce((s, i) => s + Number(i.amount), 0);
   const totalOutstanding = invoices.filter((i) => i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
-  const overdueCount = invoices.filter((i) => i.status === "overdue").length;
+  const overdueCount = invoices.filter((i) => effectiveStatus(i) === "overdue").length;
 
   return (
     <div style={{ minHeight: "100vh", background: P.bg, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", display: "flex" }}>
@@ -707,7 +747,7 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
 
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {FILTERS.map((f) => {
-              const count = f === "All" ? invoices.length : invoices.filter((i) => i.status === f.toLowerCase()).length;
+              const count = f === "All" ? invoices.length : invoices.filter((i) => effectiveStatus(i) === f.toLowerCase()).length;
               const isActive = filter === f;
               return (
                 <button key={f} onClick={() => setFilter(f)} style={{ fontSize: 12, fontWeight: 700, padding: "6px 13px", borderRadius: 20, cursor: "pointer", border: `1px solid ${isActive ? P.accent : P.border}`, background: isActive ? P.accentSoft : "transparent", color: isActive ? P.accent : P.textSecondary }}>

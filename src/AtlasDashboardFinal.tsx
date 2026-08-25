@@ -548,8 +548,12 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
   const today = new Date();
   const todaysJobs = jobs.filter((j) => j.scheduled_at && sameDay(new Date(j.scheduled_at), today));
   const todaysActiveJobs = todaysJobs.filter((j) => j.status !== "cancelled");
-  const todaysRevenue = todaysActiveJobs.reduce((sum, j) => sum + estimateJobPrice(j, servicesById), 0);
-  const todaysCompleted = todaysActiveJobs.filter((j) => j.status === "completed").length;
+  // "Revenue" means money actually earned, not the estimated value of work
+  // that's merely scheduled — only completed jobs count toward it (matches
+  // the "N jobs completed" subtext shown right under the figure).
+  const todaysCompletedJobs = todaysActiveJobs.filter((j) => j.status === "completed");
+  const todaysRevenue = todaysCompletedJobs.reduce((sum, j) => sum + estimateJobPrice(j, servicesById), 0);
+  const todaysCompleted = todaysCompletedJobs.length;
   const todaysRemaining = todaysActiveJobs.filter((j) => j.status === "scheduled" || j.status === "in_progress").length;
   const todaysSchedule = [...todaysActiveJobs].sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at)).slice(0, 4);
 
@@ -558,7 +562,7 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
     const d = new Date(monday);
     d.setDate(d.getDate() + i);
     const value = jobs
-      .filter((j) => j.status !== "cancelled" && j.scheduled_at && sameDay(new Date(j.scheduled_at), d))
+      .filter((j) => j.status === "completed" && j.scheduled_at && sameDay(new Date(j.scheduled_at), d))
       .reduce((sum, j) => sum + estimateJobPrice(j, servicesById), 0);
     return { day: label, value };
   });
@@ -646,7 +650,7 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
           ) : (
             <>
               <BentoGrid kpi={kpi} earnings={weekEarnings} />
-              <ProfitBanner editMode={editMode} visible={visible.profitBanner} onToggle={() => toggle("profitBanner")} jobsToday={todaysActiveJobs.length} revenueToday={todaysRevenue} />
+              <ProfitBanner editMode={editMode} visible={visible.profitBanner} onToggle={() => toggle("profitBanner")} jobsToday={todaysCompleted} revenueToday={todaysRevenue} />
 
               <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, padding: "16px 18px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
