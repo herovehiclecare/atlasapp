@@ -1,0 +1,766 @@
+import { useState, useEffect, useRef, useMemo } from "react";
+import {
+  LayoutGrid, Calendar, Users, Car, Receipt, Settings, Sparkles,
+  MoreHorizontal, Pencil, Camera, Plus, ChevronLeft, ChevronRight,
+  X, Eye, EyeOff, Loader2, ListChecks,
+} from "lucide-react";
+import { supabase } from "./supabaseClient";
+import { useBusinessId } from "./useBusinessId";
+import { resizeImageToDataUrl, useLiveClock, formatDateTime, mergeBusinessJsonb } from "./lib";
+
+const P = {
+  bg: "#06100C", bgTop: "#0B1813", surface: "#0F1B15", surfaceHover: "#132018",
+  border: "#1E2E25", textPrimary: "#EDF6F1", textSecondary: "#92AA9D", textMuted: "#566B5E",
+  accent: "#18D97A", accentHover: "#35E890", secondary: "#FF7A63",
+  accentSoft: "rgba(24,217,122,0.14)", secondarySoft: "rgba(255,122,99,0.14)", danger: "#FF6B5E",
+};
+const STATUS = { scheduled: "#4C8DFF", in_progress: "#F5A623", completed: P.accent, cancelled: P.danger };
+const STATUS_LABEL = { scheduled: "Scheduled", in_progress: "In Progress", completed: "Completed", cancelled: "Cancelled" };
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const inputStyle = {
+  width: "100%", background: "transparent", border: `1px solid ${P.border}`,
+  borderRadius: 10, padding: "10px 12px", fontSize: 13.5, color: P.textPrimary, outline: "none", boxSizing: "border-box",
+};
+const labelStyle = { display: "block", fontSize: 12.5, fontWeight: 500, color: P.textSecondary, marginBottom: 6 };
+
+function AtlasMark({ size = 24 }) {
+  const gid = "atlas-globe-schedule";
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+      <defs><radialGradient id={gid} cx="36%" cy="30%" r="75%"><stop offset="0%" stopColor={P.accentHover} /><stop offset="100%" stopColor={P.accent} /></radialGradient></defs>
+      <path d="M18 82 L49 33 L51 33 L82 82" stroke={P.accent} strokeWidth="13" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <circle cx="50" cy="31" r="18" fill={`url(#${gid})`} />
+      <ellipse cx="44" cy="24" rx="6.5" ry="4.2" fill="rgba(255,255,255,0.38)" />
+    </svg>
+  );
+}
+
+const NAV = [
+  { id: "dashboard", label: "Dashboard", Icon: LayoutGrid }, { id: "customers", label: "Customers", Icon: Users },
+  { id: "vehicles", label: "Vehicles", Icon: Car }, { id: "quote", label: "Atlas QuickQuote", Icon: Sparkles },
+  { id: "schedule", label: "Schedule", Icon: Calendar }, { id: "followups", label: "Follow-ups", Icon: ListChecks },
+  { id: "invoices", label: "Invoices", Icon: Receipt },
+  { id: "settings", label: "Settings", Icon: Settings },
+];
+const MOBILE_NAV = [
+  { id: "dashboard", label: "Home", Icon: LayoutGrid }, { id: "schedule", label: "Schedule", Icon: Calendar },
+  { id: "customers", label: "Clients", Icon: Users }, { id: "invoices", label: "Invoices", Icon: Receipt },
+  { id: "more", label: "More", Icon: MoreHorizontal },
+];
+// Pages that don't fit in the 5-slot mobile bottom bar — "More" opens a sheet listing these.
+const MORE_PAGES = [
+  { id: "vehicles", label: "Vehicles", Icon: Car }, { id: "quote", label: "Atlas QuickQuote", Icon: Sparkles },
+  { id: "followups", label: "Follow-ups", Icon: ListChecks }, { id: "settings", label: "Settings", Icon: Settings },
+];
+
+function money(n) { return `$${Math.round(n).toLocaleString()}`; }
+function sameDay(a, b) { return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+function sameMonth(a, b) { return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth(); }
+function toInputDate(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+function formatTime(iso) { return iso ? new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "—"; }
+function jobDate(job) { return job.scheduled_at ? new Date(job.scheduled_at) : null; }
+
+function buildMonthGrid(viewMonth) {
+  const year = viewMonth.getFullYear();
+  const month = viewMonth.getMonth();
+  const gridStart = new Date(year, month, 1 - new Date(year, month, 1).getDay());
+  return Array.from({ length: 42 }, (_, i) => {
+    const d = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i);
+    return { date: d, inMonth: d.getMonth() === month };
+  });
+}
+
+function estimateJobPrice(job, servicesById) {
+  const ids = Array.isArray(job.service_ids) ? job.service_ids : [];
+  if (ids.length === 0) return null;
+  const isSuv = job.vehicles?.size_class === "suv_truck_van";
+  let total = 0;
+  let known = false;
+  for (const id of ids) {
+    const svc = servicesById[id];
+    const price = isSuv ? (svc?.price_suv_low ?? svc?.price_car_low) : svc?.price_car_low;
+    if (price != null) { total += Number(price); known = true; }
+  }
+  return known ? total : null;
+}
+
+function jobServiceNames(job, servicesById) {
+  const ids = Array.isArray(job.service_ids) ? job.service_ids : [];
+  const names = ids.map((id) => servicesById[id]?.name).filter(Boolean);
+  return names.length ? names.join(", ") : "No services selected";
+}
+
+function initials(name) { return name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase(); }
+
+/* ---------------------------------- shared chrome ---------------------------------- */
+
+function NavItem({ item, active, onClick }) {
+  const { Icon, label } = item;
+  return (
+    <button onClick={onClick} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: "9px 12px", borderRadius: 9, border: "none", cursor: "pointer", textAlign: "left", background: active ? P.surfaceHover : "transparent", color: active ? P.textPrimary : P.textSecondary }}>
+      <Icon size={17} color={active ? P.accent : P.textMuted} />
+      <span style={{ fontSize: 13.5, fontWeight: active ? 600 : 500 }}>{label}</span>
+    </button>
+  );
+}
+
+function BrandLockup({ size = 30, businessId, realName, realLogoUrl }) {
+  const [logo, setLogo] = useState(null);
+  const [name, setName] = useState("Detail Hero");
+  const [editingName, setEditingName] = useState(false);
+  const fileRef = useRef(null);
+
+  useEffect(() => { if (realLogoUrl !== undefined) setLogo(realLogoUrl || null); }, [realLogoUrl]);
+  useEffect(() => { if (realName) setName(realName); }, [realName]);
+
+  async function onPick(e) {
+    const file = e.target.files?.[0];
+    if (!file || !businessId) return;
+    try {
+      const dataUrl = await resizeImageToDataUrl(file, 256);
+      setLogo(dataUrl);
+      const { error } = await supabase.from("businesses").update({ logo_url: dataUrl }).eq("id", businessId).select().single();
+      if (error) throw error;
+    } catch (err) {
+      alert(err.message || "Couldn't save that logo.");
+    }
+  }
+  async function commitName() {
+    setEditingName(false);
+    if (businessId && name.trim()) await supabase.from("businesses").update({ name: name.trim() }).eq("id", businessId);
+  }
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <button onClick={() => fileRef.current?.click()} title="Change logo" style={{ position: "relative", width: size, height: size, borderRadius: "50%", border: `1px solid ${P.border}`, background: logo ? `url(${logo}) center/cover` : P.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, padding: 0 }}>
+        {!logo && <span style={{ fontSize: size * 0.36, fontWeight: 700, color: P.accent }}>{initials(name)}</span>}
+        <div style={{ position: "absolute", bottom: -2, right: -2, width: 16, height: 16, borderRadius: "50%", background: P.accent, display: "flex", alignItems: "center", justifyContent: "center", border: `2px solid ${P.bg}` }}><Camera size={9} color={P.bg} /></div>
+      </button>
+      <input ref={fileRef} type="file" accept="image/*" onChange={onPick} style={{ display: "none" }} />
+      {editingName ? (
+        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onBlur={commitName} onKeyDown={(e) => e.key === "Enter" && commitName()} style={{ background: "transparent", border: "none", borderBottom: `1px solid ${P.accent}`, color: P.textPrimary, fontSize: 15, fontWeight: 700, outline: "none", width: 140 }} />
+      ) : (
+        <button onClick={() => setEditingName(true)} style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 5, padding: 0 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: P.textPrimary }}>{name}</span>
+          <Pencil size={11} color={P.textMuted} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function VisibilityToggle({ editMode, visible, onToggle }) {
+  if (editMode) {
+    return (
+      <button onClick={onToggle} style={{ display: "flex", alignItems: "center", gap: 5, background: visible ? "transparent" : P.accentSoft, border: `1px solid ${visible ? P.border : P.accent}`, borderRadius: 7, padding: "4px 9px", color: visible ? P.textMuted : P.accent, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+        {visible ? <EyeOff size={11} /> : <Eye size={11} />} {visible ? "Hide" : "Show"}
+      </button>
+    );
+  }
+  return (
+    <button onClick={onToggle} title="Hide this" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", padding: 3, display: "flex" }}>
+      <X size={13} />
+    </button>
+  );
+}
+
+function HiddenGhost({ label, onToggle }) {
+  return (
+    <button onClick={onToggle} style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", background: "transparent", border: `1px dashed ${P.border}`, borderRadius: 12, padding: "12px 16px", color: P.textMuted, fontSize: 12, cursor: "pointer" }}>
+      <Eye size={13} /> {label} — click to show it again
+    </button>
+  );
+}
+
+function Legend() {
+  return (
+    <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+      {Object.entries(STATUS).map(([k, color]) => (
+        <span key={k} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: P.textMuted }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: color }} /> {STATUS_LABEL[k]}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/* ---------------------------------- Month view (drag to reschedule) ---------------------------------- */
+
+function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate }) {
+  const [dragId, setDragId] = useState(null);
+  const cells = useMemo(() => buildMonthGrid(viewMonth), [viewMonth]);
+  const today = new Date();
+
+  return (
+    <div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,minmax(0,1fr))", marginBottom: 6 }}>
+        {WEEKDAYS.map((w) => <div key={w} style={{ textAlign: "center", fontSize: 11, fontWeight: 700, color: P.textMuted, padding: "6px 0" }}>{w}</div>)}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,minmax(0,1fr))", gap: 6 }}>
+        {cells.map((c, i) => {
+          const dayJobs = jobs.filter((j) => sameDay(jobDate(j), c.date));
+          const isToday = sameDay(c.date, today);
+          const isPreviewed = previewDate && sameDay(c.date, previewDate);
+          return (
+            <div
+              key={i}
+              onDragOver={(e) => c.inMonth && e.preventDefault()}
+              onDrop={() => { if (c.inMonth && dragId != null) { moveJob(dragId, c.date); setDragId(null); } }}
+              onClick={() => c.inMonth && setPreviewDate(isPreviewed ? null : c.date)}
+              style={{
+                minHeight: 78, minWidth: 0, borderRadius: 10, padding: 6, cursor: c.inMonth ? "pointer" : "default",
+                background: isPreviewed ? P.accentSoft : P.surface,
+                border: `1px solid ${isPreviewed ? P.accent : P.border}`,
+                boxShadow: isPreviewed ? `0 0 0 2px ${P.accentSoft}` : "none",
+                opacity: c.inMonth ? 1 : 0.35, overflow: "hidden",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                <span style={{ fontSize: 11.5, fontWeight: isPreviewed ? 800 : 600, color: isPreviewed ? P.accent : P.textSecondary }}>{c.date.getDate()}</span>
+                {isToday && <span title="Today" style={{ width: 4, height: 4, borderRadius: "50%", background: P.accent, flexShrink: 0 }} />}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                {dayJobs.slice(0, 3).map((j) => (
+                  <div
+                    key={j.id}
+                    draggable
+                    onDragStart={() => setDragId(j.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    title={`${formatTime(j.scheduled_at)} · ${j.customers?.name || "No customer"}`}
+                    style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, background: `${STATUS[j.status]}1F`, borderRadius: 5, padding: "2px 4px", cursor: "grab" }}
+                  >
+                    <span style={{ width: 5, height: 5, borderRadius: "50%", background: STATUS[j.status], flexShrink: 0 }} />
+                    <span style={{ fontSize: 9.5, color: P.textSecondary, minWidth: 0, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{(j.customers?.name || "No customer").split(" ")[0]}</span>
+                  </div>
+                ))}
+                {dayJobs.length > 3 && <span style={{ fontSize: 9, color: P.textMuted, paddingLeft: 2 }}>+{dayJobs.length - 3} more</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p style={{ fontSize: 11.5, color: P.textMuted, marginTop: 10, fontStyle: "italic" }}>Click a day to preview it, or hold and drag a job to reschedule.</p>
+    </div>
+  );
+}
+
+function DayPreview({ date, jobs, servicesById, openFullDay, onClose, onAddJob }) {
+  const dayJobs = jobs.filter((j) => sameDay(jobDate(j), date)).sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
+  const dateLabel = date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  return (
+    <div style={{ background: P.surface, border: `1px solid ${P.accent}`, borderRadius: 14, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: `1px solid ${P.border}` }}>
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: P.textPrimary }}>{dateLabel}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button onClick={openFullDay} style={{ background: "transparent", border: "none", color: P.accent, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Open full day →</button>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", display: "flex" }}><X size={15} /></button>
+        </div>
+      </div>
+
+      {dayJobs.length === 0 ? (
+        <div style={{ padding: "20px 16px", textAlign: "center" }}>
+          <p style={{ fontSize: 12.5, color: P.textMuted, margin: "0 0 10px" }}>No jobs on this day yet.</p>
+          <button onClick={() => onAddJob(date)} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 8, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            <Plus size={13} /> Add job
+          </button>
+        </div>
+      ) : (
+        <div>
+          {dayJobs.map((j, i) => (
+            <div key={j.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 16px", borderBottom: i < dayJobs.length - 1 ? `1px solid ${P.border}` : "none" }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS[j.status], flexShrink: 0 }} />
+              <div style={{ fontSize: 11.5, color: P.textMuted, width: 78, flexShrink: 0 }}>{formatTime(j.scheduled_at)}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: P.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{j.customers?.name || "No customer"}</div>
+                <div style={{ fontSize: 11, color: P.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{j.vehicles?.label || "No vehicle"} · {jobServiceNames(j, servicesById)}</div>
+              </div>
+              {(() => { const est = estimateJobPrice(j, servicesById); return <div style={{ fontSize: 12.5, fontWeight: 700, color: est != null ? P.textPrimary : P.textMuted, flexShrink: 0 }}>{est != null ? money(est) : "—"}</div>; })()}
+            </div>
+          ))}
+          <div style={{ padding: "10px 16px" }}>
+            <button onClick={() => onAddJob(date)} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: `1px dashed ${P.border}`, color: P.textMuted, borderRadius: 8, padding: "6px 12px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>
+              <Plus size={12} /> Add another job
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------------------------- Week view ---------------------------------- */
+
+function WeekView({ jobs, selectedDate, goToDate }) {
+  const startOfWeek = new Date(selectedDate);
+  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+  const weekDays = Array.from({ length: 7 }, (_, i) => { const d = new Date(startOfWeek); d.setDate(d.getDate() + i); return d; });
+  const today = new Date();
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${weekDays.length}, minmax(0,1fr))`, gap: 8 }}>
+      {weekDays.map((d) => {
+        const dayJobs = jobs.filter((j) => sameDay(jobDate(j), d)).sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
+        const isToday = sameDay(d, today);
+        return (
+          <div key={d.toISOString()} onClick={() => goToDate(d)} style={{ cursor: "pointer", minWidth: 0, overflow: "hidden", background: isToday ? P.accentSoft : P.surface, border: `1px solid ${isToday ? P.accent : P.border}`, borderRadius: 10, padding: 8, minHeight: 140 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: isToday ? P.accent : P.textSecondary, marginBottom: 6, textAlign: "center" }}>
+              {WEEKDAYS[d.getDay()]} {d.getDate()}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+              {dayJobs.map((j) => (
+                <div key={j.id} style={{ background: `${STATUS[j.status]}1F`, borderRadius: 6, padding: "4px 5px", minWidth: 0, overflow: "hidden" }}>
+                  <div style={{ fontSize: 9, color: P.textMuted }}>{formatTime(j.scheduled_at)}</div>
+                  <div style={{ fontSize: 10, color: P.textPrimary, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{j.customers?.name || "No customer"}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---------------------------------- Day view ---------------------------------- */
+
+function DayView({ jobs, selectedDate, servicesById }) {
+  const dayJobs = jobs.filter((j) => sameDay(jobDate(j), selectedDate)).sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
+  const dateLabel = selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
+  if (dayJobs.length === 0) {
+    return (
+      <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, padding: "40px 18px", textAlign: "center" }}>
+        <Calendar size={22} color={P.textMuted} style={{ marginBottom: 10 }} />
+        <div style={{ fontSize: 14, fontWeight: 600, color: P.textPrimary }}>No jobs on {dateLabel}</div>
+        <div style={{ fontSize: 12.5, color: P.textMuted, marginTop: 4 }}>Enjoy the day, or schedule a new job.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {dayJobs.map((j) => {
+        const est = estimateJobPrice(j, servicesById);
+        return (
+          <div key={j.id} style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 12, padding: "13px 16px", display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ width: 9, height: 9, borderRadius: "50%", background: STATUS[j.status], flexShrink: 0 }} />
+            <div style={{ fontSize: 12, color: P.textMuted, width: 84, flexShrink: 0 }}>{formatTime(j.scheduled_at)}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>{j.customers?.name || "No customer"}</div>
+              <div style={{ fontSize: 12, color: P.textMuted }}>{j.vehicles?.label || "No vehicle"} · {jobServiceNames(j, servicesById)}</div>
+            </div>
+            <span style={{ fontSize: 10.5, fontWeight: 700, padding: "3px 9px", borderRadius: 20, background: `${STATUS[j.status]}22`, color: STATUS[j.status], flexShrink: 0 }}>{STATUS_LABEL[j.status]}</span>
+            <div style={{ fontSize: 13, fontWeight: 700, color: est != null ? P.textPrimary : P.textMuted, width: 64, textAlign: "right", flexShrink: 0 }}>{est != null ? money(est) : "—"}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---------------------------------- Add Job modal ---------------------------------- */
+
+function AddJobModal({ businessId, customers, vehicles, services, initialDate, onClose, onAdded }) {
+  const [customerId, setCustomerId] = useState("");
+  const [vehicleId, setVehicleId] = useState("");
+  const [serviceIds, setServiceIds] = useState([]);
+  const [date, setDate] = useState(toInputDate(initialDate || new Date()));
+  const [time, setTime] = useState("09:00");
+  const [status, setStatus] = useState("scheduled");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const vehiclesForCustomer = customerId ? vehicles.filter((v) => v.customer_id === customerId) : vehicles;
+  const categories = [...new Set(services.map((s) => s.category))];
+
+  function toggleService(id) {
+    setServiceIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!date || !time) {
+      setError("Pick a date and time.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+
+    const scheduledAt = new Date(`${date}T${time}`).toISOString();
+    const { data, error: insertError } = await supabase
+      .from("jobs")
+      .insert({
+        business_id: businessId,
+        customer_id: customerId || null,
+        vehicle_id: vehicleId || null,
+        service_ids: serviceIds,
+        scheduled_at: scheduledAt,
+        status,
+      })
+      .select("*, customers(name), vehicles(label, size_class)")
+      .single();
+
+    setSaving(false);
+    if (insertError) {
+      setError(insertError.message);
+      return;
+    }
+    onAdded(data);
+  }
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 50 }} />
+      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(460px, calc(100vw - 32px))", maxHeight: "calc(100vh - 40px)", overflowY: "auto", background: P.bg, border: `1px solid ${P.border}`, borderRadius: 16, zIndex: 51, padding: 22 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: P.textPrimary }}>New job</span>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", display: "flex" }}><X size={18} /></button>
+        </div>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {error && <div style={{ fontSize: 12.5, color: P.danger }}>{error}</div>}
+
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Customer</label>
+              <select value={customerId} onChange={(e) => { setCustomerId(e.target.value); setVehicleId(""); }} style={inputStyle}>
+                <option value="">No customer</option>
+                {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Vehicle</label>
+              <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} style={inputStyle}>
+                <option value="">No vehicle</option>
+                {vehiclesForCustomer.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Date</label>
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={inputStyle} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Time</label>
+              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} style={inputStyle} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Status</label>
+              <select value={status} onChange={(e) => setStatus(e.target.value)} style={inputStyle}>
+                {Object.keys(STATUS_LABEL).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Services</label>
+            <div style={{ border: `1px solid ${P.border}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 10, maxHeight: 200, overflowY: "auto" }}>
+              {categories.map((cat) => (
+                <div key={cat}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: P.textMuted, marginBottom: 6 }}>{cat}</div>
+                  {services.filter((s) => s.category === cat).map((s) => (
+                    <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", cursor: "pointer" }}>
+                      <input type="checkbox" checked={serviceIds.includes(s.id)} onChange={() => toggleService(s.id)} style={{ accentColor: P.accent }} />
+                      <span style={{ fontSize: 12.5, color: P.textSecondary, flex: 1 }}>{s.name}</span>
+                      <span style={{ fontSize: 11.5, color: P.textMuted }}>from ${s.price_car_low}</span>
+                    </label>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button type="submit" disabled={saving} style={{ marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: `linear-gradient(120deg, ${P.accent}, ${P.secondary})`, color: P.bg, border: "none", borderRadius: 10, padding: "11px 16px", fontSize: 13.5, fontWeight: 700, cursor: saving ? "default" : "pointer", opacity: saving ? 0.85 : 1 }}>
+            {saving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : "Create job"}
+          </button>
+        </form>
+      </div>
+    </>
+  );
+}
+
+/* ---------------------------------- page ---------------------------------- */
+
+export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) {
+  const { businessId, businessName, businessLogoUrl, businessUiPrefs, loading: bizLoading, error: bizError } = useBusinessId();
+  const now = useLiveClock();
+  const [jobs, setJobs] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
+  const [services, setServices] = useState([]);
+  const [loadingJobs, setLoadingJobs] = useState(true);
+  const [jobsError, setJobsError] = useState("");
+
+  const [view, setView] = useState("month");
+  const [viewMonth, setViewMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
+  const [previewDate, setPreviewDate] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [visible, setVisible] = useState({ stats: true, ai: true });
+
+  useEffect(() => {
+    if (businessUiPrefs?.schedule) setVisible((v) => ({ ...v, ...businessUiPrefs.schedule }));
+  }, [businessUiPrefs]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addDate, setAddDate] = useState(null);
+  function toggleVisible(key) {
+    setVisible((v) => {
+      const next = { ...v, [key]: !v[key] };
+      if (businessId) {
+        mergeBusinessJsonb(supabase, businessId, "ui_prefs", { schedule: next }).catch((err) => console.error(err));
+      }
+      return next;
+    });
+  }
+
+  useEffect(() => {
+    if (!businessId) return;
+    let cancelled = false;
+
+    async function load() {
+      setLoadingJobs(true);
+      const [jobsResult, customersResult, vehiclesResult, servicesResult] = await Promise.all([
+        supabase.from("jobs").select("*, customers(name), vehicles(label, size_class)").eq("business_id", businessId).order("scheduled_at", { ascending: true }),
+        supabase.from("customers").select("id, name").eq("business_id", businessId).order("name", { ascending: true }),
+        supabase.from("vehicles").select("id, label, customer_id, size_class").eq("business_id", businessId).order("label", { ascending: true }),
+        supabase.from("services").select("id, name, category, price_car_low, price_suv_low").eq("business_id", businessId).order("sort_order", { ascending: true }),
+      ]);
+
+      if (cancelled) return;
+      if (jobsResult.error) {
+        setJobsError(jobsResult.error.message);
+      } else {
+        setJobs(jobsResult.data);
+      }
+      setCustomers(customersResult.data || []);
+      setVehicles(vehiclesResult.data || []);
+      setServices(servicesResult.data || []);
+      setLoadingJobs(false);
+    }
+
+    load();
+    return () => { cancelled = true; };
+  }, [businessId]);
+
+  const loading = bizLoading || (!!businessId && loadingJobs);
+  const error = bizError || jobsError;
+  const servicesById = useMemo(() => Object.fromEntries(services.map((s) => [s.id, s])), [services]);
+
+  function openAddJob(date) {
+    setAddDate(date);
+    setAddOpen(true);
+  }
+
+  function handleAdded(job) {
+    setJobs((js) => [...js, job].sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at)));
+    setAddOpen(false);
+  }
+
+  async function moveJob(id, newDate) {
+    const job = jobs.find((j) => j.id === id);
+    if (!job || !job.scheduled_at) return;
+    const old = new Date(job.scheduled_at);
+    const updated = new Date(newDate.getFullYear(), newDate.getMonth(), newDate.getDate(), old.getHours(), old.getMinutes());
+    const iso = updated.toISOString();
+    const previous = job.scheduled_at;
+    setJobs((js) => js.map((j) => (j.id === id ? { ...j, scheduled_at: iso } : j)));
+    const { error: updateError } = await supabase.from("jobs").update({ scheduled_at: iso }).eq("id", id);
+    if (updateError) {
+      setJobs((js) => js.map((j) => (j.id === id ? { ...j, scheduled_at: previous } : j)));
+    }
+  }
+
+  function goToDate(d) { setSelectedDate(d); setView("day"); setPreviewDate(null); }
+
+  function shiftMonth(delta) { setViewMonth((m) => new Date(m.getFullYear(), m.getMonth() + delta, 1)); }
+  function shiftWeek(delta) { setSelectedDate((d) => { const n = new Date(d); n.setDate(n.getDate() + delta * 7); return n; }); }
+  function shiftDay(delta) { setSelectedDate((d) => { const n = new Date(d); n.setDate(n.getDate() + delta); return n; }); }
+
+  const periodRevenue = useMemo(() => {
+    const active = jobs.filter((j) => j.status !== "cancelled" && j.scheduled_at);
+    let scoped;
+    if (view === "day") scoped = active.filter((j) => sameDay(jobDate(j), selectedDate));
+    else if (view === "week") {
+      const start = new Date(selectedDate); start.setDate(start.getDate() - start.getDay());
+      const end = new Date(start); end.setDate(end.getDate() + 6);
+      scoped = active.filter((j) => { const d = jobDate(j); return d >= start && d <= end; });
+    } else {
+      scoped = active.filter((j) => sameMonth(jobDate(j), viewMonth));
+    }
+    return scoped.reduce((s, j) => s + (estimateJobPrice(j, servicesById) || 0), 0);
+  }, [jobs, view, selectedDate, viewMonth, servicesById]);
+
+  const monthStats = useMemo(() => {
+    const monthJobs = jobs.filter((j) => j.scheduled_at && sameMonth(jobDate(j), viewMonth));
+    const active = monthJobs.filter((j) => j.status !== "cancelled");
+    const cancelledCount = monthJobs.length - active.length;
+    const isCurrentMonth = sameMonth(viewMonth, new Date());
+    const today = new Date();
+    const daysInThisMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate();
+    const openDaysAhead = isCurrentMonth
+      ? Array.from({ length: daysInThisMonth }, (_, i) => i + 1)
+          .filter((d) => d > today.getDate() && !active.some((j) => jobDate(j).getDate() === d && jobDate(j).getMonth() === viewMonth.getMonth()))
+          .length
+      : 0;
+    return { jobCount: active.length, cancelledCount, openDaysAhead };
+  }, [jobs, viewMonth]);
+
+  const periodLabel = view === "day"
+    ? selectedDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
+    : view === "week"
+      ? (() => { const s = new Date(selectedDate); s.setDate(s.getDate() - s.getDay()); const e = new Date(s); e.setDate(e.getDate() + 6); const sameM = s.getMonth() === e.getMonth(); return `${s.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${e.toLocaleDateString("en-US", sameM ? { day: "numeric" } : { month: "short", day: "numeric" })}`; })()
+      : viewMonth.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  return (
+    <div style={{ minHeight: "100vh", background: P.bg, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", display: "flex" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');`}</style>
+
+      {/* SIDEBAR */}
+      <div className="hidden lg:flex" style={{ width: 240, flexShrink: 0, borderRight: `1px solid ${P.border}`, flexDirection: "column", padding: "22px 14px", position: "sticky", top: 0, height: "100vh" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 8px", marginBottom: 28 }}>
+          <AtlasMark size={24} /><span style={{ fontSize: 16, fontWeight: 700, color: P.textPrimary }}>Atlas</span>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          {NAV.map((item) => <NavItem key={item.id} item={item} active={currentPage === item.id} onClick={() => onNavigate(item.id)} />)}
+        </div>
+        <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", borderTop: `1px solid ${P.border}`, paddingTop: 16 }}>
+          <div style={{ width: 28, height: 28, borderRadius: "50%", background: businessLogoUrl ? `url(${businessLogoUrl}) center/cover` : P.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: P.accent }}>{!businessLogoUrl && initials(businessName || "Detail Hero")}</div>
+          <div><div style={{ fontSize: 12.5, fontWeight: 600, color: P.textPrimary }}>{businessName || "Detail Hero"}</div><div style={{ fontSize: 11, color: P.textMuted }}>Owner</div></div>
+        </div>
+      </div>
+
+      {/* MAIN */}
+      <div style={{ flex: 1, minWidth: 0, paddingBottom: 88 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 24px", borderBottom: `1px solid ${P.border}`, position: "sticky", top: 0, background: P.bg, zIndex: 10, gap: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0 }}>
+            <BrandLockup size={30} businessId={businessId} realName={businessName} realLogoUrl={businessLogoUrl} />
+            <div className="hidden lg:flex" style={{ alignItems: "center", gap: 14 }}>
+              <div style={{ width: 1, height: 20, background: P.border }} />
+              <span style={{ fontSize: 13, color: P.textSecondary, whiteSpace: "nowrap" }}>Schedule <span style={{ color: P.textMuted }}>· {periodLabel} · {formatDateTime(now)}</span></span>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <div style={{ display: "flex", border: `1px solid ${P.border}`, borderRadius: 9, overflow: "hidden" }}>
+              {["day", "week", "month"].map((v) => (
+                <button key={v} onClick={() => setView(v)} style={{ background: view === v ? P.accentSoft : "transparent", border: "none", color: view === v ? P.accent : P.textSecondary, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", textTransform: "capitalize" }}>{v}</button>
+              ))}
+            </div>
+            <button onClick={() => openAddJob(view === "day" ? selectedDate : new Date())} disabled={!businessId} style={{ display: "flex", alignItems: "center", gap: 6, background: `linear-gradient(120deg, ${P.accent}, ${P.secondary})`, color: P.bg, border: "none", borderRadius: 8, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: businessId ? "pointer" : "default", opacity: businessId ? 1 : 0.6 }}><Plus size={14} /> New Job</button>
+          </div>
+        </div>
+
+        <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16, maxWidth: 900, margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+          {/* period nav + revenue */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <button onClick={() => (view === "day" ? shiftDay(-1) : view === "week" ? shiftWeek(-1) : shiftMonth(-1))} style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${P.border}`, background: "transparent", color: P.textSecondary, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><ChevronLeft size={15} /></button>
+              <span style={{ fontSize: 14, fontWeight: 700, color: P.textPrimary }}>{periodLabel}</span>
+              <button onClick={() => (view === "day" ? shiftDay(1) : view === "week" ? shiftWeek(1) : shiftMonth(1))} style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${P.border}`, background: "transparent", color: P.textSecondary, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><ChevronRight size={15} /></button>
+            </div>
+            <div style={{ background: P.accentSoft, border: `1px solid ${P.accent}`, borderRadius: 20, padding: "6px 14px", fontSize: 12.5, fontWeight: 700, color: P.accent }}>
+              {view === "day" ? "Day" : view === "week" ? "Week" : "Month"} revenue (est.): {money(periodRevenue)}
+            </div>
+          </div>
+
+          <Legend />
+
+          {view === "month" && (visible.stats || editMode) && (
+            visible.stats ? (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: P.textMuted }}>This month</span>
+                  <VisibilityToggle editMode={editMode} visible={visible.stats} onToggle={() => toggleVisible("stats")} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+                  <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 12, padding: "12px 16px" }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted }}>Jobs This Month</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: P.textPrimary, marginTop: 4 }}>{monthStats.jobCount}</div>
+                    {monthStats.cancelledCount > 0 && <div style={{ fontSize: 11, color: P.textMuted, marginTop: 2 }}>{monthStats.cancelledCount} cancelled</div>}
+                  </div>
+                  <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 12, padding: "12px 16px" }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted }}>Est. Revenue</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: P.textPrimary, marginTop: 4 }}>{money(periodRevenue)}</div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <HiddenGhost label="Jobs stats are hidden" onToggle={() => toggleVisible("stats")} />
+            )
+          )}
+
+          {view === "month" && (visible.ai || editMode) && (
+            visible.ai ? (
+              <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, overflow: "hidden" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "12px 16px", borderBottom: `1px solid ${P.border}` }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, color: P.textPrimary }}><Sparkles size={14} color={P.accent} /> Atlas AI — staying on track</span>
+                  <VisibilityToggle editMode={editMode} visible={visible.ai} onToggle={() => toggleVisible("ai")} />
+                </div>
+                <div style={{ padding: "12px 16px", fontSize: 13, color: P.textSecondary, lineHeight: 1.6 }}>
+                  You're tracking to <strong style={{ color: P.textPrimary }}>{money(periodRevenue)}</strong> (estimated) this month across {monthStats.jobCount} jobs.
+                  {monthStats.openDaysAhead > 0 && <> There {monthStats.openDaysAhead === 1 ? "is" : "are"} still <strong style={{ color: P.accent }}>{monthStats.openDaysAhead} open day{monthStats.openDaysAhead === 1 ? "" : "s"}</strong> left this month — good windows to fill with follow-ups or same-week bookings.</>}
+                </div>
+              </div>
+            ) : (
+              <HiddenGhost label="Atlas AI panel is hidden" onToggle={() => toggleVisible("ai")} />
+            )
+          )}
+
+          {loading ? (
+            <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, padding: "40px 18px", textAlign: "center", fontSize: 13, color: P.textMuted, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+              <Loader2 size={15} className="animate-spin" /> Loading schedule…
+            </div>
+          ) : error ? (
+            <div style={{ background: "rgba(255,107,94,0.1)", border: `1px solid ${P.danger}`, borderRadius: 14, padding: "18px", fontSize: 13, color: P.danger }}>{error}</div>
+          ) : (
+            <>
+              {view === "month" && <MonthView jobs={jobs} viewMonth={viewMonth} moveJob={moveJob} previewDate={previewDate} setPreviewDate={setPreviewDate} />}
+              {view === "month" && previewDate && (
+                <DayPreview date={previewDate} jobs={jobs} servicesById={servicesById} openFullDay={() => goToDate(previewDate)} onClose={() => setPreviewDate(null)} onAddJob={openAddJob} />
+              )}
+              {view === "week" && <WeekView jobs={jobs} selectedDate={selectedDate} goToDate={goToDate} />}
+              {view === "day" && <DayView jobs={jobs} selectedDate={selectedDate} servicesById={servicesById} />}
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="flex lg:hidden" style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: P.bgTop, borderTop: `1px solid ${P.border}`, padding: "10px 6px 18px", justifyContent: "space-around", zIndex: 20 }}>
+        {MOBILE_NAV.map((item) => {
+          const isActive = item.id === "more" ? moreOpen : currentPage === item.id;
+          return (
+            <button key={item.id} onClick={() => (item.id === "more" ? setMoreOpen((v) => !v) : onNavigate(item.id))} style={{ background: "transparent", border: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", color: isActive ? P.accent : P.textMuted }}>
+              <item.Icon size={19} /><span style={{ fontSize: 10.5, fontWeight: isActive ? 600 : 500 }}>{item.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      {moreOpen && (
+        <>
+          <div className="flex lg:hidden" onClick={() => setMoreOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 21 }} />
+          <div className="flex lg:hidden" style={{ position: "fixed", bottom: 84, left: 12, right: 12, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, padding: 8, zIndex: 22, flexDirection: "column", gap: 2 }}>
+            {MORE_PAGES.map((p) => (
+              <button key={p.id} onClick={() => { onNavigate(p.id); setMoreOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", borderRadius: 9, border: "none", background: currentPage === p.id ? P.surfaceHover : "transparent", color: currentPage === p.id ? P.textPrimary : P.textSecondary, cursor: "pointer", textAlign: "left" }}>
+                <p.Icon size={16} color={currentPage === p.id ? P.accent : P.textMuted} />
+                <span style={{ fontSize: 13.5, fontWeight: currentPage === p.id ? 600 : 500 }}>{p.label}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {addOpen && (
+        <AddJobModal
+          businessId={businessId}
+          customers={customers}
+          vehicles={vehicles}
+          services={services}
+          initialDate={addDate}
+          onClose={() => setAddOpen(false)}
+          onAdded={handleAdded}
+        />
+      )}
+    </div>
+  );
+}
