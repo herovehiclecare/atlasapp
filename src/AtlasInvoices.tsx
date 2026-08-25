@@ -208,7 +208,19 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
   const [vehicleId, setVehicleId] = useState(invoice?.vehicle_id || "");
   const [serviceIds, setServiceIds] = useState(invoice?.service_ids || []);
   const [taxRate, setTaxRate] = useState(invoice?.tax_rate != null ? String(invoice.tax_rate) : String(taxEnabled ? defaultTaxRate : 0));
-  const [amount, setAmount] = useState(invoice ? String(invoice.amount) : "");
+  // For a non-itemized invoice, this field represents the pre-tax price the
+  // owner types in — tax is added on top at submit time, same mental model
+  // as itemized services. The stored `amount` column is always the final
+  // tax-inclusive total, so editing an existing manual invoice needs to back
+  // out the pre-tax price from that stored total to show in this field.
+  const [amount, setAmount] = useState(() => {
+    if (!invoice) return "";
+    if ((invoice.service_ids || []).length > 0) return String(invoice.amount);
+    const rate = Number(invoice.tax_rate) || 0;
+    const total = Number(invoice.amount) || 0;
+    const preTax = rate > 0 ? total / (1 + rate / 100) : total;
+    return String(Math.round(preTax * 100) / 100);
+  });
   const [dueDate, setDueDate] = useState(invoice?.due_date || "");
   const [status, setStatus] = useState(invoice?.status || "unpaid");
   const [notes, setNotes] = useState(invoice?.notes || "");
@@ -228,6 +240,15 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
   const computedTax = computedSubtotal * ((Number(taxRate) || 0) / 100);
   const computedTotal = computedSubtotal + computedTax;
 
+  // Manual (non-itemized) entries: `amount` is the pre-tax price typed in,
+  // so the actual total charged has tax added on top — same model as
+  // itemized services, instead of treating whatever's typed as already
+  // including tax.
+  const manualPrice = Number(amount) || 0;
+  const manualTax = manualPrice * ((Number(taxRate) || 0) / 100);
+  const manualTotal = Math.round((manualPrice + manualTax) * 100) / 100;
+  const finalAmount = itemized ? computedTotal : manualTotal;
+
   // When services are picked, the amount is derived from them so the total
   // can never drift out of sync with the itemized lines shown on the PDF.
   useEffect(() => {
@@ -243,7 +264,13 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
     const q = quotes.find((x) => x.id === id);
     if (q?.totals && serviceIds.length === 0) {
       const t = q.totals.isRange ? q.totals.rangeHigh : q.totals.total;
-      if (t != null) setAmount(String(Math.round(t * 100) / 100));
+      if (t != null) {
+        // The quote's total is already tax-inclusive — back out the
+        // pre-tax price so it matches what this field now represents.
+        const rate = Number(taxRate) || 0;
+        const preTax = rate > 0 ? t / (1 + rate / 100) : t;
+        setAmount(String(Math.round(preTax * 100) / 100));
+      }
     }
   }
 
@@ -266,9 +293,9 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
 
   async function handleSubmit(e) {
     e.preventDefault();
-    const amt = Number(amount);
-    if (!amount || Number.isNaN(amt) || amt < 0) {
-      setError("Enter a valid amount.");
+    const amt = finalAmount;
+    if (!amount || Number.isNaN(Number(amount)) || Number(amount) < 0) {
+      setError(itemized ? "Enter a valid amount." : "Enter a valid price.");
       return;
     }
     if (itemized && !vehicleId) {
@@ -401,8 +428,13 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
               )}
             </div>
             <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Amount ($){itemized && " — from services"}</label>
+              <label style={labelStyle}>{itemized ? "Amount ($) — from services" : "Price ($, before tax)"}</label>
               <input type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" disabled={itemized} style={{ ...inputStyle, opacity: itemized ? 0.7 : 1 }} />
+              {!itemized && Number(taxRate) > 0 && manualPrice > 0 && (
+                <p style={{ fontSize: 11, color: P.textMuted, margin: "6px 0 0" }}>
+                  + {taxRate}% tax = <strong style={{ color: P.textSecondary }}>${manualTotal.toFixed(2)}</strong> total
+                </p>
+              )}
             </div>
           </div>
 
