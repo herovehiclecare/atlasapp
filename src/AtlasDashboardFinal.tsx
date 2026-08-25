@@ -193,11 +193,19 @@ function FollowUpsList({ items, customersById, onComplete }) {
 
 /* ---------------------------------- KPI tile (colored circles, no pills, overlap-safe) ---------------------------------- */
 
-function Tile({ stat, tileClass, big, earnings }) {
+function Tile({ stat, tileClass, big, earnings, onNavigate }) {
   const color = HUES[stat.hue];
   const tint = `${color}22`;
+  const clickable = !!(stat.nav && onNavigate);
   return (
-    <div className={tileClass} style={{ minWidth: 0, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 18, padding: big ? 18 : 14, display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 0, overflow: "hidden" }}>
+    <div
+      className={tileClass}
+      onClick={clickable ? () => onNavigate(stat.nav) : undefined}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNavigate(stat.nav); } } : undefined}
+      style={{ minWidth: 0, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 18, padding: big ? 18 : 14, display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 0, overflow: "hidden", cursor: clickable ? "pointer" : "default" }}
+    >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
         <div style={{ fontSize: big ? 11 : 10, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, minWidth: 0, flex: 1, lineHeight: 1.35 }}>
           {stat.label}
@@ -301,7 +309,7 @@ function ProfitBanner({ editMode, visible, onToggle, jobsToday, revenueToday }) 
   );
 }
 
-function BentoGrid({ kpi, earnings }) {
+function BentoGrid({ kpi, earnings, onNavigate }) {
   return (
     <>
       {/* Fixed at 4 columns, this squeezed the single-column tiles (Jobs,
@@ -328,12 +336,12 @@ function BentoGrid({ kpi, earnings }) {
         }
       `}</style>
       <div className="atlas-bento">
-        <Tile stat={kpi.revenue} tileClass="t-revenue" big earnings={earnings} />
-        <Tile stat={kpi.jobs} tileClass="t-jobs" />
-        <Tile stat={kpi.customers} tileClass="t-customers" />
-        <Tile stat={kpi.pipeline} tileClass="t-pipeline" />
-        <Tile stat={kpi.outstanding} tileClass="t-outstanding" />
-        <Tile stat={kpi.avgTicket} tileClass="t-avgticket" />
+        <Tile stat={kpi.revenue} tileClass="t-revenue" big earnings={earnings} onNavigate={onNavigate} />
+        <Tile stat={kpi.jobs} tileClass="t-jobs" onNavigate={onNavigate} />
+        <Tile stat={kpi.customers} tileClass="t-customers" onNavigate={onNavigate} />
+        <Tile stat={kpi.pipeline} tileClass="t-pipeline" onNavigate={onNavigate} />
+        <Tile stat={kpi.outstanding} tileClass="t-outstanding" onNavigate={onNavigate} />
+        <Tile stat={kpi.avgTicket} tileClass="t-avgticket" onNavigate={onNavigate} />
       </div>
     </>
   );
@@ -603,12 +611,12 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
   const outstandingList = outstandingInvoices.slice(0, 3);
 
   const kpi = {
-    revenue: { Icon: DollarSign, label: "Today's Revenue", value: money(todaysRevenue), sub: `${todaysCompleted} job${todaysCompleted === 1 ? "" : "s"} completed`, hue: "emerald" },
-    jobs: { Icon: Briefcase, label: "Today's Jobs", value: String(todaysActiveJobs.length), sub: todaysActiveJobs.length === 0 ? "No jobs today" : todaysRemaining > 0 ? `${todaysRemaining} remaining` : "All done for today", hue: "blue" },
-    customers: { Icon: Users, label: "Customers", value: String(customersCount), sub: newCustomersThisMonth > 0 ? `+${newCustomersThisMonth} this month` : "No new customers this month", hue: "violet" },
-    pipeline: { Icon: TrendingUp, label: "Pipeline Value", value: money(pipelineValue), sub: `${pipelineQuotes.length} open quote${pipelineQuotes.length === 1 ? "" : "s"}`, hue: "amber" },
-    outstanding: { Icon: AlertCircle, label: "Outstanding", value: money(outstandingTotal), sub: `${outstandingInvoices.length} unpaid invoice${outstandingInvoices.length === 1 ? "" : "s"}`, hue: "coral" },
-    avgTicket: { Icon: Receipt, label: "Avg. Ticket", value: avgTicket == null ? "—" : money(avgTicket), sub: `${invoices.length} invoice${invoices.length === 1 ? "" : "s"}`, hue: "blue" },
+    revenue: { Icon: DollarSign, label: "Today's Revenue", value: money(todaysRevenue), sub: `${todaysCompleted} job${todaysCompleted === 1 ? "" : "s"} completed`, hue: "emerald", nav: "schedule" },
+    jobs: { Icon: Briefcase, label: "Today's Jobs", value: String(todaysActiveJobs.length), sub: todaysActiveJobs.length === 0 ? "No jobs today" : todaysRemaining > 0 ? `${todaysRemaining} remaining` : "All done for today", hue: "blue", nav: "schedule" },
+    customers: { Icon: Users, label: "Customers", value: String(customersCount), sub: newCustomersThisMonth > 0 ? `+${newCustomersThisMonth} this month` : "No new customers this month", hue: "violet", nav: "customers" },
+    pipeline: { Icon: TrendingUp, label: "Pipeline Value", value: money(pipelineValue), sub: `${pipelineQuotes.length} open quote${pipelineQuotes.length === 1 ? "" : "s"}`, hue: "amber", nav: "quote" },
+    outstanding: { Icon: AlertCircle, label: "Outstanding", value: money(outstandingTotal), sub: `${outstandingInvoices.length} unpaid invoice${outstandingInvoices.length === 1 ? "" : "s"}`, hue: "coral", nav: "invoices" },
+    avgTicket: { Icon: Receipt, label: "Avg. Ticket", value: avgTicket == null ? "—" : money(avgTicket), sub: `${invoices.length} invoice${invoices.length === 1 ? "" : "s"}`, hue: "blue", nav: "invoices" },
   };
 
   const insights = [];
@@ -674,7 +682,7 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
             <div style={{ padding: "16px 18px", borderRadius: 12, background: "rgba(255,107,94,0.1)", border: `1px solid ${P.danger}`, color: P.danger, fontSize: 13 }}>{error}</div>
           ) : (
             <>
-              <BentoGrid kpi={kpi} earnings={weekEarnings} />
+              <BentoGrid kpi={kpi} earnings={weekEarnings} onNavigate={onNavigate} />
               <ProfitBanner editMode={editMode} visible={visible.profitBanner} onToggle={() => toggle("profitBanner")} jobsToday={todaysCompleted} revenueToday={todaysRevenue} />
 
               <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, padding: "16px 18px" }}>
