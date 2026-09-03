@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
-import { createPortal } from "react-dom";
+import pdfMake from "pdfmake/build/pdfmake";
+import pdfFonts from "pdfmake/build/vfs_fonts";
 import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings, Sparkles,
   MoreHorizontal, Pencil, Camera, Plus, Search, Download,
@@ -7,7 +8,9 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { formatDate, downloadCsv, shortId, uploadImages, parseDate, findService, svcPrice, resizeImageToDataUrl, useLiveClock, formatDateTime } from "./lib";
+import { formatDate, downloadCsv, shortId, uploadImages, parseDate, findService, svcPrice, resizeImageToDataUrl, useLiveClock, formatDateTime, urlToDataUri } from "./lib";
+
+pdfMake.vfs = pdfFonts;
 
 const PHOTOS_BUCKET = "invoice-photos";
 
@@ -492,54 +495,37 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
 
 const PRINT_ACCENT = "#18D97A";
 
-function PrintHeader({ business, docLabel, preparedDate }) {
-  return (
-    <div style={{ marginBottom: 18 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          {business.logoUrl ? (
-            <img src={business.logoUrl} alt="" style={{ width: 52, height: 52, borderRadius: "50%", objectFit: "cover" }} />
-          ) : (
-            <div style={{ width: 52, height: 52, borderRadius: "50%", background: `${PRINT_ACCENT}22`, color: PRINT_ACCENT, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 16 }}>
-              {initials(business.name || "?")}
-            </div>
-          )}
-          <div>
-            <div style={{ fontSize: 17, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.03em" }}>{business.name}</div>
-            {business.tagline && <div style={{ fontSize: 10.5, color: "#777", marginTop: 2 }}>{business.tagline}</div>}
-          </div>
-        </div>
-        <div style={{ fontSize: 11, fontWeight: 800, color: PRINT_ACCENT, letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{docLabel}</div>
-      </div>
-      <div style={{ height: 3, background: PRINT_ACCENT, borderRadius: 2, margin: "14px 0 8px" }} />
-      <div style={{ fontSize: 11, color: "#555" }}>Prepared {preparedDate}</div>
-    </div>
-  );
+// Generates a genuine PDF file client-side instead of relying on
+// window.print() at all -- see the matching comment in AtlasQuickQuotePro.tsx
+// for why (three prior print-pipeline approaches all still let iOS Safari
+// capture the wrong screen). pdfSection/pdfBox are duplicated per-file to
+// match this codebase's existing convention of each page owning its own copy
+// of small shared helpers.
+function pdfSection(label, content) {
+  return [
+    {
+      margin: [0, 0, 0, 8],
+      columns: [
+        { canvas: [{ type: "rect", x: 0, y: 1, w: 3, h: 11, color: PRINT_ACCENT }], width: 10 },
+        { text: label.toUpperCase(), bold: true, fontSize: 9, color: "#555555", characterSpacing: 0.5 },
+      ],
+    },
+    content,
+  ];
 }
 
-function PrintSection({ label, children, style }) {
-  return (
-    <div style={{ marginBottom: 16, ...style }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <span style={{ width: 4, height: 13, borderRadius: 2, background: PRINT_ACCENT, display: "inline-block", flexShrink: 0 }} />
-        <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", color: "#555" }}>{label}</span>
-      </div>
-      <div style={{ background: "#f4f4f4", borderRadius: 10, padding: "13px 15px" }}>
-        {children}
-      </div>
-    </div>
-  );
+function pdfBox(stackItems, fill = "#f4f4f4") {
+  return {
+    table: { widths: ["*"], body: [[{ stack: stackItems, margin: [12, 10, 12, 10] }]] },
+    layout: { fillColor: () => fill, hLineWidth: () => 0, vLineWidth: () => 0 },
+    margin: [0, 0, 0, 16],
+  };
 }
 
-function PrintableInvoice({ inv, services, business }) {
-  if (!inv) return null;
+async function buildInvoicePdfDoc(inv, services, business) {
   const { subtotal, tax, total } = invoiceBreakdown(inv.amount, inv.tax_rate);
   const vehicle = inv.vehicles;
   const serviceIds = inv.service_ids || [];
-  // Prefer the name/price snapshot taken when the invoice was saved — a
-  // service renamed or deleted afterward in Settings shouldn't change what
-  // an already-issued invoice shows. Older invoices saved before this
-  // snapshot existed fall back to a live lookup.
   const lineItems = inv.line_items && inv.line_items.length > 0
     ? inv.line_items.map((li) => ({ name: li.name, price: Number(li.price) || 0, includes: li.includes || [] }))
     : serviceIds.length > 0
@@ -549,146 +535,73 @@ function PrintableInvoice({ inv, services, business }) {
         })
       : [{ name: "Detailing service", price: subtotal, includes: [] }];
   const paymentTerms = inv.due_date ? `Payment due by ${formatDate(inv.due_date)}` : "Due on receipt";
+  const docLabel = business.invoiceLabel || "INVOICE";
+  const logoDataUri = business.logoUrl ? await urlToDataUri(business.logoUrl) : null;
 
-  return (
-    <div id="atlas-print-root">
-      <PrintHeader business={business} docLabel={business.invoiceLabel || "INVOICE"} preparedDate={formatDate(inv.created_at)} />
+  const headerLeft = {
+    width: "*",
+    columns: [
+      logoDataUri ? { image: logoDataUri, width: 40, height: 40, margin: [0, 0, 10, 0] } : { text: "", width: 0 },
+      {
+        stack: [
+          { text: (business.name || "Your Business").toUpperCase(), bold: true, fontSize: 15 },
+          ...(business.tagline ? [{ text: business.tagline, fontSize: 8, color: "#777777", margin: [0, 2, 0, 0] }] : []),
+        ],
+      },
+    ],
+  };
 
-      <PrintSection label="Prepared For">
-        <div style={{ fontWeight: 700, fontSize: 13 }}>{inv.customers?.name || "No customer"}</div>
-        {vehicle && (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#444", marginTop: 3 }}>
-            {vehicle.color_hex && <span style={{ width: 9, height: 9, borderRadius: 3, background: vehicle.color_hex, border: "1px solid #ccc", display: "inline-block" }} />}
-            {vehicle.label}
-          </div>
-        )}
-        {inv.customers?.phone && <div style={{ fontSize: 12, color: "#444", marginTop: 3 }}>{inv.customers.phone}</div>}
-        {inv.customers?.email && <div style={{ fontSize: 12, color: "#444", marginTop: 3 }}>{inv.customers.email}</div>}
-        <div style={{ fontSize: 11, color: "#777", marginTop: 6, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.04em" }}>{effectiveStatus(inv)}</div>
-      </PrintSection>
+  const content = [
+    { columns: [headerLeft, { text: docLabel, bold: true, fontSize: 9, color: PRINT_ACCENT, alignment: "right" }] },
+    { canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 2, lineColor: PRINT_ACCENT }], margin: [0, 12, 0, 6] },
+    { text: `Prepared ${formatDate(inv.created_at)}`, fontSize: 9, color: "#777777", margin: [0, 0, 0, 14] },
 
-      {inv.notes && (
-        <PrintSection label="Job Details">
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: "#777", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.03em" }}>Condition</div>
-          <div style={{ fontSize: 12, color: "#333", lineHeight: 1.5 }}>{inv.notes}</div>
-        </PrintSection>
-      )}
+    ...pdfSection("Prepared For", pdfBox([
+      { text: inv.customers?.name || "No customer", bold: true, fontSize: 13 },
+      ...(vehicle ? [{ text: vehicle.label, fontSize: 11, color: "#444444", margin: [0, 3, 0, 0] }] : []),
+      ...(inv.customers?.phone ? [{ text: inv.customers.phone, fontSize: 11, color: "#444444", margin: [0, 3, 0, 0] }] : []),
+      ...(inv.customers?.email ? [{ text: inv.customers.email, fontSize: 11, color: "#444444", margin: [0, 3, 0, 0] }] : []),
+      { text: effectiveStatus(inv).toUpperCase(), bold: true, fontSize: 9, color: "#777777", margin: [0, 6, 0, 0] },
+    ])),
 
-      <PrintSection label="What's Included">
-        {lineItems.map((item, i) => (
-          <div key={i} style={{ marginBottom: i < lineItems.length - 1 ? 10 : 0 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
-              <span style={{ fontWeight: 600 }}>{item.name}</span><span style={{ fontWeight: 600 }}>${item.price.toFixed(2)}</span>
-            </div>
-            {item.includes.length > 0 && (
-              <ul style={{ margin: "4px 0 0", paddingLeft: 16 }}>
-                {item.includes.map((line, j) => (
-                  <li key={j} style={{ fontSize: 10.5, color: "#777", lineHeight: 1.5 }}>{line}</li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ))}
-      </PrintSection>
+    ...(inv.notes ? pdfSection("Job Details", pdfBox([
+      { text: "CONDITION", bold: true, fontSize: 8.5, color: "#777777", margin: [0, 0, 0, 4] },
+      { text: inv.notes, fontSize: 11, color: "#333333" },
+    ])) : []),
 
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6 }}>
-          <span>Subtotal</span><span>${subtotal.toFixed(2)}</span>
-        </div>
-        {Number(inv.tax_rate) > 0 && (
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6 }}>
-            <span>Tax ({inv.tax_rate}%)</span><span>${tax.toFixed(2)}</span>
-          </div>
-        )}
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 16, fontWeight: 800, marginTop: 10, paddingTop: 10, borderTop: `2px solid ${PRINT_ACCENT}` }}>
-          <span>Total</span><span>${total.toFixed(2)}</span>
-        </div>
-      </div>
+    ...pdfSection("What's Included", pdfBox(
+      lineItems.map((item, i) => ({
+        stack: [
+          { columns: [{ text: item.name, bold: true, fontSize: 11 }, { text: `$${item.price.toFixed(2)}`, bold: true, fontSize: 11, alignment: "right" }] },
+          ...(item.includes.length > 0 ? [{ ul: item.includes, fontSize: 9.5, color: "#777777", margin: [0, 3, 0, 0] }] : []),
+        ],
+        margin: [0, 0, 0, i < lineItems.length - 1 ? 10 : 0],
+      }))
+    )),
 
-      {inv.photos && inv.photos.length > 0 && (
-        <PrintSection label="Completed-Job Photos" style={{ marginBottom: 16 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-            {inv.photos.map((src, i) => (
-              <img key={i} src={src} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, border: "1px solid #ccc" }} />
-            ))}
-          </div>
-        </PrintSection>
-      )}
+    { columns: [{ text: "Subtotal", fontSize: 11 }, { text: `$${subtotal.toFixed(2)}`, fontSize: 11, alignment: "right" }], margin: [0, 0, 0, 5] },
+    ...(Number(inv.tax_rate) > 0 ? [{ columns: [{ text: `Tax (${inv.tax_rate}%)`, fontSize: 11 }, { text: `$${tax.toFixed(2)}`, fontSize: 11, alignment: "right" }], margin: [0, 0, 0, 5] }] : []),
+    { canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 2, lineColor: PRINT_ACCENT }], margin: [0, 6, 0, 6] },
+    { columns: [{ text: "Total", bold: true, fontSize: 15 }, { text: `$${total.toFixed(2)}`, bold: true, fontSize: 15, alignment: "right" }], margin: [0, 0, 0, 16] },
 
-      <PrintSection label="Notes">
-        <p style={{ margin: "0 0 4px", fontSize: 12 }}>Thank you for your business!</p>
-        <p style={{ margin: 0, fontSize: 11.5, color: "#555" }}>{paymentTerms}</p>
-      </PrintSection>
-    </div>
-  );
-}
+    ...pdfSection("Notes", pdfBox([
+      { text: "Thank you for your business!", fontSize: 11, margin: [0, 0, 0, 4] },
+      { text: paymentTerms, fontSize: 10.5, color: "#555555" },
+    ])),
+  ];
 
-// Prints via a persistent, always-mounted, off-screen <iframe> instead of
-// swapping the main document's own content and calling window.print() on
-// it. That approach worked on desktop but proved unreliable on iOS Safari
-// -- the print snapshot could end up capturing whatever the main page
-// looked like a frame earlier, no matter how the timing was tuned. An
-// iframe is a genuinely separate document the browser must render fresh
-// before printing, which sidesteps that whole class of bug (the same
-// technique libraries like react-to-print use).
-function PrintFrame({ printJob, onDone, render }) {
-  const iframeRef = useRef(null);
-  const [frameBody, setFrameBody] = useState(null);
-
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    function setup() {
-      const doc = iframe.contentDocument;
-      if (!doc) return;
-      doc.open();
-      doc.write(`<!doctype html><html><head><meta charset="utf-8"><style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap');
-        * { box-sizing: border-box; }
-        body { margin: 0; padding: 40px; background: #fff; color: #111; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-      </style></head><body><div id="print-mount"></div></body></html>`);
-      doc.close();
-      setFrameBody(doc.getElementById("print-mount"));
-    }
-    if (iframe.contentDocument?.readyState === "complete") setup();
-    iframe.addEventListener("load", setup);
-    return () => iframe.removeEventListener("load", setup);
-  }, []);
-
-  useEffect(() => {
-    if (!printJob || !frameBody) return;
-    const iframe = iframeRef.current;
-    const doc = iframe.contentDocument;
-    const imgs = Array.from(frameBody.querySelectorAll("img"));
-    const waits = imgs.map((img) =>
-      img.complete ? Promise.resolve() : new Promise((resolve) => {
-        img.addEventListener("load", resolve, { once: true });
-        img.addEventListener("error", resolve, { once: true });
-      })
-    );
-    if (doc.fonts?.ready) waits.push(doc.fonts.ready);
-    let cancelled = false;
-    Promise.all(waits).then(() => {
-      if (cancelled) return;
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        if (cancelled) return;
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-      }));
-    });
-    function handleAfterPrint() { onDone(); }
-    iframe.contentWindow.addEventListener("afterprint", handleAfterPrint);
-    return () => {
-      cancelled = true;
-      iframe.contentWindow?.removeEventListener("afterprint", handleAfterPrint);
-    };
-  }, [printJob, frameBody]);
-
-  return (
-    <>
-      <iframe ref={iframeRef} title="Atlas print" style={{ position: "fixed", top: "-9999px", left: "-9999px", width: "816px", height: "1056px", border: "none" }} />
-      {frameBody && printJob && createPortal(render(), frameBody)}
-    </>
-  );
+  return {
+    pageMargins: [40, 40, 40, 50],
+    defaultStyle: { font: "Roboto", color: "#333333" },
+    footer: (currentPage, pageCount) => ({
+      margin: [40, 0, 40, 20],
+      columns: [
+        { text: business.name || "Atlas", fontSize: 8, color: "#999999" },
+        { text: `Page ${currentPage} of ${pageCount}`, fontSize: 8, color: "#999999", alignment: "right" },
+      ],
+    }),
+    content,
+  };
 }
 
 /* ---------------------------------- page ---------------------------------- */
@@ -707,7 +620,18 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
   const [addOpen, setAddOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
-  const [printInvoice, setPrintInvoice] = useState(null);
+  const [downloadingPdfId, setDownloadingPdfId] = useState(null);
+
+  async function downloadInvoicePdf(inv) {
+    if (!inv || downloadingPdfId) return;
+    setDownloadingPdfId(inv.id);
+    try {
+      const doc = await buildInvoicePdfDoc(inv, services, { name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, invoiceLabel: businessInvoiceLabel });
+      pdfMake.createPdf(doc).download(`invoice-${(inv.customers?.name || "invoice").replace(/\s+/g, "-").toLowerCase()}.pdf`);
+    } finally {
+      setDownloadingPdfId(null);
+    }
+  }
 
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("All");
@@ -859,7 +783,7 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
             <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, overflow: "hidden" }}>
               {filtered.map((inv, i) => (
                 <div key={inv.id} style={{ borderBottom: i < filtered.length - 1 ? `1px solid ${P.border}` : "none" }}>
-                  <InvoiceRow inv={inv} i={i} onMarkPaid={markPaid} onPreview={setPrintInvoice} onEdit={setEditingInvoice} marking={markingId === inv.id} />
+                  <InvoiceRow inv={inv} i={i} onMarkPaid={markPaid} onPreview={downloadInvoicePdf} onEdit={setEditingInvoice} marking={markingId === inv.id} />
                 </div>
               ))}
             </div>
@@ -905,13 +829,6 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
           onSaved={handleSaved}
         />
       )}
-      <PrintFrame
-        printJob={printInvoice}
-        onDone={() => setPrintInvoice(null)}
-        render={() => (
-          <PrintableInvoice inv={printInvoice} services={services} business={{ name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, invoiceLabel: businessInvoiceLabel }} />
-        )}
-      />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo, useEffect } from "react";
-import { createPortal } from "react-dom";
+import pdfMake from "pdfmake/build/pdfmake";
+import pdfFonts from "pdfmake/build/vfs_fonts";
 import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings, Sparkles,
   MoreHorizontal, Pencil, Camera, Check, ChevronLeft, ChevronRight,
@@ -9,7 +10,9 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { formatDate, shortId, findService, svcPrice, resizeImageToDataUrl } from "./lib";
+import { formatDate, shortId, findService, svcPrice, resizeImageToDataUrl, urlToDataUri } from "./lib";
+
+pdfMake.vfs = pdfFonts;
 
 const P = {
   bg: "#06100C", bgTop: "#0B1813", surface: "#0F1B15", surfaceHover: "#132018",
@@ -1302,72 +1305,147 @@ function PrintableQuote({ q, services, addonsAll, business, id = "atlas-print-ro
   );
 }
 
-// Prints via a persistent, always-mounted, off-screen <iframe> instead of
-// swapping the main document's own content and calling window.print() on
-// it. That approach worked on desktop but proved unreliable on iOS Safari
-// -- the print snapshot could end up capturing whatever the main page
-// looked like a frame earlier, no matter how the timing was tuned. An
-// iframe is a genuinely separate document the browser must render fresh
-// before printing, which sidesteps that whole class of bug (the same
-// technique libraries like react-to-print use).
-function PrintFrame({ printJob, onDone, render }) {
-  const iframeRef = useRef(null);
-  const [frameBody, setFrameBody] = useState(null);
+// Generates a genuine PDF file client-side instead of relying on
+// window.print() at all -- three different attempts at getting the browser's
+// print pipeline to reliably capture just the printable content (a CSS
+// visibility trick, a full-tree DOM swap, and finally an isolated iframe)
+// all still ended up with iOS Safari's print/PDF output capturing whatever
+// screen the app happened to be showing instead. Producing real PDF bytes
+// with pdfmake and handing them to the browser as a download sidesteps the
+// browser print pipeline -- and its many mobile quirks -- entirely.
+function pdfSection(label, content) {
+  return [
+    {
+      margin: [0, 0, 0, 8],
+      columns: [
+        { canvas: [{ type: "rect", x: 0, y: 1, w: 3, h: 11, color: PRINT_ACCENT }], width: 10 },
+        { text: label.toUpperCase(), bold: true, fontSize: 9, color: "#555555", characterSpacing: 0.5 },
+      ],
+    },
+    content,
+  ];
+}
 
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    function setup() {
-      const doc = iframe.contentDocument;
-      if (!doc) return;
-      doc.open();
-      doc.write(`<!doctype html><html><head><meta charset="utf-8"><style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        * { box-sizing: border-box; }
-        body { margin: 0; padding: 40px; background: #fff; color: #111; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-      </style></head><body><div id="print-mount"></div></body></html>`);
-      doc.close();
-      setFrameBody(doc.getElementById("print-mount"));
-    }
-    if (iframe.contentDocument?.readyState === "complete") setup();
-    iframe.addEventListener("load", setup);
-    return () => iframe.removeEventListener("load", setup);
-  }, []);
+function pdfBox(stackItems, fill = "#f4f4f4") {
+  return {
+    table: { widths: ["*"], body: [[{ stack: stackItems, margin: [12, 10, 12, 10] }]] },
+    layout: { fillColor: () => fill, hLineWidth: () => 0, vLineWidth: () => 0 },
+    margin: [0, 0, 0, 16],
+  };
+}
 
-  useEffect(() => {
-    if (!printJob || !frameBody) return;
-    const iframe = iframeRef.current;
-    const doc = iframe.contentDocument;
-    const imgs = Array.from(frameBody.querySelectorAll("img"));
-    const waits = imgs.map((img) =>
-      img.complete ? Promise.resolve() : new Promise((resolve) => {
-        img.addEventListener("load", resolve, { once: true });
-        img.addEventListener("error", resolve, { once: true });
-      })
-    );
-    if (doc.fonts?.ready) waits.push(doc.fonts.ready);
-    let cancelled = false;
-    Promise.all(waits).then(() => {
-      if (cancelled) return;
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        if (cancelled) return;
-        iframe.contentWindow.focus();
-        iframe.contentWindow.print();
-      }));
-    });
-    function handleAfterPrint() { onDone(); }
-    iframe.contentWindow.addEventListener("afterprint", handleAfterPrint);
-    return () => {
-      cancelled = true;
-      iframe.contentWindow?.removeEventListener("afterprint", handleAfterPrint);
-    };
-  }, [printJob, frameBody]);
+async function buildQuotePdfDoc(q, services, addonsAll, business) {
+  const vehicle = q.vehicles[0];
+  const tiered = q.proposalMode === "tiered";
+  const docLabel = business.quoteLabel || "SERVICE QUOTE";
+  const logoDataUri = business.logoUrl ? await urlToDataUri(business.logoUrl) : null;
 
-  return (
-    <>
-      <iframe ref={iframeRef} title="Atlas print" style={{ position: "fixed", top: "-9999px", left: "-9999px", width: "816px", height: "1056px", border: "none" }} />
-      {frameBody && printJob && createPortal(render(), frameBody)}
-    </>
-  );
+  const headerLeft = {
+    width: "*",
+    columns: [
+      logoDataUri ? { image: logoDataUri, width: 40, height: 40, margin: [0, 0, 10, 0] } : { text: "", width: 0 },
+      {
+        stack: [
+          { text: (business.name || "Your Business").toUpperCase(), bold: true, fontSize: 15 },
+          ...(business.tagline ? [{ text: business.tagline, fontSize: 8, color: "#777777", margin: [0, 2, 0, 0] }] : []),
+        ],
+      },
+    ],
+  };
+
+  const content = [
+    { columns: [headerLeft, { text: docLabel, bold: true, fontSize: 9, color: PRINT_ACCENT, alignment: "right" }] },
+    { canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 2, lineColor: PRINT_ACCENT }], margin: [0, 12, 0, 6] },
+    { text: `Prepared ${q.createdAt}`, fontSize: 9, color: "#777777", margin: [0, 0, 0, 14] },
+
+    ...pdfSection("Prepared For", pdfBox([
+      { text: q.customer?.name || "", bold: true, fontSize: 13 },
+      ...(q.vehicleSummary && q.vehicleSummary !== "—" ? [{ text: q.vehicleSummary, fontSize: 11, color: "#444444", margin: [0, 3, 0, 0] }] : []),
+      ...(q.customer?.phone ? [{ text: q.customer.phone, fontSize: 11, color: "#444444", margin: [0, 3, 0, 0] }] : []),
+      ...(q.customer?.email ? [{ text: q.customer.email, fontSize: 11, color: "#444444", margin: [0, 3, 0, 0] }] : []),
+    ])),
+
+    ...(q.notes ? pdfSection("Job Details", pdfBox([
+      { text: "CONDITION", bold: true, fontSize: 8.5, color: "#777777", margin: [0, 0, 0, 4] },
+      { text: q.notes, fontSize: 11, color: "#333333" },
+    ])) : []),
+
+    ...pdfSection("What's Included", pdfBox(
+      tiered
+        ? q.tiers.map((tier, i) => {
+            const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, q.taxRate);
+            const names = [
+              ...tier.packageIds.map((id) => findService(services, id)?.name),
+              ...tier.addonIds.map((id) => findAddon(addonsAll, id)?.name),
+            ].filter(Boolean);
+            return {
+              stack: [
+                { columns: [{ text: tier.name, bold: true, fontSize: 12 }, { text: money(total), bold: true, fontSize: 12, alignment: "right" }] },
+                { text: tierDescription(tier, services, addonsAll), fontSize: 10, color: "#555555", margin: [0, 3, 0, 5] },
+                ...(names.length ? [{ ul: names, fontSize: 10.5, color: "#333333" }] : []),
+              ],
+              margin: [0, 0, 0, i < q.tiers.length - 1 ? 12 : 0],
+            };
+          })
+        : q.vehicles.flatMap((v) => {
+            const ids = q.lineItems[v.id] || [];
+            if (!ids.length) return [];
+            const rows = [];
+            if (q.vehicles.length > 1) rows.push({ text: v.label, bold: true, fontSize: 11, margin: [0, 0, 0, 5] });
+            ids.forEach((id) => {
+              const p = findService(services, id);
+              rows.push({
+                stack: [
+                  { columns: [{ text: p?.name || "Service", bold: true, fontSize: 11 }, { text: `$${svcPrice(p, v)}`, bold: true, fontSize: 11, alignment: "right" }] },
+                  ...(p?.description ? [{ text: p.description, fontSize: 9.5, color: "#777777", margin: [0, 3, 0, 0] }] : []),
+                  ...(p?.includes?.length > 0 ? [{ ul: p.includes, fontSize: 9.5, color: "#777777", margin: [0, 3, 0, 0] }] : []),
+                ],
+                margin: [0, 0, 0, 8],
+              });
+            });
+            return rows;
+          })
+    )),
+
+    ...(tiered
+      ? pdfSection("Choose One Of These Options", pdfBox(
+          q.tiers.map((tier, i) => {
+            const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, q.taxRate);
+            return {
+              columns: [{ text: tier.name, fontSize: 11, color: "#ffffff" }, { text: money(total), bold: true, fontSize: 11, color: "#ffffff", alignment: "right" }],
+              margin: [0, 4, 0, i < q.tiers.length - 1 ? 4 : 0],
+            };
+          }),
+          "#1C1E24"
+        ))
+      : [
+          { columns: [{ text: "Subtotal", fontSize: 11 }, { text: `$${q.totals.subtotal.toFixed(2)}`, fontSize: 11, alignment: "right" }], margin: [0, 0, 0, 5] },
+          ...(q.discount > 0 ? [{ columns: [{ text: "Discount", fontSize: 11 }, { text: `-$${q.discount}`, fontSize: 11, alignment: "right" }], margin: [0, 0, 0, 5] }] : []),
+          ...(q.taxRate > 0 ? [{ columns: [{ text: `Tax (${q.taxRate}%)`, fontSize: 11 }, { text: `$${q.totals.tax.toFixed(2)}`, fontSize: 11, alignment: "right" }], margin: [0, 0, 0, 5] }] : []),
+          { canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 2, lineColor: PRINT_ACCENT }], margin: [0, 6, 0, 6] },
+          { columns: [{ text: "Total", bold: true, fontSize: 15 }, { text: `$${q.totals.total.toFixed(2)}`, bold: true, fontSize: 15, alignment: "right" }], margin: [0, 0, 0, 16] },
+        ]),
+
+    ...(business.depositLink ? [{ text: `Secure your spot — pay your deposit: ${business.depositLink}`, fontSize: 10, color: "#555555", margin: [0, 0, 0, 16] }] : []),
+
+    ...pdfSection("Notes", pdfBox([
+      ...(q.description ? [{ text: q.description, fontSize: 11, margin: [0, 0, 0, 8] }] : []),
+      { text: closingNote(q.proposalMode), fontSize: 11, italics: true },
+    ])),
+  ];
+
+  return {
+    pageMargins: [40, 40, 40, 50],
+    defaultStyle: { font: "Roboto", color: "#333333" },
+    footer: (currentPage, pageCount) => ({
+      margin: [40, 0, 40, 20],
+      columns: [
+        { text: business.name || "Atlas", fontSize: 8, color: "#999999" },
+        { text: `Page ${currentPage} of ${pageCount}`, fontSize: 8, color: "#999999", alignment: "right" },
+      ],
+    }),
+    content,
+  };
 }
 
 // Shows the exact PrintableQuote document on-screen — what the customer
@@ -1434,7 +1512,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
   // on the Review step without changing the reusable template in Quote
   // settings. Null means "just show the template filled in for this quote."
   const [scriptOverride, setScriptOverride] = useState(null);
-  const [printQuote, setPrintQuote] = useState(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
@@ -1672,8 +1750,16 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
     setChannels(["email"]); setSent(false); setLastSent(null); setSaveError(""); setScriptOverride(null);
   }
 
-  function triggerPrint(snapshot) {
-    if (snapshot) setPrintQuote(snapshot);
+  async function downloadQuotePdf(snapshot) {
+    if (!snapshot || downloadingPdf) return;
+    setDownloadingPdf(true);
+    try {
+      const doc = await buildQuotePdfDoc(snapshot, services, addonsAll, { name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, quoteLabel: businessQuoteLabel, depositLink });
+      const filename = `quote-${(snapshot.customer?.name || "quote").replace(/\s+/g, "-").toLowerCase()}.pdf`;
+      pdfMake.createPdf(doc).download(filename);
+    } finally {
+      setDownloadingPdf(false);
+    }
   }
 
   // A preview snapshot for the Review step's "PDF" button, built from
@@ -1785,7 +1871,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
               error={error}
               onView={openQuote}
               onDelete={deleteQuote}
-              onDownloadPdf={(q) => triggerPrint(q)}
+              onDownloadPdf={(q) => downloadQuotePdf(q)}
               onExportCSV={() => downloadText(`atlas-quotes-${Date.now()}.csv`, quotesToCSV(savedQuotes), "text/csv")}
               onNew={() => { resetQuote(); setView("new"); }}
             />
@@ -1820,7 +1906,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
                   scriptDisplay={scriptDisplay} onScriptChange={setScriptOverride} onCopyScript={copyScript} scriptCopied={scriptCopied}
                   depositLink={depositLink}
                   onSaveDraft={saveDraft} draftSaved={draftSaved} savingDraft={savingDraft} saveError={saveError}
-                  onDownloadPdf={() => triggerPrint(buildLocalSnapshot())}
+                  onDownloadPdf={() => downloadQuotePdf(buildLocalSnapshot())}
                   onPreview={() => setPreviewOpen(true)}
                 />
               )}
@@ -1830,7 +1916,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
                   depositLink={depositLink}
                   proposalMode={proposalMode} tierCount={tiers.length}
                   onAddToCalendar={addToCalendar} onSaveContact={saveContact}
-                  onDownloadPdf={() => triggerPrint(lastSent)}
+                  onDownloadPdf={() => downloadQuotePdf(lastSent)}
                   onPreview={() => setPreviewOpen(true)}
                 />
               )}
@@ -1877,13 +1963,6 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
           />
         </QuotePreviewModal>
       )}
-      <PrintFrame
-        printJob={printQuote}
-        onDone={() => setPrintQuote(null)}
-        render={() => (
-          <PrintableQuote q={printQuote} services={services} addonsAll={addonsAll} business={{ name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, quoteLabel: businessQuoteLabel, depositLink }} />
-        )}
-      />
     </div>
   );
 }

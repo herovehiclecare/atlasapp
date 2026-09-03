@@ -78,6 +78,25 @@ export function downloadCsv(rows, filename) {
   URL.revokeObjectURL(url);
 }
 
+// Used to embed a business logo (a remote Supabase Storage URL) into a
+// generated PDF, which needs the image as a data URI rather than a URL it
+// can fetch itself. Returns null on any failure so the PDF still generates,
+// just without the logo, instead of the whole download failing.
+export async function urlToDataUri(url) {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
 // A full-resolution phone photo, base64-encoded, easily runs several MB —
 // big enough to hit request-size limits on a plain UPDATE and fail with no
 // usable error. A logo only ever renders at 30-52px, so downscaling client-
