@@ -1214,6 +1214,9 @@ function PrintableQuote({ q, services, addonsAll, business, id = "atlas-print-ro
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
                           <span style={{ fontWeight: 600 }}>{p?.name}</span><span style={{ fontWeight: 600 }}>${svcPrice(p, v)}</span>
                         </div>
+                        {p?.description && (
+                          <p style={{ margin: "3px 0 0", fontSize: 10.5, color: "#777", lineHeight: 1.5 }}>{p.description}</p>
+                        )}
                         {p?.includes?.length > 0 && (
                           <ul style={{ margin: "4px 0 0", paddingLeft: 16 }}>
                             {p.includes.map((line, k) => <li key={k} style={{ fontSize: 10.5, color: "#777", lineHeight: 1.5 }}>{line}</li>)}
@@ -1675,12 +1678,12 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         #atlas-print-root { display: none; }
         @media print {
-          body * { visibility: hidden; }
-          #atlas-print-root, #atlas-print-root * { visibility: visible; }
-          #atlas-print-root { display: block; position: absolute; top: 0; left: 0; width: 100%; padding: 40px; background: #fff; color: #111; }
+          .atlas-screen-only { display: none !important; }
+          #atlas-print-root { display: block !important; width: 100%; padding: 40px; background: #fff; color: #111; }
         }
       `}</style>
 
+      <div className="atlas-screen-only" style={{ display: "flex", width: "100%" }}>
       {/* SIDEBAR */}
       <div className="hidden lg:flex" style={{ width: 240, flexShrink: 0, borderRight: `1px solid ${P.border}`, flexDirection: "column", padding: "22px 14px", position: "sticky", top: 0, height: "100vh" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 8px", marginBottom: 28 }}>
@@ -1812,7 +1815,6 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
       )}
 
       <BusinessPanel open={showBusinessPanel} onClose={() => setShowBusinessPanel(false)} depositLink={depositLink} setDepositLink={setDepositLink} script={script} setScript={setScript} />
-      <PrintableQuote q={printQuote} services={services} addonsAll={addonsAll} business={{ name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, quoteLabel: businessQuoteLabel, depositLink }} />
       {previewOpen && (
         <QuotePreviewModal onClose={() => setPreviewOpen(false)}>
           <PrintableQuote
@@ -1824,6 +1826,9 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
           />
         </QuotePreviewModal>
       )}
+      </div>
+
+      <PrintableQuote q={printQuote} services={services} addonsAll={addonsAll} business={{ name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, quoteLabel: businessQuoteLabel, depositLink }} />
     </div>
   );
 }

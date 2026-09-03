@@ -3,7 +3,7 @@ import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings, Plus,
   Sparkles, Search, MoreHorizontal, SlidersHorizontal,
   Phone, MessageSquare, ChevronRight, Download, ChevronDown, Pencil, Camera,
-  X, Loader2, ListChecks, Navigation, Check,
+  X, Loader2, ListChecks, Navigation, Check, Trash2,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
@@ -16,6 +16,15 @@ const P = {
   accentSoft: "rgba(24,217,122,0.14)", secondarySoft: "rgba(255,122,99,0.14)", danger: "#FF6B5E",
 };
 const HUES = ["#18D97A", "#4C8DFF", "#9B6BFF", "#F5A623", "#FF7A63", "#4FD1C5"];
+function money(n) { return `$${(Number(n) || 0).toLocaleString()}`; }
+
+const JOB_STATUS_LABEL = { scheduled: "Scheduled", in_progress: "In progress", completed: "Completed", cancelled: "Cancelled" };
+function statusBadgeColor(status) {
+  if (status === "completed" || status === "paid") return P.accent;
+  if (status === "cancelled") return P.danger;
+  if (status === "in_progress") return "#F5A623";
+  return P.textSecondary;
+}
 
 const inputStyle = {
   width: "100%", background: "transparent", border: `1px solid ${P.border}`,
@@ -168,28 +177,139 @@ function RowsView({ list, selected, toggleSelect, onOpenDetail }) {
 
 /* ---------------------------------- Customer Detail drawer ---------------------------------- */
 
-function CustomerDetail({ customer, onClose, onUpdated }) {
-  const [editingAddress, setEditingAddress] = useState(false);
-  const [address, setAddress] = useState(customer?.address || "");
-  const [savingAddress, setSavingAddress] = useState(false);
-  const [addressSaved, setAddressSaved] = useState(false);
+// A click-to-edit field: shows the value as plain text until clicked, then
+// becomes an input that saves on blur/Enter. Used throughout the customer
+// detail drawer so every field (not just address) can be corrected without
+// a separate "edit customer" modal.
+function EditableField({ label, value, onSave, placeholder, type = "text", big }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value || "");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
-  useEffect(() => { setAddress(customer?.address || ""); setEditingAddress(false); }, [customer?.id]);
+  useEffect(() => { setDraft(value || ""); setEditing(false); }, [value]);
+
+  async function commit() {
+    setEditing(false);
+    if (draft === (value || "")) return;
+    setSaving(true);
+    await onSave(draft.trim() || null);
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+  }
+
+  const textStyle = big
+    ? { fontSize: 15, fontWeight: 700, color: P.textPrimary }
+    : { fontSize: 12.5, color: P.textSecondary };
+
+  if (editing) {
+    return (
+      <input
+        autoFocus type={type} value={draft} onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit} onKeyDown={(e) => e.key === "Enter" && commit()} placeholder={placeholder}
+        style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", borderBottom: `1px solid ${P.accent}`, outline: "none", padding: 0, fontFamily: "inherit", ...textStyle }}
+      />
+    );
+  }
+  return (
+    <button onClick={() => setEditing(true)} style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}>
+      {label && <span style={{ fontSize: 12.5, color: P.textSecondary, flexShrink: 0 }}>{label}:</span>}
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", ...textStyle }}>{value || "—"}</span>
+      {saving ? <Loader2 size={11} className="animate-spin" style={{ flexShrink: 0, color: P.textMuted }} /> : saved ? <Check size={11} color={P.accent} style={{ flexShrink: 0 }} /> : null}
+    </button>
+  );
+}
+
+function VehicleRow({ vehicle, onUpdated, onDeleted }) {
+  async function saveField(column, value) {
+    const { data, error } = await supabase.from("vehicles").update({ [column]: value }).eq("id", vehicle.id).select().single();
+    if (!error && data) onUpdated(data);
+  }
+  async function handleDelete() {
+    const { error } = await supabase.from("vehicles").delete().eq("id", vehicle.id);
+    if (!error) onDeleted(vehicle.id);
+  }
+  return (
+    <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <input type="color" value={vehicle.color_hex || "#4B5158"} onChange={(e) => saveField("color_hex", e.target.value)} title="Vehicle color" style={{ width: 26, height: 26, padding: 0, border: `1px solid ${P.border}`, borderRadius: 6, background: "transparent", cursor: "pointer", flexShrink: 0 }} />
+        <EditableField value={vehicle.label} onSave={(v) => saveField("label", v || vehicle.label)} placeholder="2021 VW ID4" />
+        <button onClick={handleDelete} title="Remove vehicle" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", flexShrink: 0, display: "flex" }}><Trash2 size={13} /></button>
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <select value={vehicle.vehicle_type || "Car"} onChange={(e) => saveField("vehicle_type", e.target.value)} style={{ flex: 1, background: "transparent", border: `1px solid ${P.border}`, borderRadius: 7, padding: "5px 7px", color: P.textSecondary, fontSize: 11.5, outline: "none" }}>
+          {["Car", "Motorcycle", "Boat", "RV & Trailer", "Aircraft", "Other"].map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select value={vehicle.size_class || "car"} onChange={(e) => saveField("size_class", e.target.value)} title="Controls which price this vehicle gets on quotes/invoices" style={{ flex: 1, background: "transparent", border: `1px solid ${P.border}`, borderRadius: 7, padding: "5px 7px", color: P.textSecondary, fontSize: 11.5, outline: "none" }}>
+          <option value="car">Car pricing</option>
+          <option value="suv_truck_van">SUV/Truck/Van pricing</option>
+        </select>
+      </div>
+    </div>
+  );
+}
+
+function CustomerDetail({ customer, vehicles, businessId, onClose, onUpdated, onVehicleAdded, onVehicleUpdated, onVehicleDeleted, onNavigate }) {
+  const [addingVehicle, setAddingVehicle] = useState(false);
+  const [newLabel, setNewLabel] = useState("");
+  const [newType, setNewType] = useState("Car");
+  const [newSize, setNewSize] = useState("car");
+  const [savingVehicle, setSavingVehicle] = useState(false);
+  const [vehicleError, setVehicleError] = useState("");
+
+  const [jobs, setJobs] = useState([]);
+  const [quotes, setQuotes] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [servicesById, setServicesById] = useState({});
+  const [loadingHistory, setLoadingHistory] = useState(true);
+
+  useEffect(() => {
+    if (!customer?.id || !businessId) return;
+    let cancelled = false;
+    async function loadHistory() {
+      setLoadingHistory(true);
+      const [jobsRes, quotesRes, invoicesRes, servicesRes] = await Promise.all([
+        supabase.from("jobs").select("id, status, scheduled_at, service_ids, vehicles(label)").eq("business_id", businessId).eq("customer_id", customer.id).order("scheduled_at", { ascending: false }),
+        supabase.from("quotes").select("id, status, totals, created_at").eq("business_id", businessId).eq("customer_id", customer.id).order("created_at", { ascending: false }),
+        supabase.from("invoices").select("id, status, amount, paid_at, created_at").eq("business_id", businessId).eq("customer_id", customer.id).order("created_at", { ascending: false }),
+        supabase.from("services").select("id, name").eq("business_id", businessId),
+      ]);
+      if (cancelled) return;
+      setJobs(jobsRes.data || []);
+      setQuotes(quotesRes.data || []);
+      setInvoices(invoicesRes.data || []);
+      setServicesById(Object.fromEntries((servicesRes.data || []).map((s) => [s.id, s])));
+      setLoadingHistory(false);
+    }
+    loadHistory();
+    return () => { cancelled = true; };
+  }, [customer?.id, businessId]);
 
   if (!customer) return null;
   const color = colorForId(customer.id);
+  const totalSpent = invoices.filter((i) => i.status === "paid").reduce((s, i) => s + (Number(i.amount) || 0), 0);
 
-  async function commitAddress() {
-    setEditingAddress(false);
-    if (address === (customer.address || "")) return;
-    setSavingAddress(true);
-    const { data, error } = await supabase.from("customers").update({ address: address.trim() || null }).eq("id", customer.id).select().single();
-    setSavingAddress(false);
-    if (!error && data) {
-      onUpdated?.(data);
-      setAddressSaved(true);
-      setTimeout(() => setAddressSaved(false), 1500);
-    }
+  async function saveField(column, value) {
+    const { data, error } = await supabase.from("customers").update({ [column]: value }).eq("id", customer.id).select().single();
+    if (!error && data) onUpdated?.(data);
+  }
+
+  async function handleAddVehicle(e) {
+    e.preventDefault();
+    if (!newLabel.trim()) { setVehicleError('Enter a description, like "2021 VW ID4".'); return; }
+    setSavingVehicle(true);
+    setVehicleError("");
+    const { data, error } = await supabase
+      .from("vehicles")
+      .insert({ business_id: businessId, label: newLabel.trim(), vehicle_type: newType, size_class: newSize, customer_id: customer.id })
+      .select()
+      .single();
+    setSavingVehicle(false);
+    if (error) { setVehicleError(error.message); return; }
+    onVehicleAdded(data);
+    setAddingVehicle(false);
+    setNewLabel(""); setNewType("Car"); setNewSize("car");
   }
 
   return (
@@ -199,8 +319,8 @@ function CustomerDetail({ customer, onClose, onUpdated }) {
         <div style={{ position: "sticky", top: 0, background: P.bg, borderBottom: `1px solid ${P.border}`, padding: "16px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", zIndex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{ width: 38, height: 38, borderRadius: "50%", background: `${color}22`, color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{initials(customer.name)}</div>
-            <div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: P.textPrimary }}>{customer.name}</div>
+            <div style={{ minWidth: 0 }}>
+              <EditableField big value={customer.name} onSave={(v) => saveField("name", v || customer.name)} placeholder="Customer name" />
               <div style={{ fontSize: 11.5, color: P.textMuted }}>Customer since {formatDate(customer.created_at)}</div>
             </div>
           </div>
@@ -226,30 +346,109 @@ function CustomerDetail({ customer, onClose, onUpdated }) {
             )}
           </div>
 
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1, background: P.accentSoft, border: `1px solid ${P.accent}33`, borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, marginBottom: 4 }}>Total spent</div>
+              <div style={{ fontSize: 19, fontWeight: 800, color: P.accent }}>{loadingHistory ? "…" : money(totalSpent)}</div>
+            </div>
+            <div style={{ flex: 1, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 12, padding: "12px 14px" }}>
+              <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, marginBottom: 4 }}>Jobs completed</div>
+              <div style={{ fontSize: 19, fontWeight: 800, color: P.textPrimary }}>{loadingHistory ? "…" : jobs.filter((j) => j.status === "completed").length}</div>
+            </div>
+          </div>
+
           <div>
             <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, marginBottom: 8 }}>Contact</div>
-            <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ fontSize: 12.5, color: P.textSecondary }}>Phone: {customer.phone || "—"}</div>
-              <div style={{ fontSize: 12.5, color: P.textSecondary }}>Email: {customer.email || "—"}</div>
+            <p style={{ fontSize: 10.5, color: P.textMuted, margin: "0 0 8px", fontStyle: "italic" }}>Tap any field to edit it.</p>
+            <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
-                <span style={{ fontSize: 12.5, color: P.textSecondary, flexShrink: 0 }}>Address:</span>
-                {editingAddress ? (
-                  <input
-                    autoFocus
-                    value={address}
-                    onChange={(e) => setAddress(e.target.value)}
-                    onBlur={commitAddress}
-                    onKeyDown={(e) => e.key === "Enter" && commitAddress()}
-                    placeholder="123 Main St, City, ST 12345"
-                    style={{ flex: 1, background: "transparent", border: "none", borderBottom: `1px solid ${P.accent}`, color: P.textPrimary, fontSize: 12.5, outline: "none", padding: 0, minWidth: 0 }}
-                  />
-                ) : (
-                  <button onClick={() => setEditingAddress(true)} style={{ flex: 1, display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "none", color: P.textSecondary, fontSize: 12.5, cursor: "pointer", padding: 0, textAlign: "left", minWidth: 0 }}>
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{customer.address || "—"}</span>
-                    {savingAddress ? <Loader2 size={11} className="animate-spin" style={{ flexShrink: 0 }} /> : addressSaved ? <Check size={11} color={P.accent} style={{ flexShrink: 0 }} /> : <Pencil size={10} color={P.textMuted} style={{ flexShrink: 0 }} />}
-                  </button>
-                )}
+                <EditableField label="Phone" value={customer.phone} placeholder="(555) 123-4567" onSave={(v) => saveField("phone", v)} />
               </div>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
+                <EditableField label="Email" type="email" value={customer.email} placeholder="jane@email.com" onSave={(v) => saveField("email", v)} />
+              </div>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
+                <EditableField label="Address" value={customer.address} placeholder="123 Main St, City, ST 12345" onSave={(v) => saveField("address", v)} />
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted }}>Vehicles</div>
+              {!addingVehicle && (
+                <button onClick={() => setAddingVehicle(true)} style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "none", color: P.accent, fontSize: 11, fontWeight: 600, cursor: "pointer" }}><Plus size={11} /> Add</button>
+              )}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {vehicles.length === 0 && !addingVehicle && (
+                <p style={{ fontSize: 12, color: P.textMuted, fontStyle: "italic", margin: 0 }}>No vehicles on file yet.</p>
+              )}
+              {vehicles.map((v) => (
+                <VehicleRow key={v.id} vehicle={v} onUpdated={onVehicleUpdated} onDeleted={onVehicleDeleted} />
+              ))}
+              {addingVehicle && (
+                <div style={{ border: `1px solid ${P.border}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                  {vehicleError && <div style={{ fontSize: 12, color: P.danger }}>{vehicleError}</div>}
+                  <input autoFocus value={newLabel} onChange={(e) => setNewLabel(e.target.value)} placeholder="2021 VW ID4" style={inputStyle} />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <select value={newType} onChange={(e) => setNewType(e.target.value)} style={{ flex: 1, ...inputStyle, padding: "7px 9px", fontSize: 12.5 }}>
+                      {["Car", "Motorcycle", "Boat", "RV & Trailer", "Aircraft", "Other"].map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    <select value={newSize} onChange={(e) => setNewSize(e.target.value)} style={{ flex: 1, ...inputStyle, padding: "7px 9px", fontSize: 12.5 }}>
+                      <option value="car">Car pricing</option>
+                      <option value="suv_truck_van">SUV/Truck/Van pricing</option>
+                    </select>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button type="button" onClick={() => { setAddingVehicle(false); setVehicleError(""); setNewLabel(""); }} style={{ flex: 1, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "8px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                    <button type="button" onClick={handleAddVehicle} disabled={savingVehicle} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 9, padding: "8px", fontSize: 12, fontWeight: 700, cursor: savingVehicle ? "default" : "pointer" }}>
+                      {savingVehicle ? <Loader2 size={12} className="animate-spin" /> : "Save vehicle"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, marginBottom: 8 }}>Service history</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {loadingHistory && <p style={{ fontSize: 12, color: P.textMuted, fontStyle: "italic", margin: 0 }}>Loading…</p>}
+              {!loadingHistory && jobs.length === 0 && (
+                <p style={{ fontSize: 12, color: P.textMuted, fontStyle: "italic", margin: 0 }}>No jobs scheduled yet.</p>
+              )}
+              {jobs.map((j) => {
+                const names = (j.service_ids || []).map((id) => servicesById[id]?.name).filter(Boolean).join(", ");
+                return (
+                  <div key={j.id} onClick={() => onNavigate?.("schedule")} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "9px 12px", cursor: onNavigate ? "pointer" : "default" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 600, color: P.textPrimary }}>{j.scheduled_at ? formatDate(j.scheduled_at) : "Unscheduled"}</div>
+                      <div style={{ fontSize: 11, color: P.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{j.vehicles?.label || "No vehicle"}{names ? ` · ${names}` : ""}</div>
+                    </div>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: statusBadgeColor(j.status), flexShrink: 0 }}>{JOB_STATUS_LABEL[j.status] || j.status}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, marginBottom: 8 }}>Quotes</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {loadingHistory && <p style={{ fontSize: 12, color: P.textMuted, fontStyle: "italic", margin: 0 }}>Loading…</p>}
+              {!loadingHistory && quotes.length === 0 && (
+                <p style={{ fontSize: 12, color: P.textMuted, fontStyle: "italic", margin: 0 }}>No quotes yet.</p>
+              )}
+              {quotes.map((q) => (
+                <div key={q.id} onClick={() => onNavigate?.("quote")} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "9px 12px", cursor: onNavigate ? "pointer" : "default" }}>
+                  <div style={{ fontSize: 12.5, color: P.textSecondary }}>{formatDate(q.created_at)}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: P.textPrimary }}>{q.totals?.isRange ? `${money(q.totals.rangeLow)}–${money(q.totals.rangeHigh)}` : money(q.totals?.total)}</span>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: statusBadgeColor(q.status), textTransform: "capitalize" }}>{q.status}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -333,6 +532,7 @@ export default function AtlasCustomers({ onNavigate, currentPage = "customers" }
   const { businessId, businessName, businessLogoUrl, loading: bizLoading, error: bizError } = useBusinessId();
   const now = useLiveClock();
   const [customers, setCustomers] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [customersError, setCustomersError] = useState("");
   const [query, setQuery] = useState("");
@@ -345,6 +545,15 @@ export default function AtlasCustomers({ onNavigate, currentPage = "customers" }
     setCustomers((cs) => cs.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
     setDetailCustomer((c) => (c && c.id === updated.id ? { ...c, ...updated } : c));
   }
+  function handleVehicleAdded(vehicle) {
+    setVehicles((vs) => [...vs, vehicle]);
+  }
+  function handleVehicleUpdated(updated) {
+    setVehicles((vs) => vs.map((v) => (v.id === updated.id ? updated : v)));
+  }
+  function handleVehicleDeleted(id) {
+    setVehicles((vs) => vs.filter((v) => v.id !== id));
+  }
 
   useEffect(() => {
     if (!businessId) return;
@@ -352,18 +561,18 @@ export default function AtlasCustomers({ onNavigate, currentPage = "customers" }
 
     async function load() {
       setLoadingCustomers(true);
-      const { data: rows, error: fetchError } = await supabase
-        .from("customers")
-        .select("*")
-        .eq("business_id", businessId)
-        .order("name", { ascending: true });
+      const [customersRes, vehiclesRes] = await Promise.all([
+        supabase.from("customers").select("*").eq("business_id", businessId).order("name", { ascending: true }),
+        supabase.from("vehicles").select("*").eq("business_id", businessId),
+      ]);
 
       if (cancelled) return;
-      if (fetchError) {
-        setCustomersError(fetchError.message);
+      if (customersRes.error) {
+        setCustomersError(customersRes.error.message);
       } else {
-        setCustomers(rows);
+        setCustomers(customersRes.data);
       }
+      setVehicles(vehiclesRes.data || []);
       setLoadingCustomers(false);
     }
 
@@ -484,7 +693,19 @@ export default function AtlasCustomers({ onNavigate, currentPage = "customers" }
       )}
 
       {addOpen && <AddCustomerModal businessId={businessId} onClose={() => setAddOpen(false)} onAdded={handleAdded} />}
-      {detailCustomer && <CustomerDetail customer={detailCustomer} onClose={() => setDetailCustomer(null)} onUpdated={handleCustomerUpdated} />}
+      {detailCustomer && (
+        <CustomerDetail
+          customer={detailCustomer}
+          vehicles={vehicles.filter((v) => v.customer_id === detailCustomer.id)}
+          businessId={businessId}
+          onClose={() => setDetailCustomer(null)}
+          onUpdated={handleCustomerUpdated}
+          onVehicleAdded={handleVehicleAdded}
+          onVehicleUpdated={handleVehicleUpdated}
+          onVehicleDeleted={handleVehicleDeleted}
+          onNavigate={onNavigate}
+        />
+      )}
     </div>
   );
 }

@@ -366,7 +366,7 @@ function PriceField({ label, value, onChange, onBlur }) {
   );
 }
 
-function ServiceCard({ service, onUpdateLocal, onPersist, onDelete }) {
+function ServiceCard({ service, onUpdateLocal, onPersist, onDelete, onDuplicate }) {
   const [expanded, setExpanded] = useState(false);
   const includes = service.includes || [];
 
@@ -397,12 +397,27 @@ function ServiceCard({ service, onUpdateLocal, onPersist, onDelete }) {
           <input value={service.name} onChange={(e) => set("name", e.target.value)} onBlur={commit} style={{ ...inputStyle, fontWeight: 700, fontSize: 14, padding: "6px 8px" }} />
           <input value={service.category || ""} onChange={(e) => set("category", e.target.value)} onBlur={commit} placeholder="Category, e.g. Maintenance Detailing" style={{ ...inputStyle, fontSize: 12, color: P.textSecondary, padding: "6px 8px" }} />
         </div>
-        <button onClick={onDelete} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", flexShrink: 0 }}><Trash2 size={15} /></button>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 4, flexShrink: 0 }}>
+          <button onClick={onDuplicate} title="Duplicate this service" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer" }}><Copy size={14} /></button>
+          <button onClick={onDelete} title="Delete this service" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer" }}><Trash2 size={15} /></button>
+        </div>
       </div>
 
       <div style={{ padding: "0 16px 14px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: 8 }}>
         <PriceField label="Car" value={service.price_car_low} onChange={(e) => setNum("price_car_low", e.target.value)} onBlur={commit} />
         <PriceField label="SUV/Truck/Van" value={service.price_suv_low} onChange={(e) => setNum("price_suv_low", e.target.value)} onBlur={commit} />
+      </div>
+
+      <div style={{ padding: "0 16px 14px" }}>
+        <label style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, display: "block", marginBottom: 4 }}>Description</label>
+        <textarea
+          value={service.description || ""}
+          onChange={(e) => set("description", e.target.value)}
+          onBlur={commit}
+          placeholder="Plain-text description customers see, e.g. paste in a paragraph instead of listing bullet points."
+          rows={2}
+          style={{ ...inputStyle, width: "100%", padding: "8px 10px", fontSize: 12.5, resize: "vertical", fontFamily: "inherit", boxSizing: "border-box" }}
+        />
       </div>
 
       <button onClick={() => setExpanded((v) => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", background: "transparent", border: "none", borderTop: `1px solid ${P.border}`, padding: "9px 16px", cursor: "pointer", color: P.textSecondary, fontSize: 12, fontWeight: 600 }}>
@@ -459,6 +474,7 @@ function ServicesPanel() {
       price_suv_high: service.price_suv_high,
       deposit_required: service.deposit_required,
       includes: service.includes,
+      description: service.description,
     }).eq("id", service.id);
     if (updateError) setError(updateError.message);
   }
@@ -466,6 +482,28 @@ function ServicesPanel() {
     setServices((list) => list.filter((s) => s.id !== id));
     const { error: deleteError } = await supabase.from("services").delete().eq("id", id);
     if (deleteError) setError(deleteError.message);
+  }
+  async function duplicateService(service) {
+    const nextSort = services.length ? Math.max(...services.map((s) => s.sort_order || 0)) + 1 : 1;
+    const { data, error: insertError } = await supabase
+      .from("services")
+      .insert({
+        business_id: businessId,
+        name: `${service.name} (copy)`,
+        category: service.category,
+        price_car_low: service.price_car_low,
+        price_car_high: service.price_car_high,
+        price_suv_low: service.price_suv_low,
+        price_suv_high: service.price_suv_high,
+        deposit_required: service.deposit_required,
+        includes: service.includes,
+        description: service.description,
+        sort_order: nextSort,
+      })
+      .select()
+      .single();
+    if (insertError) { setError(insertError.message); return; }
+    setServices((list) => [...list, data]);
   }
   async function addService() {
     if (!businessId) return;
@@ -487,7 +525,7 @@ function ServicesPanel() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {services.map((s) => (
-            <ServiceCard key={s.id} service={s} onUpdateLocal={(next) => updateLocal(s.id, next)} onPersist={persist} onDelete={() => deleteService(s.id)} />
+            <ServiceCard key={s.id} service={s} onUpdateLocal={(next) => updateLocal(s.id, next)} onPersist={persist} onDelete={() => deleteService(s.id)} onDuplicate={() => duplicateService(s)} />
           ))}
           <button onClick={addService} disabled={!businessId} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "transparent", border: `1px dashed ${P.border}`, color: P.textMuted, borderRadius: 12, padding: "12px", fontSize: 13, fontWeight: 600, cursor: businessId ? "pointer" : "default", opacity: businessId ? 1 : 0.6 }}>
             <Plus size={14} /> Add service

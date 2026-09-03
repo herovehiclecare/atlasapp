@@ -732,12 +732,12 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap');
         #atlas-print-root { display: none; }
         @media print {
-          body * { visibility: hidden; }
-          #atlas-print-root, #atlas-print-root * { visibility: visible; }
-          #atlas-print-root { display: block; position: absolute; top: 0; left: 0; width: 100%; padding: 40px; background: #fff; color: #111; }
+          .atlas-screen-only { display: none !important; }
+          #atlas-print-root { display: block !important; width: 100%; padding: 40px; background: #fff; color: #111; }
         }
       `}</style>
 
+      <div className="atlas-screen-only" style={{ display: "flex", width: "100%" }}>
       {/* SIDEBAR */}
       <div className="hidden lg:flex" style={{ width: 240, flexShrink: 0, borderRight: `1px solid ${P.border}`, flexDirection: "column", padding: "22px 14px", position: "sticky", top: 0, height: "100vh" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 8px", marginBottom: 28 }}>
@@ -857,6 +857,8 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
           onSaved={handleSaved}
         />
       )}
+      </div>
+
       <PrintableInvoice inv={printInvoice} services={services} business={{ name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, invoiceLabel: businessInvoiceLabel }} />
     </div>
   );

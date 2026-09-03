@@ -3,7 +3,7 @@ import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings, Plus,
   Sparkles, Search, MoreHorizontal, SlidersHorizontal, ChevronDown,
   Pencil, Camera, Download,
-  Ship, Plane, HelpCircle, X, Check, Loader2, ListChecks,
+  Ship, Plane, HelpCircle, X, Check, Loader2, ListChecks, Trash2,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
@@ -150,11 +150,11 @@ function StatCard({ label, value, sub, tone }) {
   );
 }
 
-function VehicleCard({ v, i }) {
+function VehicleCard({ v, i, onEdit }) {
   const TypeIcon = TYPE_ICON[v.vehicle_type] || HelpCircle;
   const ownerName = v.customers?.name;
   return (
-    <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 16, overflow: "hidden" }}>
+    <div onClick={() => onEdit(v)} title="Click to edit" style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 16, overflow: "hidden", cursor: "pointer" }}>
       <div style={{ height: 64, background: v.color_hex || P.surfaceHover, position: "relative" }}>
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(255,255,255,0.16), transparent 60%)" }} />
         <span style={{ position: "absolute", top: 10, left: 10, display: "flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: 7, background: "rgba(0,0,0,0.45)" }}>
@@ -188,15 +188,21 @@ function VehicleCard({ v, i }) {
 
 /* ---------------------------------- Add Vehicle modal ---------------------------------- */
 
-function AddVehicleModal({ businessId, customers, onClose, onAdded }) {
-  const [label, setLabel] = useState("");
-  const [vehicleType, setVehicleType] = useState("Car");
-  const [customType, setCustomType] = useState("");
-  const [sizeClass, setSizeClass] = useState("car");
-  const [colorHex, setColorHex] = useState("#4B5158");
-  const [customerId, setCustomerId] = useState("");
+function AddVehicleModal({ businessId, customers, vehicle, onClose, onAdded, onUpdated, onDeleted }) {
+  const isEdit = !!vehicle;
+  const [label, setLabel] = useState(vehicle?.label || "");
+  const [vehicleType, setVehicleType] = useState(
+    vehicle && !BASE_TYPES.includes(vehicle.vehicle_type) ? "Custom…" : vehicle?.vehicle_type || "Car"
+  );
+  const [customType, setCustomType] = useState(
+    vehicle && !BASE_TYPES.includes(vehicle.vehicle_type) ? vehicle.vehicle_type : ""
+  );
+  const [sizeClass, setSizeClass] = useState(vehicle?.size_class || "car");
+  const [colorHex, setColorHex] = useState(vehicle?.color_hex || "#4B5158");
+  const [customerId, setCustomerId] = useState(vehicle?.customer_id || "");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -212,16 +218,33 @@ function AddVehicleModal({ businessId, customers, onClose, onAdded }) {
     setSaving(true);
     setError("");
 
+    const payload = {
+      label: label.trim(),
+      vehicle_type: type,
+      size_class: sizeClass,
+      color_hex: colorHex || null,
+      customer_id: customerId || null,
+    };
+
+    if (isEdit) {
+      const { data, error: updateError } = await supabase
+        .from("vehicles")
+        .update(payload)
+        .eq("id", vehicle.id)
+        .select("*, customers(name)")
+        .single();
+      setSaving(false);
+      if (updateError) {
+        setError(updateError.message);
+        return;
+      }
+      onUpdated(data);
+      return;
+    }
+
     const { data, error: insertError } = await supabase
       .from("vehicles")
-      .insert({
-        business_id: businessId,
-        label: label.trim(),
-        vehicle_type: type,
-        size_class: sizeClass,
-        color_hex: colorHex || null,
-        customer_id: customerId || null,
-      })
+      .insert({ business_id: businessId, ...payload })
       .select("*, customers(name)")
       .single();
 
@@ -233,12 +256,24 @@ function AddVehicleModal({ businessId, customers, onClose, onAdded }) {
     onAdded(data);
   }
 
+  async function handleDelete() {
+    if (!window.confirm("Delete this vehicle? This can't be undone.")) return;
+    setDeleting(true);
+    const { error: deleteError } = await supabase.from("vehicles").delete().eq("id", vehicle.id);
+    setDeleting(false);
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
+    onDeleted(vehicle.id);
+  }
+
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 50 }} />
       <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(440px, calc(100vw - 32px))", maxHeight: "calc(100vh - 40px)", overflowY: "auto", background: P.bg, border: `1px solid ${P.border}`, borderRadius: 16, zIndex: 51, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: P.textPrimary }}>Add vehicle</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: P.textPrimary }}>{isEdit ? "Edit vehicle" : "Add vehicle"}</span>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", display: "flex" }}><X size={18} /></button>
         </div>
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -282,8 +317,13 @@ function AddVehicleModal({ businessId, customers, onClose, onAdded }) {
             </div>
           </div>
           <button type="submit" disabled={saving} style={{ marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: `linear-gradient(120deg, ${P.accent}, ${P.secondary})`, color: P.bg, border: "none", borderRadius: 10, padding: "11px 16px", fontSize: 13.5, fontWeight: 700, cursor: saving ? "default" : "pointer", opacity: saving ? 0.85 : 1 }}>
-            {saving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : "Add vehicle"}
+            {saving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : isEdit ? "Save changes" : "Add vehicle"}
           </button>
+          {isEdit && (
+            <button type="button" onClick={handleDelete} disabled={deleting} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "transparent", color: P.danger, border: `1px solid ${P.border}`, borderRadius: 10, padding: "10px 16px", fontSize: 13, fontWeight: 600, cursor: deleting ? "default" : "pointer" }}>
+              {deleting ? <><Loader2 size={14} className="animate-spin" /> Deleting…</> : <><Trash2 size={14} /> Delete vehicle</>}
+            </button>
+          )}
         </form>
       </div>
     </>
@@ -305,6 +345,7 @@ export default function AtlasVehicles({ onNavigate, currentPage = "vehicles" }) 
   const [addingType, setAddingType] = useState(false);
   const [newType, setNewType] = useState("");
   const [addOpen, setAddOpen] = useState(false);
+  const [editingVehicle, setEditingVehicle] = useState(null);
   const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
@@ -358,6 +399,16 @@ export default function AtlasVehicles({ onNavigate, currentPage = "vehicles" }) 
   function handleAdded(vehicle) {
     setVehicles((vs) => [vehicle, ...vs]);
     setAddOpen(false);
+  }
+
+  function handleVehicleUpdated(vehicle) {
+    setVehicles((vs) => vs.map((v) => (v.id === vehicle.id ? vehicle : v)));
+    setEditingVehicle(null);
+  }
+
+  function handleVehicleDeleted(id) {
+    setVehicles((vs) => vs.filter((v) => v.id !== id));
+    setEditingVehicle(null);
   }
 
   function handleExport() {
@@ -471,7 +522,7 @@ export default function AtlasVehicles({ onNavigate, currentPage = "vehicles" }) 
             </div>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 14 }}>
-              {filtered.map((v, i) => <VehicleCard key={v.id} v={v} i={i} />)}
+              {filtered.map((v, i) => <VehicleCard key={v.id} v={v} i={i} onEdit={setEditingVehicle} />)}
             </div>
           )}
         </div>
@@ -501,7 +552,17 @@ export default function AtlasVehicles({ onNavigate, currentPage = "vehicles" }) 
         </>
       )}
 
-      {addOpen && <AddVehicleModal businessId={businessId} customers={customers} onClose={() => setAddOpen(false)} onAdded={handleAdded} />}
+      {(addOpen || editingVehicle) && (
+        <AddVehicleModal
+          businessId={businessId}
+          customers={customers}
+          vehicle={editingVehicle}
+          onClose={() => { setAddOpen(false); setEditingVehicle(null); }}
+          onAdded={handleAdded}
+          onUpdated={handleVehicleUpdated}
+          onDeleted={handleVehicleDeleted}
+        />
+      )}
     </div>
   );
 }
