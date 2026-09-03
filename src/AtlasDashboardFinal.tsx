@@ -716,7 +716,7 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
                     {todaysSchedule.length === 0 ? (
                       <div style={{ padding: "18px", fontSize: 13, color: P.textMuted, textAlign: "center" }}>No jobs scheduled today</div>
                     ) : todaysSchedule.map((job, i) => (
-                      <div key={job.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 18px", borderBottom: i < todaysSchedule.length - 1 ? `1px solid ${P.border}` : "none" }}>
+                      <div key={job.id} onClick={() => onNavigate("schedule")} style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 18px", borderBottom: i < todaysSchedule.length - 1 ? `1px solid ${P.border}` : "none", cursor: "pointer" }}>
                         <div style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS[job.status] || P.textMuted, flexShrink: 0 }} />
                         <div style={{ fontSize: 12.5, color: P.textMuted, width: 68, flexShrink: 0 }}>{formatTime(job.scheduled_at)}</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
@@ -732,7 +732,7 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
                     {recentQuotes.length === 0 ? (
                       <div style={{ padding: "18px", fontSize: 13, color: P.textMuted, textAlign: "center" }}>No quotes yet</div>
                     ) : recentQuotes.map((q, i) => (
-                      <div key={q.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 18px", borderBottom: i < recentQuotes.length - 1 ? `1px solid ${P.border}` : "none" }}>
+                      <div key={q.id} onClick={() => onNavigate("quote")} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 18px", borderBottom: i < recentQuotes.length - 1 ? `1px solid ${P.border}` : "none", cursor: "pointer" }}>
                         <div style={{ minWidth: 0 }}><div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>{q.customers?.name || "No customer"}</div><div style={{ fontSize: 12, color: P.textMuted }}>{quoteVehicleLabel(q, vehiclesById) || "No vehicle"}</div></div>
                         <div style={{ textAlign: "right", flexShrink: 0 }}><div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>{money(quoteAmount(q))}</div><div style={{ fontSize: 11.5, color: P.textMuted }}>{capitalize(q.status)}</div></div>
                       </div>
@@ -752,7 +752,7 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
                     ) : outstandingList.map((inv, i) => {
                       const daysOverdue = inv.due_date ? Math.floor((today - parseDate(inv.due_date)) / 86400000) : 0;
                       return (
-                        <div key={inv.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 18px", borderBottom: i < outstandingList.length - 1 ? `1px solid ${P.border}` : "none" }}>
+                        <div key={inv.id} onClick={() => onNavigate("invoices")} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 18px", borderBottom: i < outstandingList.length - 1 ? `1px solid ${P.border}` : "none", cursor: "pointer" }}>
                           <div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>{inv.customers?.name || "No customer"}</div>
                           <div style={{ textAlign: "right" }}><div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>{money(inv.amount)}</div><div style={{ fontSize: 11.5, color: daysOverdue > 0 ? P.danger : P.textMuted }}>{daysOverdue > 0 ? `${daysOverdue}d overdue` : "Due soon"}</div></div>
                         </div>
