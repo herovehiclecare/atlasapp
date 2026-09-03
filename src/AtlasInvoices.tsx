@@ -733,7 +733,8 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
   // print styles to a page this complex before generating the preview.
   if (printInvoice) {
     return (
-      <div style={{ background: "#fff", color: "#111", minHeight: "100vh", padding: 40 }}>
+      <div style={{ background: "#fff", color: "#111", minHeight: "100vh", padding: 40, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');`}</style>
         <PrintableInvoice inv={printInvoice} services={services} business={{ name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, invoiceLabel: businessInvoiceLabel }} />
       </div>
     );

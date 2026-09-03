@@ -92,6 +92,10 @@ export function printWhenReady(rootId = "atlas-print-root") {
           img.addEventListener("error", resolve, { once: true });
         })
   );
+  // Also wait for the webfont (Inter) to finish loading -- otherwise the
+  // print snapshot can get taken on a fallback system font, mismatching
+  // the on-screen preview which had time to load it earlier.
+  if (document.fonts?.ready) waits.push(document.fonts.ready);
   Promise.all(waits).then(() => window.print());
 }
 
