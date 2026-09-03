@@ -1672,18 +1672,25 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
     true,
   ][step];
 
+  // While a print/PDF is in flight, render ONLY the printable document --
+  // nothing else in the DOM for the browser's print engine to deal with.
+  // This sidesteps iOS Safari's well-known blank-page bug with the
+  // "hide everything else via CSS" trick, which doesn't reliably apply
+  // print styles to a page this complex before generating the preview.
+  if (printQuote) {
+    return (
+      <div style={{ background: "#fff", color: "#111", minHeight: "100vh", padding: 40 }}>
+        <PrintableQuote q={printQuote} services={services} addonsAll={addonsAll} business={{ name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, quoteLabel: businessQuoteLabel, depositLink }} />
+      </div>
+    );
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: P.bg, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", display: "flex" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        #atlas-print-root { display: none; }
-        @media print {
-          .atlas-screen-only { display: none !important; }
-          #atlas-print-root { display: block !important; width: 100%; padding: 40px; background: #fff; color: #111; }
-        }
       `}</style>
 
-      <div className="atlas-screen-only" style={{ display: "flex", width: "100%" }}>
       {/* SIDEBAR */}
       <div className="hidden lg:flex" style={{ width: 240, flexShrink: 0, borderRight: `1px solid ${P.border}`, flexDirection: "column", padding: "22px 14px", position: "sticky", top: 0, height: "100vh" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 8px", marginBottom: 28 }}>
@@ -1826,9 +1833,6 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
           />
         </QuotePreviewModal>
       )}
-      </div>
-
-      <PrintableQuote q={printQuote} services={services} addonsAll={addonsAll} business={{ name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, quoteLabel: businessQuoteLabel, depositLink }} />
     </div>
   );
 }
