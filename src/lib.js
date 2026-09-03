@@ -78,39 +78,6 @@ export function downloadCsv(rows, filename) {
   URL.revokeObjectURL(url);
 }
 
-// Firing window.print() on a fixed timer races remote images (logo/photo
-// URLs) that haven't finished loading yet, so they print blank. This waits
-// for every <img> inside the print root to actually load (or fail) first.
-export function printWhenReady(rootId = "atlas-print-root") {
-  const root = document.getElementById(rootId);
-  const imgs = root ? Array.from(root.querySelectorAll("img")) : [];
-  const waits = imgs.map((img) =>
-    img.complete
-      ? Promise.resolve()
-      : new Promise((resolve) => {
-          img.addEventListener("load", resolve, { once: true });
-          img.addEventListener("error", resolve, { once: true });
-        })
-  );
-  // Also wait for the webfont (Inter) to finish loading -- otherwise the
-  // print snapshot can get taken on a fallback system font, mismatching
-  // the on-screen preview which had time to load it earlier.
-  if (document.fonts?.ready) waits.push(document.fonts.ready);
-  Promise.all(waits).then(() => {
-    // React committing the swap to only-the-printable-content DOM doesn't
-    // guarantee the browser has actually painted it yet -- calling
-    // window.print() immediately (especially when `waits` resolves near
-    // -instantly, in the same microtask queue) can capture whatever was
-    // still on screen from the previous frame instead. Two nested rAFs
-    // guarantee at least one real paint has happened first.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        window.print();
-      });
-    });
-  });
-}
-
 // A full-resolution phone photo, base64-encoded, easily runs several MB —
 // big enough to hit request-size limits on a plain UPDATE and fail with no
 // usable error. A logo only ever renders at 30-52px, so downscaling client-

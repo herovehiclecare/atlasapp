@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings, Sparkles,
   MoreHorizontal, Pencil, Camera, Check, ChevronLeft, ChevronRight,
@@ -8,7 +9,7 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { formatDate, shortId, printWhenReady, findService, svcPrice, resizeImageToDataUrl } from "./lib";
+import { formatDate, shortId, findService, svcPrice, resizeImageToDataUrl } from "./lib";
 
 const P = {
   bg: "#06100C", bgTop: "#0B1813", surface: "#0F1B15", surfaceHover: "#132018",
@@ -1301,6 +1302,74 @@ function PrintableQuote({ q, services, addonsAll, business, id = "atlas-print-ro
   );
 }
 
+// Prints via a persistent, always-mounted, off-screen <iframe> instead of
+// swapping the main document's own content and calling window.print() on
+// it. That approach worked on desktop but proved unreliable on iOS Safari
+// -- the print snapshot could end up capturing whatever the main page
+// looked like a frame earlier, no matter how the timing was tuned. An
+// iframe is a genuinely separate document the browser must render fresh
+// before printing, which sidesteps that whole class of bug (the same
+// technique libraries like react-to-print use).
+function PrintFrame({ printJob, onDone, render }) {
+  const iframeRef = useRef(null);
+  const [frameBody, setFrameBody] = useState(null);
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    function setup() {
+      const doc = iframe.contentDocument;
+      if (!doc) return;
+      doc.open();
+      doc.write(`<!doctype html><html><head><meta charset="utf-8"><style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 40px; background: #fff; color: #111; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+      </style></head><body><div id="print-mount"></div></body></html>`);
+      doc.close();
+      setFrameBody(doc.getElementById("print-mount"));
+    }
+    if (iframe.contentDocument?.readyState === "complete") setup();
+    iframe.addEventListener("load", setup);
+    return () => iframe.removeEventListener("load", setup);
+  }, []);
+
+  useEffect(() => {
+    if (!printJob || !frameBody) return;
+    const iframe = iframeRef.current;
+    const doc = iframe.contentDocument;
+    const imgs = Array.from(frameBody.querySelectorAll("img"));
+    const waits = imgs.map((img) =>
+      img.complete ? Promise.resolve() : new Promise((resolve) => {
+        img.addEventListener("load", resolve, { once: true });
+        img.addEventListener("error", resolve, { once: true });
+      })
+    );
+    if (doc.fonts?.ready) waits.push(doc.fonts.ready);
+    let cancelled = false;
+    Promise.all(waits).then(() => {
+      if (cancelled) return;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (cancelled) return;
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      }));
+    });
+    function handleAfterPrint() { onDone(); }
+    iframe.contentWindow.addEventListener("afterprint", handleAfterPrint);
+    return () => {
+      cancelled = true;
+      iframe.contentWindow?.removeEventListener("afterprint", handleAfterPrint);
+    };
+  }, [printJob, frameBody]);
+
+  return (
+    <>
+      <iframe ref={iframeRef} title="Atlas print" style={{ position: "fixed", top: "-9999px", left: "-9999px", width: "816px", height: "1056px", border: "none" }} />
+      {frameBody && printJob && createPortal(render(), frameBody)}
+    </>
+  );
+}
+
 // Shows the exact PrintableQuote document on-screen — what the customer
 // will actually see — instead of the app-themed Review card, so there's a
 // real preview before Send rather than just this app's own summary.
@@ -1620,18 +1689,6 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
     };
   }
 
-  useEffect(() => {
-    if (!printQuote) return;
-    const handleAfterPrint = () => setPrintQuote(null);
-    window.addEventListener("afterprint", handleAfterPrint);
-    // See the matching comment in AtlasInvoices.tsx — calling this directly
-    // instead of behind an extra setTimeout hop keeps it as close as
-    // possible to the click that triggered it, which matters for browsers'
-    // print/dialog-throttling heuristics.
-    printWhenReady();
-    return () => window.removeEventListener("afterprint", handleAfterPrint);
-  }, [printQuote]);
-
   function addToCalendar() {
     const start = new Date();
     start.setDate(start.getDate() + 1);
@@ -1671,20 +1728,6 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
     true,
     true,
   ][step];
-
-  // While a print/PDF is in flight, render ONLY the printable document --
-  // nothing else in the DOM for the browser's print engine to deal with.
-  // This sidesteps iOS Safari's well-known blank-page bug with the
-  // "hide everything else via CSS" trick, which doesn't reliably apply
-  // print styles to a page this complex before generating the preview.
-  if (printQuote) {
-    return (
-      <div style={{ background: "#fff", color: "#111", minHeight: "100vh", padding: 40, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');`}</style>
-        <PrintableQuote q={printQuote} services={services} addonsAll={addonsAll} business={{ name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, quoteLabel: businessQuoteLabel, depositLink }} />
-      </div>
-    );
-  }
 
   return (
     <div style={{ minHeight: "100vh", background: P.bg, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", display: "flex" }}>
@@ -1834,6 +1877,13 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
           />
         </QuotePreviewModal>
       )}
+      <PrintFrame
+        printJob={printQuote}
+        onDone={() => setPrintQuote(null)}
+        render={() => (
+          <PrintableQuote q={printQuote} services={services} addonsAll={addonsAll} business={{ name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, quoteLabel: businessQuoteLabel, depositLink }} />
+        )}
+      />
     </div>
   );
 }

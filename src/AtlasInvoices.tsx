@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings, Sparkles,
   MoreHorizontal, Pencil, Camera, Plus, Search, Download,
@@ -6,7 +7,7 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { formatDate, downloadCsv, shortId, uploadImages, parseDate, printWhenReady, findService, svcPrice, resizeImageToDataUrl, useLiveClock, formatDateTime } from "./lib";
+import { formatDate, downloadCsv, shortId, uploadImages, parseDate, findService, svcPrice, resizeImageToDataUrl, useLiveClock, formatDateTime } from "./lib";
 
 const PHOTOS_BUCKET = "invoice-photos";
 
@@ -622,6 +623,74 @@ function PrintableInvoice({ inv, services, business }) {
   );
 }
 
+// Prints via a persistent, always-mounted, off-screen <iframe> instead of
+// swapping the main document's own content and calling window.print() on
+// it. That approach worked on desktop but proved unreliable on iOS Safari
+// -- the print snapshot could end up capturing whatever the main page
+// looked like a frame earlier, no matter how the timing was tuned. An
+// iframe is a genuinely separate document the browser must render fresh
+// before printing, which sidesteps that whole class of bug (the same
+// technique libraries like react-to-print use).
+function PrintFrame({ printJob, onDone, render }) {
+  const iframeRef = useRef(null);
+  const [frameBody, setFrameBody] = useState(null);
+
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    function setup() {
+      const doc = iframe.contentDocument;
+      if (!doc) return;
+      doc.open();
+      doc.write(`<!doctype html><html><head><meta charset="utf-8"><style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap');
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 40px; background: #fff; color: #111; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+      </style></head><body><div id="print-mount"></div></body></html>`);
+      doc.close();
+      setFrameBody(doc.getElementById("print-mount"));
+    }
+    if (iframe.contentDocument?.readyState === "complete") setup();
+    iframe.addEventListener("load", setup);
+    return () => iframe.removeEventListener("load", setup);
+  }, []);
+
+  useEffect(() => {
+    if (!printJob || !frameBody) return;
+    const iframe = iframeRef.current;
+    const doc = iframe.contentDocument;
+    const imgs = Array.from(frameBody.querySelectorAll("img"));
+    const waits = imgs.map((img) =>
+      img.complete ? Promise.resolve() : new Promise((resolve) => {
+        img.addEventListener("load", resolve, { once: true });
+        img.addEventListener("error", resolve, { once: true });
+      })
+    );
+    if (doc.fonts?.ready) waits.push(doc.fonts.ready);
+    let cancelled = false;
+    Promise.all(waits).then(() => {
+      if (cancelled) return;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (cancelled) return;
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      }));
+    });
+    function handleAfterPrint() { onDone(); }
+    iframe.contentWindow.addEventListener("afterprint", handleAfterPrint);
+    return () => {
+      cancelled = true;
+      iframe.contentWindow?.removeEventListener("afterprint", handleAfterPrint);
+    };
+  }, [printJob, frameBody]);
+
+  return (
+    <>
+      <iframe ref={iframeRef} title="Atlas print" style={{ position: "fixed", top: "-9999px", left: "-9999px", width: "816px", height: "1056px", border: "none" }} />
+      {frameBody && printJob && createPortal(render(), frameBody)}
+    </>
+  );
+}
+
 /* ---------------------------------- page ---------------------------------- */
 
 export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) {
@@ -700,21 +769,6 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
     downloadCsv(rows, "invoices.csv");
   }
 
-  useEffect(() => {
-    if (!printInvoice) return;
-    const handleAfterPrint = () => setPrintInvoice(null);
-    window.addEventListener("afterprint", handleAfterPrint);
-    // Calling window.print() straight from this effect (rather than behind an
-    // extra setTimeout hop) keeps it as close as possible to the click that
-    // triggered it — Chrome silently blocks print/dialog calls it judges too
-    // disconnected from a direct user gesture, especially after several in a
-    // short span, which is what "This page has been blocked from opening
-    // dialogs" means. It's a browser-level throttle, not something app code
-    // can override; closing and reopening the tab resets it.
-    printWhenReady();
-    return () => window.removeEventListener("afterprint", handleAfterPrint);
-  }, [printInvoice]);
-
   const filtered = invoices.filter((inv) => {
     const matchesQuery = `${inv.customers?.name || ""} ${inv.id}`.toLowerCase().includes(query.toLowerCase());
     const matchesFilter = filter === "All" || effectiveStatus(inv) === filter.toLowerCase();
@@ -725,20 +779,6 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
   const totalPaid = invoices.filter((i) => i.status === "paid").reduce((s, i) => s + Number(i.amount), 0);
   const totalOutstanding = invoices.filter((i) => i.status !== "paid").reduce((s, i) => s + Number(i.amount), 0);
   const overdueCount = invoices.filter((i) => effectiveStatus(i) === "overdue").length;
-
-  // While a print/PDF is in flight, render ONLY the printable document --
-  // nothing else in the DOM for the browser's print engine to deal with.
-  // This sidesteps iOS Safari's well-known blank-page bug with the
-  // "hide everything else via CSS" trick, which doesn't reliably apply
-  // print styles to a page this complex before generating the preview.
-  if (printInvoice) {
-    return (
-      <div style={{ background: "#fff", color: "#111", minHeight: "100vh", padding: 40, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');`}</style>
-        <PrintableInvoice inv={printInvoice} services={services} business={{ name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, invoiceLabel: businessInvoiceLabel }} />
-      </div>
-    );
-  }
 
   return (
     <div style={{ minHeight: "100vh", background: P.bg, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", display: "flex" }}>
@@ -865,6 +905,13 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
           onSaved={handleSaved}
         />
       )}
+      <PrintFrame
+        printJob={printInvoice}
+        onDone={() => setPrintInvoice(null)}
+        render={() => (
+          <PrintableInvoice inv={printInvoice} services={services} business={{ name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, invoiceLabel: businessInvoiceLabel }} />
+        )}
+      />
     </div>
   );
 }
