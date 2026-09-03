@@ -528,7 +528,7 @@ function AddCustomerModal({ businessId, onClose, onAdded }) {
 
 /* ---------------------------------- page ---------------------------------- */
 
-export default function AtlasCustomers({ onNavigate, currentPage = "customers" }) {
+export default function AtlasCustomers({ onNavigate, navParams, currentPage = "customers" }) {
   const { businessId, businessName, businessLogoUrl, loading: bizLoading, error: bizError } = useBusinessId();
   const now = useLiveClock();
   const [customers, setCustomers] = useState([]);
@@ -579,6 +579,21 @@ export default function AtlasCustomers({ onNavigate, currentPage = "customers" }
     load();
     return () => { cancelled = true; };
   }, [businessId]);
+
+  // Deep-linked here from another page ("Recent quotes" on the dashboard,
+  // etc.) with a specific customer to jump straight to. Tracked by object
+  // identity so closing the drawer doesn't make it pop back open the next
+  // time `customers` happens to re-render (e.g. after an unrelated edit).
+  const consumedNavRef = useRef(null);
+  useEffect(() => {
+    if (!navParams?.customerId || customers.length === 0) return;
+    if (consumedNavRef.current === navParams) return;
+    const match = customers.find((c) => c.id === navParams.customerId);
+    if (match) {
+      setDetailCustomer(match);
+      consumedNavRef.current = navParams;
+    }
+  }, [navParams, customers]);
 
   const loading = bizLoading || (!!businessId && loadingCustomers);
   const error = bizError || customersError;

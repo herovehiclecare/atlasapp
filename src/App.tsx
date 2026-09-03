@@ -40,7 +40,18 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState("dashboard");
+  const [navParams, setNavParams] = useState(null);
   const [recovery, setRecovery] = useState(isRecoveryUrl);
+
+  // Lets a row on one page ("this quote", "this customer's job") jump
+  // straight to the relevant record on another page, instead of just
+  // landing on that page's generic list — e.g. onNavigate("customers", { customerId })
+  // opens that customer's profile directly. Params are optional; plain
+  // onNavigate(id) calls elsewhere keep working unchanged.
+  function navigate(id, params) {
+    setNavParams(params || null);
+    setPage(id);
+  }
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -86,5 +97,5 @@ export default function App() {
 
   const Page = PAGES[page] || AtlasDashboardFinal;
 
-  return <Page onNavigate={setPage} currentPage={page} onSignOut={handleSignOut} />;
+  return <Page onNavigate={navigate} navParams={navParams} currentPage={page} onSignOut={handleSignOut} />;
 }
