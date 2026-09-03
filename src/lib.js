@@ -96,7 +96,19 @@ export function printWhenReady(rootId = "atlas-print-root") {
   // print snapshot can get taken on a fallback system font, mismatching
   // the on-screen preview which had time to load it earlier.
   if (document.fonts?.ready) waits.push(document.fonts.ready);
-  Promise.all(waits).then(() => window.print());
+  Promise.all(waits).then(() => {
+    // React committing the swap to only-the-printable-content DOM doesn't
+    // guarantee the browser has actually painted it yet -- calling
+    // window.print() immediately (especially when `waits` resolves near
+    // -instantly, in the same microtask queue) can capture whatever was
+    // still on screen from the previous frame instead. Two nested rAFs
+    // guarantee at least one real paint has happened first.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.print();
+      });
+    });
+  });
 }
 
 // A full-resolution phone photo, base64-encoded, easily runs several MB —
