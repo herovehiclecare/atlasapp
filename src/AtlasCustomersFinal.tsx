@@ -561,6 +561,7 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
   const [detailCustomer, setDetailCustomer] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   function handleCustomerUpdated(updated) {
     setCustomers((cs) => cs.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
@@ -643,6 +644,31 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
     downloadCsv(rows, "customers.csv");
   }
 
+  function handleBulkExport() {
+    const targets = customers.filter((c) => selected.includes(c.id));
+    const rows = [["Name", "Email", "Phone", "Customer Since"]].concat(
+      targets.map((c) => [c.name, c.email || "", c.phone || "", formatDate(c.created_at)])
+    );
+    downloadCsv(rows, "customers-selected.csv");
+  }
+
+  async function handleBulkDelete() {
+    const targets = customers.filter((c) => selected.includes(c.id));
+    if (targets.length === 0) return;
+    const vehicleCount = vehicles.filter((v) => selected.includes(v.customer_id)).length;
+    const vehicleNote = vehicleCount > 0 ? ` ${vehicleCount === 1 ? "1 vehicle" : `${vehicleCount} vehicles`} of theirs will be deleted too.` : "";
+    const label = targets.length === 1 ? targets[0].name : `${targets.length} customers`;
+    if (!window.confirm(`Delete ${label}?${vehicleNote} Existing jobs, quotes, and invoices will be kept for your records but will no longer show a customer name. This can't be undone.`)) return;
+    setBulkDeleting(true);
+    const { error } = await supabase.from("customers").delete().in("id", selected);
+    setBulkDeleting(false);
+    if (error) { alert(error.message); return; }
+    setCustomers((cs) => cs.filter((c) => !selected.includes(c.id)));
+    setVehicles((vs) => vs.filter((v) => !selected.includes(v.customer_id)));
+    setDetailCustomer((c) => (c && selected.includes(c.id) ? null : c));
+    setSelected([]);
+  }
+
   return (
     <div style={{ minHeight: "100vh", background: P.bg, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", display: "flex" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');`}</style>
@@ -693,6 +719,17 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
               <SlidersHorizontal size={13} /> Name A–Z <ChevronDown size={13} />
             </button>
           </div>
+
+          {selected.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", background: P.accentSoft, border: `1px solid ${P.accent}33`, borderRadius: 10, padding: "9px 12px" }}>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: P.accent, marginRight: "auto" }}>{selected.length} selected</span>
+              <button onClick={handleBulkExport} style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 8, padding: "6px 11px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}><Download size={12} /> Export selected</button>
+              <button onClick={handleBulkDelete} disabled={bulkDeleting} style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", border: `1px solid ${P.border}`, color: P.danger, borderRadius: 8, padding: "6px 11px", fontSize: 12, fontWeight: 700, cursor: bulkDeleting ? "default" : "pointer", opacity: bulkDeleting ? 0.6 : 1 }}>
+                {bulkDeleting ? <><Loader2 size={12} className="animate-spin" /> Deleting…</> : <><Trash2 size={12} /> Delete selected</>}
+              </button>
+              <button onClick={() => setSelected([])} style={{ background: "transparent", border: "none", color: P.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "6px 4px" }}>Clear</button>
+            </div>
+          )}
 
           {loading ? (
             <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, padding: "40px 18px", textAlign: "center", fontSize: 13, color: P.textMuted, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
