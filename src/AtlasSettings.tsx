@@ -188,7 +188,7 @@ function Card({ children, style }) {
 /* ---------------------------------- Business Profile ---------------------------------- */
 
 function ProfilePanel() {
-  const { businessId, businessName, businessLogoUrl, businessTagline, businessQuoteLabel, businessInvoiceLabel, loading: bizLoading } = useBusinessId();
+  const { businessId, businessName, businessLogoUrl, businessTagline, businessQuoteLabel, businessInvoiceLabel, businessPhone, businessEmail, businessAddress, loading: bizLoading } = useBusinessId();
   const [logo, setLogo] = useState(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [name, setName] = useState("");
@@ -203,6 +203,15 @@ function ProfilePanel() {
   const [invoiceLabel, setInvoiceLabel] = useState("");
   const [savingInvoiceLabel, setSavingInvoiceLabel] = useState(false);
   const [invoiceLabelSaved, setInvoiceLabelSaved] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [savingPhone, setSavingPhone] = useState(false);
+  const [phoneSaved, setPhoneSaved] = useState(false);
+  const [email, setEmail] = useState("");
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [emailSaved, setEmailSaved] = useState(false);
+  const [address, setAddress] = useState("");
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [addressSaved, setAddressSaved] = useState(false);
   const [error, setError] = useState("");
   const fileRef = useRef(null);
 
@@ -211,6 +220,9 @@ function ProfilePanel() {
   useEffect(() => { setTagline(businessTagline); }, [businessTagline]);
   useEffect(() => { setQuoteLabel(businessQuoteLabel); }, [businessQuoteLabel]);
   useEffect(() => { setInvoiceLabel(businessInvoiceLabel); }, [businessInvoiceLabel]);
+  useEffect(() => { setPhone(businessPhone); }, [businessPhone]);
+  useEffect(() => { setEmail(businessEmail); }, [businessEmail]);
+  useEffect(() => { setAddress(businessAddress); }, [businessAddress]);
 
   async function onPick(e) {
     const file = e.target.files?.[0];
@@ -271,6 +283,39 @@ function ProfilePanel() {
     if (updateError) { setError(updateError.message); return; }
     setInvoiceLabelSaved(true);
     setTimeout(() => setInvoiceLabelSaved(false), 1600);
+  }
+
+  async function savePhone() {
+    if (!businessId) return;
+    setSavingPhone(true);
+    setError("");
+    const { error: updateError } = await supabase.from("businesses").update({ phone: phone.trim() || null }).eq("id", businessId).select().single();
+    setSavingPhone(false);
+    if (updateError) { setError(updateError.message); return; }
+    setPhoneSaved(true);
+    setTimeout(() => setPhoneSaved(false), 1600);
+  }
+
+  async function saveEmail() {
+    if (!businessId) return;
+    setSavingEmail(true);
+    setError("");
+    const { error: updateError } = await supabase.from("businesses").update({ email: email.trim() || null }).eq("id", businessId).select().single();
+    setSavingEmail(false);
+    if (updateError) { setError(updateError.message); return; }
+    setEmailSaved(true);
+    setTimeout(() => setEmailSaved(false), 1600);
+  }
+
+  async function saveAddress() {
+    if (!businessId) return;
+    setSavingAddress(true);
+    setError("");
+    const { error: updateError } = await supabase.from("businesses").update({ address: address.trim() || null }).eq("id", businessId).select().single();
+    setSavingAddress(false);
+    if (updateError) { setError(updateError.message); return; }
+    setAddressSaved(true);
+    setTimeout(() => setAddressSaved(false), 1600);
   }
 
   return (
@@ -341,13 +386,46 @@ function ProfilePanel() {
             </button>
           </div>
         </Field>
-        <Field label="Phone"><input defaultValue="(407) 555-0134" style={inputStyle} /></Field>
-        <Field label="Email"><input defaultValue="hello@detailhero.com" style={inputStyle} /></Field>
+        <Field label="Phone">
+          <div style={{ display: "flex", gap: 8 }}>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} disabled={bizLoading} placeholder="(407) 555-0134" style={{ ...inputStyle, flex: 1 }} />
+            <button
+              onClick={savePhone}
+              disabled={savingPhone || bizLoading || phone === businessPhone}
+              style={{ display: "flex", alignItems: "center", gap: 5, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 9, padding: "0 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: (savingPhone || bizLoading || phone === businessPhone) ? 0.5 : 1 }}
+            >
+              {savingPhone ? <Loader2 size={13} className="animate-spin" /> : phoneSaved ? <CheckIcon size={13} /> : "Save"}
+            </button>
+          </div>
+        </Field>
+        <Field label="Email">
+          <div style={{ display: "flex", gap: 8 }}>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} disabled={bizLoading} placeholder="hello@detailhero.com" style={{ ...inputStyle, flex: 1 }} />
+            <button
+              onClick={saveEmail}
+              disabled={savingEmail || bizLoading || email === businessEmail}
+              style={{ display: "flex", alignItems: "center", gap: 5, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 9, padding: "0 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: (savingEmail || bizLoading || email === businessEmail) ? 0.5 : 1 }}
+            >
+              {savingEmail ? <Loader2 size={13} className="animate-spin" /> : emailSaved ? <CheckIcon size={13} /> : "Save"}
+            </button>
+          </div>
+        </Field>
         <div style={{ gridColumn: "1 / -1" }}>
-          <Field label="Address"><input defaultValue="1204 Ridge Rd, Sanford, FL 32771" style={inputStyle} /></Field>
+          <Field label="Address">
+            <div style={{ display: "flex", gap: 8 }}>
+              <input value={address} onChange={(e) => setAddress(e.target.value)} disabled={bizLoading} placeholder="1204 Ridge Rd, Sanford, FL 32771" style={{ ...inputStyle, flex: 1 }} />
+              <button
+                onClick={saveAddress}
+                disabled={savingAddress || bizLoading || address === businessAddress}
+                style={{ display: "flex", alignItems: "center", gap: 5, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 9, padding: "0 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: (savingAddress || bizLoading || address === businessAddress) ? 0.5 : 1 }}
+              >
+                {savingAddress ? <Loader2 size={13} className="animate-spin" /> : addressSaved ? <CheckIcon size={13} /> : "Save"}
+              </button>
+            </div>
+          </Field>
         </div>
       </div>
-      <p style={{ fontSize: 11, color: P.textMuted, marginTop: 14 }}>Business Name, logo, Tagline, and the Quote/Invoice document labels are saved for real — quotes and invoices pull from here. Phone, Email, and Address aren't backed by a database column yet, so they reset on reload.</p>
+      <p style={{ fontSize: 11, color: P.textMuted, marginTop: 14 }}>All fields here are saved for real — quotes and invoices pull from here.</p>
     </Panel>
   );
 }

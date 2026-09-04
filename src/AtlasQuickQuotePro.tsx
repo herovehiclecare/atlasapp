@@ -1119,6 +1119,8 @@ function PrintHeader({ business, docLabel, preparedDate }) {
           <div>
             <div style={{ fontSize: 17, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.03em" }}>{business.name}</div>
             {business.tagline && <div style={{ fontSize: 10.5, color: "#777", marginTop: 2 }}>{business.tagline}</div>}
+            {(business.phone || business.email) && <div style={{ fontSize: 10.5, color: "#777", marginTop: 2 }}>{[business.phone, business.email].filter(Boolean).join(" · ")}</div>}
+            {business.address && <div style={{ fontSize: 10.5, color: "#777", marginTop: 1 }}>{business.address}</div>}
           </div>
         </div>
         <div style={{ fontSize: 11, fontWeight: 800, color: PRINT_ACCENT, letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{docLabel}</div>
@@ -1348,6 +1350,8 @@ async function buildQuotePdfDoc(q, services, addonsAll, business) {
         stack: [
           { text: (business.name || "Your Business").toUpperCase(), bold: true, fontSize: 15 },
           ...(business.tagline ? [{ text: business.tagline, fontSize: 8, color: "#777777", margin: [0, 2, 0, 0] }] : []),
+          ...([business.phone, business.email].filter(Boolean).length > 0 ? [{ text: [business.phone, business.email].filter(Boolean).join(" · "), fontSize: 8, color: "#777777", margin: [0, 2, 0, 0] }] : []),
+          ...(business.address ? [{ text: business.address, fontSize: 8, color: "#777777", margin: [0, 1, 0, 0] }] : []),
         ],
       },
     ],
@@ -1467,7 +1471,7 @@ function QuotePreviewModal({ onClose, children }) {
 /* ---------------------------------- page ---------------------------------- */
 
 export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }) {
-  const { businessId, businessName, businessLogoUrl, businessTagline, businessQuoteLabel, businessDefaultTaxRate, businessTaxEnabled, loading: bizLoading, error: bizError } = useBusinessId();
+  const { businessId, businessName, businessLogoUrl, businessTagline, businessQuoteLabel, businessPhone, businessEmail, businessAddress, businessDefaultTaxRate, businessTaxEnabled, loading: bizLoading, error: bizError } = useBusinessId();
   const [customersAll, setCustomersAll] = useState([]);
   const [vehiclesAll, setVehiclesAll] = useState([]);
   const [services, setServices] = useState([]);
@@ -1754,7 +1758,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
     if (!snapshot || downloadingPdf) return;
     setDownloadingPdf(true);
     try {
-      const doc = await buildQuotePdfDoc(snapshot, services, addonsAll, { name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, quoteLabel: businessQuoteLabel, depositLink });
+      const doc = await buildQuotePdfDoc(snapshot, services, addonsAll, { name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, quoteLabel: businessQuoteLabel, phone: businessPhone, email: businessEmail, address: businessAddress, depositLink });
       const filename = `quote-${(snapshot.customer?.name || "quote").replace(/\s+/g, "-").toLowerCase()}.pdf`;
       pdfMake.createPdf(doc).download(filename);
     } finally {
@@ -1959,7 +1963,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
             q={sent ? lastSent : buildLocalSnapshot()}
             services={services}
             addonsAll={addonsAll}
-            business={{ name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, quoteLabel: businessQuoteLabel, depositLink }}
+            business={{ name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, quoteLabel: businessQuoteLabel, phone: businessPhone, email: businessEmail, address: businessAddress, depositLink }}
           />
         </QuotePreviewModal>
       )}

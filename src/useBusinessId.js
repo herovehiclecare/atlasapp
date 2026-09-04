@@ -11,6 +11,9 @@ export function useBusinessId() {
   const [businessTagline, setBusinessTagline] = useState("");
   const [businessQuoteLabel, setBusinessQuoteLabel] = useState("");
   const [businessInvoiceLabel, setBusinessInvoiceLabel] = useState("");
+  const [businessPhone, setBusinessPhone] = useState("");
+  const [businessEmail, setBusinessEmail] = useState("");
+  const [businessAddress, setBusinessAddress] = useState("");
   const [businessHours, setBusinessHours] = useState([]);
   const [businessNotificationPrefs, setBusinessNotificationPrefs] = useState({});
   const [businessUiPrefs, setBusinessUiPrefs] = useState({});
@@ -37,7 +40,7 @@ export function useBusinessId() {
 
         const { data, error: memberError } = await supabase
           .from("business_members")
-          .select("business_id, businesses(name, logo_url, tagline, quote_label, invoice_label, hours, notification_prefs, ui_prefs, default_tax_rate, tax_enabled)")
+          .select("business_id, businesses(name, logo_url, tagline, quote_label, invoice_label, phone, email, address, hours, notification_prefs, ui_prefs, default_tax_rate, tax_enabled)")
           .eq("user_id", user.id)
           .limit(1)
           .single();
@@ -52,6 +55,9 @@ export function useBusinessId() {
           setBusinessTagline(data.businesses?.tagline || "");
           setBusinessQuoteLabel(data.businesses?.quote_label || "");
           setBusinessInvoiceLabel(data.businesses?.invoice_label || "");
+          setBusinessPhone(data.businesses?.phone || "");
+          setBusinessEmail(data.businesses?.email || "");
+          setBusinessAddress(data.businesses?.address || "");
           setBusinessHours(data.businesses?.hours || []);
           setBusinessNotificationPrefs(data.businesses?.notification_prefs || {});
           setBusinessUiPrefs(data.businesses?.ui_prefs || {});
@@ -69,5 +75,5 @@ export function useBusinessId() {
     return () => { cancelled = true; };
   }, []);
 
-  return { businessId, businessName, businessLogoUrl, businessTagline, businessQuoteLabel, businessInvoiceLabel, businessHours, businessNotificationPrefs, businessUiPrefs, businessDefaultTaxRate, businessTaxEnabled, loading, error };
+  return { businessId, businessName, businessLogoUrl, businessTagline, businessQuoteLabel, businessInvoiceLabel, businessPhone, businessEmail, businessAddress, businessHours, businessNotificationPrefs, businessUiPrefs, businessDefaultTaxRate, businessTaxEnabled, loading, error };
 }

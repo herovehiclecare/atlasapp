@@ -546,6 +546,8 @@ async function buildInvoicePdfDoc(inv, services, business) {
         stack: [
           { text: (business.name || "Your Business").toUpperCase(), bold: true, fontSize: 15 },
           ...(business.tagline ? [{ text: business.tagline, fontSize: 8, color: "#777777", margin: [0, 2, 0, 0] }] : []),
+          ...([business.phone, business.email].filter(Boolean).length > 0 ? [{ text: [business.phone, business.email].filter(Boolean).join(" · "), fontSize: 8, color: "#777777", margin: [0, 2, 0, 0] }] : []),
+          ...(business.address ? [{ text: business.address, fontSize: 8, color: "#777777", margin: [0, 1, 0, 0] }] : []),
         ],
       },
     ],
@@ -607,7 +609,7 @@ async function buildInvoicePdfDoc(inv, services, business) {
 /* ---------------------------------- page ---------------------------------- */
 
 export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) {
-  const { businessId, businessName, businessLogoUrl, businessTagline, businessInvoiceLabel, businessDefaultTaxRate, businessTaxEnabled, loading: bizLoading, error: bizError } = useBusinessId();
+  const { businessId, businessName, businessLogoUrl, businessTagline, businessInvoiceLabel, businessPhone, businessEmail, businessAddress, businessDefaultTaxRate, businessTaxEnabled, loading: bizLoading, error: bizError } = useBusinessId();
   const now = useLiveClock();
   const [invoices, setInvoices] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -626,7 +628,7 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
     if (!inv || downloadingPdfId) return;
     setDownloadingPdfId(inv.id);
     try {
-      const doc = await buildInvoicePdfDoc(inv, services, { name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, invoiceLabel: businessInvoiceLabel });
+      const doc = await buildInvoicePdfDoc(inv, services, { name: businessName || "Your Business", logoUrl: businessLogoUrl, tagline: businessTagline, invoiceLabel: businessInvoiceLabel, phone: businessPhone, email: businessEmail, address: businessAddress });
       pdfMake.createPdf(doc).download(`invoice-${(inv.customers?.name || "invoice").replace(/\s+/g, "-").toLowerCase()}.pdf`);
     } finally {
       setDownloadingPdfId(null);
