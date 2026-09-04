@@ -564,6 +564,12 @@ function pdfBox(stackItems, fill = "#f4f4f4") {
   };
 }
 
+function chunk(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
 async function buildInvoicePdfDoc(inv, services, business) {
   const { subtotal, tax, total } = invoiceBreakdown(inv.amount, inv.tax_rate);
   const vehicle = inv.vehicles;
@@ -579,6 +585,13 @@ async function buildInvoicePdfDoc(inv, services, business) {
   const paymentTerms = inv.due_date ? `Payment due by ${formatDate(inv.due_date)}` : "Due on receipt";
   const docLabel = business.invoiceLabel || "INVOICE";
   const logoDataUri = business.logoUrl ? await urlToDataUri(business.logoUrl) : null;
+  // Job condition photos are stored as Storage URLs, same as the logo —
+  // pdfmake needs them as embedded data URIs, not remote links, so they're
+  // fetched and converted the same way. A failed fetch just drops that one
+  // photo (urlToDataUri returns null) rather than failing the whole PDF.
+  const photoUris = inv.photos && inv.photos.length > 0
+    ? (await Promise.all(inv.photos.map((url) => urlToDataUri(url)))).filter(Boolean)
+    : [];
 
   const headerLeft = {
     width: "*",
@@ -612,6 +625,13 @@ async function buildInvoicePdfDoc(inv, services, business) {
       { text: "CONDITION", bold: true, fontSize: 8.5, color: "#777777", margin: [0, 0, 0, 4] },
       { text: inv.notes, fontSize: 11, color: "#333333" },
     ])) : []),
+
+    ...(photoUris.length > 0 ? pdfSection("Job Condition Photos", {
+      stack: chunk(photoUris, 3).map((row) => ({
+        columns: row.map((uri) => ({ image: uri, fit: [150, 110], margin: [0, 0, 8, 8] })),
+      })),
+      margin: [0, 0, 0, 8],
+    }) : []),
 
     ...pdfSection("What's Included", pdfBox(
       lineItems.map((item, i) => ({
