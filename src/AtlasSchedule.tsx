@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { resizeImageToDataUrl, useLiveClock, formatDateTime, mergeBusinessJsonb, directionsUrl } from "./lib";
+import { resizeImageToDataUrl, useLiveClock, formatDateTime, mergeBusinessJsonb, directionsUrl, readDraft, clearDraft, useDraftAutosave } from "./lib";
 
 const P = {
   bg: "#06100C", bgTop: "#0B1813", surface: "#0F1B15", surfaceHover: "#132018",
@@ -452,6 +452,38 @@ function AddJobModal({ businessId, businessName, customers, vehicles, services, 
   const [script, setScript] = useState("");
   const [copied, setCopied] = useState(false);
 
+  // Autosave-draft safety net for a brand-new job (an edit already has real,
+  // saved data, so it's skipped there) — a crash mid-entry in the field
+  // (phone dies, a call interrupts) doesn't lose it outright. Restored once
+  // on mount; cleared on a successful save or an explicit close/discard.
+  const draftKey = businessId ? `job-new-${businessId}` : null;
+  const [draftRestored, setDraftRestored] = useState(false);
+  useEffect(() => {
+    if (isEdit || !draftKey) return;
+    const draft = readDraft(draftKey);
+    if (!draft?.value) return;
+    const v = draft.value;
+    if (v.customerId) setCustomerId(v.customerId);
+    if (v.vehicleId) setVehicleId(v.vehicleId);
+    if (v.serviceIds?.length) setServiceIds(v.serviceIds);
+    if (v.date) setDate(v.date);
+    if (v.time) setTime(v.time);
+    if (v.status) setStatus(v.status);
+    setDraftRestored(true);
+    // Runs once on mount only — restoring a draft shouldn't re-trigger itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useDraftAutosave(draftKey, { customerId, vehicleId, serviceIds, date, time, status }, !isEdit && !!draftKey && !createdJob);
+
+  function discardDraft() {
+    if (draftKey) clearDraft(draftKey);
+    setDraftRestored(false);
+  }
+  function handleCloseModal() {
+    if (!isEdit && !createdJob) discardDraft();
+    onClose();
+  }
+
   const vehiclesForCustomer = customerId ? vehicles.filter((v) => v.customer_id === customerId) : vehicles;
   const categories = [...new Set(services.map((s) => s.category))];
 
@@ -536,6 +568,7 @@ function AddJobModal({ businessId, businessName, customers, vehicles, services, 
       return;
     }
 
+    if (draftKey) clearDraft(draftKey);
     const { date: dLabel, time: tLabel } = formatJobDateTime(new Date(data.scheduled_at));
     setScript(fillJobScript(DEFAULT_BOOKING_SCRIPT, {
       customerFirst: data.customers?.name?.split(" ")[0] || "there",
@@ -562,12 +595,18 @@ function AddJobModal({ businessId, businessName, customers, vehicles, services, 
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 50 }} />
+      <div onClick={handleCloseModal} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 50 }} />
       <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(460px, calc(100vw - 32px))", maxHeight: "calc(100vh - 40px)", overflowY: "auto", background: P.bg, border: `1px solid ${P.border}`, borderRadius: 16, zIndex: 51, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: P.textPrimary }}>{createdJob ? "Job scheduled" : isEdit ? "Edit job" : "New job"}</span>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", display: "flex" }}><X size={18} /></button>
+          <button onClick={handleCloseModal} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", display: "flex" }}><X size={18} /></button>
         </div>
+        {!isEdit && !createdJob && draftRestored && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontSize: 12, color: P.textSecondary, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 9, padding: "8px 11px", marginBottom: 14 }}>
+            <span>Restored an unsaved job from earlier.</span>
+            <button type="button" onClick={discardDraft} style={{ background: "transparent", border: "none", color: P.danger, fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>Discard</button>
+          </div>
+        )}
         {createdJob ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div style={{ textAlign: "center", padding: "4px 0 2px" }}>

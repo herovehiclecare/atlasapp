@@ -137,6 +137,37 @@ export function resizeImageToDataUrl(file, maxDimension = 256) {
   });
 }
 
+// Periodically saves a snapshot of an in-progress form to localStorage so a
+// mid-entry crash (phone dies, a call interrupts) doesn't lose it outright —
+// only the fields still on the form when it exits ever hit the database.
+// `readDraft`/`clearDraft` are exported separately so a form can check for a
+// leftover draft once on mount and clear it after a real save (or when the
+// user explicitly cancels, so a deliberately-abandoned entry doesn't linger).
+const DRAFT_PREFIX = "atlas-draft:";
+
+export function readDraft(key) {
+  try {
+    const raw = localStorage.getItem(DRAFT_PREFIX + key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearDraft(key) {
+  try { localStorage.removeItem(DRAFT_PREFIX + key); } catch {}
+}
+
+export function useDraftAutosave(key, value, enabled = true) {
+  useEffect(() => {
+    if (!enabled) return;
+    const id = setTimeout(() => {
+      try { localStorage.setItem(DRAFT_PREFIX + key, JSON.stringify({ value, savedAt: Date.now() })); } catch {}
+    }, 800);
+    return () => clearTimeout(id);
+  }, [key, JSON.stringify(value), enabled]);
+}
+
 // businesses.ui_prefs holds per-page visibility toggles (Dashboard's and
 // Schedule's Customize panels each own a sub-key). A plain overwrite from one
 // page would silently wipe out whatever the other page last saved, so this

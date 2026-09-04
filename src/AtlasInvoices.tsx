@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { formatDate, downloadCsv, shortId, uploadImages, parseDate, findService, svcPrice, resizeImageToDataUrl, useLiveClock, formatDateTime, urlToDataUri } from "./lib";
+import { formatDate, downloadCsv, shortId, uploadImages, parseDate, findService, svcPrice, resizeImageToDataUrl, useLiveClock, formatDateTime, urlToDataUri, readDraft, clearDraft, useDraftAutosave } from "./lib";
 
 pdfMake.vfs = pdfFonts;
 
@@ -234,6 +234,41 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
   const [saving, setSaving] = useState(false);
   const fileRef = useRef(null);
 
+  // Autosave-draft safety net for a brand-new invoice (an edit already has
+  // real, saved data, so it's skipped there) so a crash mid-entry in the
+  // field doesn't lose it outright. Photos aren't included — they're too
+  // large for localStorage and are the lower-stakes part of an invoice.
+  // Restored once on mount; cleared on a successful save or explicit close.
+  const draftKey = businessId ? `invoice-new-${businessId}` : null;
+  const [draftRestored, setDraftRestored] = useState(false);
+  useEffect(() => {
+    if (isEdit || !draftKey) return;
+    const draft = readDraft(draftKey);
+    if (!draft?.value) return;
+    const v = draft.value;
+    if (v.customerId) setCustomerId(v.customerId);
+    if (v.quoteId) setQuoteId(v.quoteId);
+    if (v.vehicleId) setVehicleId(v.vehicleId);
+    if (v.serviceIds?.length) setServiceIds(v.serviceIds);
+    if (v.taxRate != null) setTaxRate(v.taxRate);
+    if (v.amount) setAmount(v.amount);
+    if (v.dueDate) setDueDate(v.dueDate);
+    if (v.status) setStatus(v.status);
+    if (v.notes) setNotes(v.notes);
+    setDraftRestored(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useDraftAutosave(draftKey, { customerId, quoteId, vehicleId, serviceIds, taxRate, amount, dueDate, status, notes }, !isEdit && !!draftKey);
+
+  function discardDraft() {
+    if (draftKey) clearDraft(draftKey);
+    setDraftRestored(false);
+  }
+  function handleCloseModal() {
+    if (!isEdit) discardDraft();
+    onClose();
+  }
+
   const quotesForCustomer = customerId ? quotes.filter((q) => q.customer_id === customerId) : [];
   const vehiclesForCustomer = customerId ? vehicles.filter((v) => v.customer_id === customerId) : vehicles;
   const selectedVehicle = vehicles.find((v) => v.id === vehicleId);
@@ -356,17 +391,24 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
       setError(saveErr.message);
       return;
     }
+    if (!isEdit && draftKey) clearDraft(draftKey);
     onSaved(data, isEdit);
   }
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 50 }} />
+      <div onClick={handleCloseModal} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 50 }} />
       <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(440px, calc(100vw - 32px))", maxHeight: "calc(100vh - 40px)", overflowY: "auto", background: P.bg, border: `1px solid ${P.border}`, borderRadius: 16, zIndex: 51, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: P.textPrimary }}>{isEdit ? "Edit invoice" : "New invoice"}</span>
-          <button onClick={onClose} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", display: "flex" }}><X size={18} /></button>
+          <button onClick={handleCloseModal} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", display: "flex" }}><X size={18} /></button>
         </div>
+        {!isEdit && draftRestored && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontSize: 12, color: P.textSecondary, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 9, padding: "8px 11px", marginBottom: 14 }}>
+            <span>Restored an unsaved invoice from earlier.</span>
+            <button type="button" onClick={discardDraft} style={{ background: "transparent", border: "none", color: P.danger, fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>Discard</button>
+          </div>
+        )}
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {error && <div style={{ fontSize: 12.5, color: P.danger }}>{error}</div>}
 
