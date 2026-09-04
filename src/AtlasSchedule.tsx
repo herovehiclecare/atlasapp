@@ -402,6 +402,19 @@ function fillJobScript(template, ctx) {
     .replace(/\{business\}/g, ctx.business || "us");
 }
 
+// There's no per-service duration data to work with, so "overlap" is
+// approximated as another active job within an hour of the proposed time —
+// close enough to catch an accidental double-booking without needing real
+// duration tracking. This only warns; it never blocks the save, since a
+// two-person crew can legitimately run two jobs at once.
+const OVERLAP_BUFFER_MINUTES = 60;
+function findConflict(scheduledAtIso, jobs, excludeId) {
+  if (!scheduledAtIso) return null;
+  const t = new Date(scheduledAtIso).getTime();
+  const bufferMs = OVERLAP_BUFFER_MINUTES * 60000;
+  return jobs.find((j) => j.id !== excludeId && j.status !== "cancelled" && j.scheduled_at && Math.abs(new Date(j.scheduled_at).getTime() - t) < bufferMs) || null;
+}
+
 function formatJobDateTime(d) {
   return {
     date: d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }),
@@ -409,7 +422,7 @@ function formatJobDateTime(d) {
   };
 }
 
-function AddJobModal({ businessId, businessName, customers, vehicles, services, initialDate, job, onClose, onAdded, onDelete, onVehicleAdded }) {
+function AddJobModal({ businessId, businessName, customers, vehicles, services, jobs, initialDate, job, onClose, onAdded, onDelete, onVehicleAdded }) {
   const isEdit = !!job;
   const [customerId, setCustomerId] = useState(job?.customer_id || "");
   const [vehicleId, setVehicleId] = useState(job?.vehicle_id || "");
@@ -441,6 +454,12 @@ function AddJobModal({ businessId, businessName, customers, vehicles, services, 
 
   const vehiclesForCustomer = customerId ? vehicles.filter((v) => v.customer_id === customerId) : vehicles;
   const categories = [...new Set(services.map((s) => s.category))];
+
+  const conflict = useMemo(() => {
+    if (!date || !time || !jobs) return null;
+    const iso = new Date(`${date}T${time}`).toISOString();
+    return findConflict(iso, jobs, job?.id);
+  }, [date, time, jobs, job?.id]);
 
   function toggleService(id) {
     setServiceIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
@@ -669,6 +688,12 @@ function AddJobModal({ businessId, businessName, customers, vehicles, services, 
             </div>
           </div>
 
+          {conflict && (
+            <div style={{ fontSize: 12, color: "#F5A623", background: "rgba(245,166,35,0.1)", border: "1px solid rgba(245,166,35,0.3)", borderRadius: 9, padding: "8px 11px" }}>
+              ⚠ Also booked around this time: {conflict.customers?.name || "another job"} at {formatTime(conflict.scheduled_at)}. You can still save — just flagging the overlap.
+            </div>
+          )}
+
           <div>
             <label style={labelStyle}>Services</label>
             <div style={{ border: `1px solid ${P.border}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 10, maxHeight: 200, overflowY: "auto" }}>
@@ -815,6 +840,8 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
     const old = new Date(job.scheduled_at);
     const updated = new Date(newDate.getFullYear(), newDate.getMonth(), newDate.getDate(), old.getHours(), old.getMinutes());
     const iso = updated.toISOString();
+    const conflict = findConflict(iso, jobs, id);
+    if (conflict && !window.confirm(`This is close to another job at ${formatTime(conflict.scheduled_at)}${conflict.customers?.name ? ` (${conflict.customers.name})` : ""} that day. Move it here anyway?`)) return;
     const previous = job.scheduled_at;
     setJobs((js) => js.map((j) => (j.id === id ? { ...j, scheduled_at: iso } : j)));
     const { error: updateError } = await supabase.from("jobs").update({ scheduled_at: iso }).eq("id", id);
@@ -1008,6 +1035,7 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
           customers={customers}
           vehicles={vehicles}
           services={services}
+          jobs={jobs}
           initialDate={addDate}
           job={editingJob}
           onClose={() => { setAddOpen(false); setEditingJob(null); }}
