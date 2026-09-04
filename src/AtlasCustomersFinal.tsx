@@ -250,13 +250,15 @@ function VehicleRow({ vehicle, onUpdated, onDeleted }) {
   );
 }
 
-function CustomerDetail({ customer, vehicles, businessId, onClose, onUpdated, onVehicleAdded, onVehicleUpdated, onVehicleDeleted, onNavigate }) {
+function CustomerDetail({ customer, vehicles, businessId, onClose, onUpdated, onDeleted, onVehicleAdded, onVehicleUpdated, onVehicleDeleted, onNavigate }) {
   const [addingVehicle, setAddingVehicle] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newType, setNewType] = useState("Car");
   const [newSize, setNewSize] = useState("car");
   const [savingVehicle, setSavingVehicle] = useState(false);
   const [vehicleError, setVehicleError] = useState("");
+  const [deletingCustomer, setDeletingCustomer] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   const [jobs, setJobs] = useState([]);
   const [quotes, setQuotes] = useState([]);
@@ -310,6 +312,18 @@ function CustomerDetail({ customer, vehicles, businessId, onClose, onUpdated, on
     onVehicleAdded(data);
     setAddingVehicle(false);
     setNewLabel(""); setNewType("Car"); setNewSize("car");
+  }
+
+  async function handleDeleteCustomer() {
+    const vehicleNote = vehicles.length > 0 ? ` Their ${vehicles.length === 1 ? "vehicle" : `${vehicles.length} vehicles`} will be deleted too.` : "";
+    const historyNote = jobs.length + quotes.length + invoices.length > 0 ? " Existing jobs, quotes, and invoices will be kept for your records but will no longer show a customer name." : "";
+    if (!window.confirm(`Delete ${customer.name}?${vehicleNote}${historyNote} This can't be undone.`)) return;
+    setDeletingCustomer(true);
+    setDeleteError("");
+    const { error } = await supabase.from("customers").delete().eq("id", customer.id);
+    setDeletingCustomer(false);
+    if (error) { setDeleteError(error.message); return; }
+    onDeleted?.(customer.id);
   }
 
   return (
@@ -451,6 +465,13 @@ function CustomerDetail({ customer, vehicles, businessId, onClose, onUpdated, on
               ))}
             </div>
           </div>
+
+          <div>
+            {deleteError && <div style={{ fontSize: 12.5, color: P.danger, marginBottom: 8 }}>{deleteError}</div>}
+            <button type="button" onClick={handleDeleteCustomer} disabled={deletingCustomer} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: "transparent", color: P.danger, border: `1px solid ${P.border}`, borderRadius: 10, padding: "10px 16px", fontSize: 13, fontWeight: 600, cursor: deletingCustomer ? "default" : "pointer" }}>
+              {deletingCustomer ? <><Loader2 size={14} className="animate-spin" /> Deleting…</> : <><Trash2 size={14} /> Delete customer</>}
+            </button>
+          </div>
         </div>
       </div>
     </>
@@ -544,6 +565,12 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
   function handleCustomerUpdated(updated) {
     setCustomers((cs) => cs.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
     setDetailCustomer((c) => (c && c.id === updated.id ? { ...c, ...updated } : c));
+  }
+  function handleCustomerDeleted(id) {
+    setCustomers((cs) => cs.filter((c) => c.id !== id));
+    setVehicles((vs) => vs.filter((v) => v.customer_id !== id));
+    setSelected((s) => s.filter((sid) => sid !== id));
+    setDetailCustomer((c) => (c && c.id === id ? null : c));
   }
   function handleVehicleAdded(vehicle) {
     setVehicles((vs) => [...vs, vehicle]);
@@ -715,6 +742,7 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
           businessId={businessId}
           onClose={() => setDetailCustomer(null)}
           onUpdated={handleCustomerUpdated}
+          onDeleted={handleCustomerDeleted}
           onVehicleAdded={handleVehicleAdded}
           onVehicleUpdated={handleVehicleUpdated}
           onVehicleDeleted={handleVehicleDeleted}
