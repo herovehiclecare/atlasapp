@@ -384,6 +384,9 @@ function CustomerDetail({ customer, vehicles, businessId, onClose, onUpdated, on
               <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
                 <EditableField label="Address" value={customer.address} placeholder="123 Main St, City, ST 12345" onSave={(v) => saveField("address", v)} />
               </div>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
+                <EditableField label="Notes" value={customer.notes} placeholder="Anything worth remembering" onSave={(v) => saveField("notes", v)} />
+              </div>
             </div>
           </div>
 
@@ -480,11 +483,15 @@ function CustomerDetail({ customer, vehicles, businessId, onClose, onUpdated, on
 
 /* ---------------------------------- Add Customer modal ---------------------------------- */
 
-function AddCustomerModal({ businessId, onClose, onAdded }) {
+function AddCustomerModal({ businessId, onClose, onAdded, onVehicleAdded }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+  const [notes, setNotes] = useState("");
+  const [vehicleLabel, setVehicleLabel] = useState("");
+  const [vehicleType, setVehicleType] = useState("Car");
+  const [vehicleSize, setVehicleSize] = useState("car");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -499,22 +506,44 @@ function AddCustomerModal({ businessId, onClose, onAdded }) {
 
     const { data, error: insertError } = await supabase
       .from("customers")
-      .insert({ business_id: businessId, name: name.trim(), email: email.trim() || null, phone: phone.trim() || null, address: address.trim() || null })
+      .insert({ business_id: businessId, name: name.trim(), email: email.trim() || null, phone: phone.trim() || null, address: address.trim() || null, notes: notes.trim() || null })
       .select()
       .single();
 
-    setSaving(false);
     if (insertError) {
+      setSaving(false);
       setError(insertError.message);
       return;
     }
+
+    // A vehicle here is optional — if a description was entered, file it
+    // under the customer that was just created. A failure here shouldn't
+    // block finishing the customer add, since the customer record itself
+    // already saved fine and a vehicle can always be added afterward from
+    // the customer's detail drawer.
+    if (vehicleLabel.trim()) {
+      const { data: vehicleData, error: vehicleError } = await supabase
+        .from("vehicles")
+        .insert({ business_id: businessId, customer_id: data.id, label: vehicleLabel.trim(), vehicle_type: vehicleType, size_class: vehicleSize })
+        .select()
+        .single();
+      if (vehicleData) onVehicleAdded?.(vehicleData);
+      if (vehicleError) {
+        setSaving(false);
+        setError(`Customer saved, but the vehicle didn't: ${vehicleError.message}`);
+        onAdded(data);
+        return;
+      }
+    }
+
+    setSaving(false);
     onAdded(data);
   }
 
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 50 }} />
-      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(420px, calc(100vw - 32px))", background: P.bg, border: `1px solid ${P.border}`, borderRadius: 16, zIndex: 51, padding: 22 }}>
+      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(420px, calc(100vw - 32px))", maxHeight: "calc(100vh - 40px)", overflowY: "auto", background: P.bg, border: `1px solid ${P.border}`, borderRadius: 16, zIndex: 51, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: P.textPrimary }}>Add customer</span>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", display: "flex" }}><X size={18} /></button>
@@ -538,6 +567,27 @@ function AddCustomerModal({ businessId, onClose, onAdded }) {
             <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="123 Main St, City, ST 12345" style={inputStyle} />
             <p style={{ fontSize: 11, color: P.textMuted, margin: "6px 0 0" }}>Used for one-tap directions on their scheduled jobs.</p>
           </div>
+          <div>
+            <label style={{ display: "block", fontSize: 12.5, fontWeight: 500, color: P.textSecondary, marginBottom: 6 }}>Notes</label>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything worth remembering about this customer" rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+          </div>
+
+          <div style={{ borderTop: `1px solid ${P.border}`, paddingTop: 12, marginTop: 4 }}>
+            <label style={{ display: "block", fontSize: 12.5, fontWeight: 500, color: P.textSecondary, marginBottom: 6 }}>Vehicle (optional)</label>
+            <input value={vehicleLabel} onChange={(e) => setVehicleLabel(e.target.value)} placeholder="2021 VW ID4" style={inputStyle} />
+            {vehicleLabel.trim() && (
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <select value={vehicleType} onChange={(e) => setVehicleType(e.target.value)} style={{ flex: 1, ...inputStyle, padding: "7px 9px", fontSize: 12.5 }}>
+                  {["Car", "Motorcycle", "Boat", "RV & Trailer", "Aircraft", "Other"].map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <select value={vehicleSize} onChange={(e) => setVehicleSize(e.target.value)} style={{ flex: 1, ...inputStyle, padding: "7px 9px", fontSize: 12.5 }}>
+                  <option value="car">Car pricing</option>
+                  <option value="suv_truck_van">SUV/Truck/Van pricing</option>
+                </select>
+              </div>
+            )}
+          </div>
+
           <button type="submit" disabled={saving} style={{ marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: `linear-gradient(120deg, ${P.accent}, ${P.secondary})`, color: P.bg, border: "none", borderRadius: 10, padding: "11px 16px", fontSize: 13.5, fontWeight: 700, cursor: saving ? "default" : "pointer", opacity: saving ? 0.85 : 1 }}>
             {saving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : "Add customer"}
           </button>
@@ -771,7 +821,7 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
         </>
       )}
 
-      {addOpen && <AddCustomerModal businessId={businessId} onClose={() => setAddOpen(false)} onAdded={handleAdded} />}
+      {addOpen && <AddCustomerModal businessId={businessId} onClose={() => setAddOpen(false)} onAdded={handleAdded} onVehicleAdded={handleVehicleAdded} />}
       {detailCustomer && (
         <CustomerDetail
           customer={detailCustomer}
