@@ -87,6 +87,16 @@ function quoteAmount(quote) {
   const t = quote.totals || {};
   return t.isRange ? t.rangeHigh || 0 : t.total || 0;
 }
+// Used only for the Pipeline Value KPI, which sums *across* every open
+// quote — always taking each one's top tier there compounds into a total
+// that reads far more optimistic than what's actually likely to close.
+// A single quote still shows its own top-of-range amount everywhere else
+// (e.g. the Recent Quotes list, via quoteAmount above) since "up to $X" is
+// an accurate thing to show for one quote on its own.
+function quoteExpectedValue(quote) {
+  const t = quote.totals || {};
+  return t.isRange ? ((t.rangeLow || 0) + (t.rangeHigh || 0)) / 2 : t.total || 0;
+}
 function quoteVehicleLabel(quote, vehiclesById) {
   const ids = quote.line_items?.vehicleIds || [];
   for (const id of ids) if (vehiclesById[id]) return vehiclesById[id].label;
@@ -204,6 +214,7 @@ function Tile({ stat, tileClass, big, earnings, onNavigate }) {
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
       onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onNavigate(stat.nav); } } : undefined}
+      title={stat.title}
       style={{ minWidth: 0, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 18, padding: big ? 18 : 14, display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 0, overflow: "hidden", cursor: clickable ? "pointer" : "default" }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
@@ -603,7 +614,7 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
   const weekTotal = weekEarnings.reduce((sum, d) => sum + d.value, 0);
 
   const pipelineQuotes = quotes.filter((q) => q.status === "sent");
-  const pipelineValue = pipelineQuotes.reduce((sum, q) => sum + quoteAmount(q), 0);
+  const pipelineValue = pipelineQuotes.reduce((sum, q) => sum + quoteExpectedValue(q), 0);
   const recentQuotes = quotes.slice(0, 3);
 
   const outstandingInvoices = invoices.filter((i) => i.status === "unpaid" || i.status === "overdue");
@@ -615,7 +626,7 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
     revenue: { Icon: DollarSign, label: "Today's Revenue", value: money(todaysRevenue), sub: `${todaysCompleted} job${todaysCompleted === 1 ? "" : "s"} completed`, hue: "emerald", nav: "schedule" },
     jobs: { Icon: Briefcase, label: "Today's Jobs", value: String(todaysActiveJobs.length), sub: todaysActiveJobs.length === 0 ? "No jobs today" : todaysRemaining > 0 ? `${todaysRemaining} remaining` : "All done for today", hue: "blue", nav: "schedule" },
     customers: { Icon: Users, label: "Customers", value: String(customersCount), sub: newCustomersThisMonth > 0 ? `+${newCustomersThisMonth} this month` : "No new customers this month", hue: "violet", nav: "customers" },
-    pipeline: { Icon: TrendingUp, label: "Pipeline Value", value: money(pipelineValue), sub: `${pipelineQuotes.length} open quote${pipelineQuotes.length === 1 ? "" : "s"}`, hue: "amber", nav: "quote" },
+    pipeline: { Icon: TrendingUp, label: "Pipeline Value", value: money(pipelineValue), sub: `${pipelineQuotes.length} open quote${pipelineQuotes.length === 1 ? "" : "s"}`, title: "Tiered quotes are valued at the midpoint of their price range, not the top tier, so this reads as a more realistic estimate rather than a best case.", hue: "amber", nav: "quote" },
     outstanding: { Icon: AlertCircle, label: "Outstanding", value: money(outstandingTotal), sub: `${outstandingInvoices.length} unpaid invoice${outstandingInvoices.length === 1 ? "" : "s"}`, hue: "coral", nav: "invoices" },
     avgTicket: { Icon: Receipt, label: "Avg. Ticket", value: avgTicket == null ? "—" : money(avgTicket), sub: `${invoices.length} invoice${invoices.length === 1 ? "" : "s"}`, hue: "blue", nav: "invoices" },
   };
