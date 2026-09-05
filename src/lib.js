@@ -168,6 +168,51 @@ export function useDraftAutosave(key, value, enabled = true) {
   }, [key, JSON.stringify(value), enabled]);
 }
 
+// The 11 federal US holidays, computed for a given year rather than hard-
+// coded per date since several (MLK Day, Presidents' Day, Memorial Day,
+// Labor Day, Columbus Day, Thanksgiving) fall on a "nth weekday of month"
+// rule instead of a fixed date. Shown on their actual calendar date rather
+// than the federal "observed" weekday shift, since that shift is a payroll/
+// government-office convention, not something a detailing business's
+// calendar needs to track.
+function nthWeekdayOfMonth(year, month, weekday, n) {
+  const d = new Date(year, month, 1);
+  let count = 0;
+  while (true) {
+    if (d.getDay() === weekday) {
+      count++;
+      if (count === n) return new Date(d);
+    }
+    d.setDate(d.getDate() + 1);
+  }
+}
+function lastWeekdayOfMonth(year, month, weekday) {
+  const d = new Date(year, month + 1, 0);
+  while (d.getDay() !== weekday) d.setDate(d.getDate() - 1);
+  return d;
+}
+export function usHolidaysForYear(year) {
+  return [
+    { date: new Date(year, 0, 1), name: "New Year's Day" },
+    { date: nthWeekdayOfMonth(year, 0, 1, 3), name: "Martin Luther King Jr. Day" },
+    { date: nthWeekdayOfMonth(year, 1, 1, 3), name: "Presidents' Day" },
+    { date: lastWeekdayOfMonth(year, 4, 1), name: "Memorial Day" },
+    { date: new Date(year, 5, 19), name: "Juneteenth" },
+    { date: new Date(year, 6, 4), name: "Independence Day" },
+    { date: nthWeekdayOfMonth(year, 8, 1, 1), name: "Labor Day" },
+    { date: nthWeekdayOfMonth(year, 9, 1, 2), name: "Columbus Day" },
+    { date: new Date(year, 10, 11), name: "Veterans Day" },
+    { date: nthWeekdayOfMonth(year, 10, 4, 4), name: "Thanksgiving Day" },
+    { date: new Date(year, 11, 25), name: "Christmas Day" },
+  ];
+}
+export function usHolidayName(date) {
+  const match = usHolidaysForYear(date.getFullYear()).find(
+    (h) => h.date.getFullYear() === date.getFullYear() && h.date.getMonth() === date.getMonth() && h.date.getDate() === date.getDate()
+  );
+  return match ? match.name : null;
+}
+
 // businesses.ui_prefs holds per-page visibility toggles (Dashboard's and
 // Schedule's Customize panels each own a sub-key). A plain overwrite from one
 // page would silently wipe out whatever the other page last saved, so this

@@ -1235,7 +1235,7 @@ function NotificationsPanel() {
 function CustomizePanel() {
   const { businessId, businessUiPrefs } = useBusinessId();
   const [dash, setDash] = useState({ profitBanner: true, insights: true, aiFab: true });
-  const [sched, setSched] = useState({ stats: true, ai: true });
+  const [sched, setSched] = useState({ stats: true, ai: true, holidays: true });
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -1284,6 +1284,7 @@ function CustomizePanel() {
         {[
           { key: "stats", label: "Jobs & Hours stats", sub: "Monthly totals above the calendar" },
           { key: "ai", label: "Atlas AI panel", sub: "Pacing and open-day nudges" },
+          { key: "holidays", label: "US holidays on calendar", sub: "Federal holidays marked on the month and day views" },
         ].map((row, i, arr) => (
           <div key={row.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", borderBottom: i < arr.length - 1 ? `1px solid ${P.border}` : "none" }}>
             <div><div style={{ fontSize: 13, fontWeight: 600, color: P.textPrimary }}>{row.label}</div><div style={{ fontSize: 11.5, color: P.textMuted, marginTop: 2 }}>{row.sub}</div></div>

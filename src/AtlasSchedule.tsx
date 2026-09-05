@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { resizeImageToDataUrl, useLiveClock, formatDateTime, mergeBusinessJsonb, directionsUrl, readDraft, clearDraft, useDraftAutosave } from "./lib";
+import { resizeImageToDataUrl, useLiveClock, formatDateTime, mergeBusinessJsonb, directionsUrl, readDraft, clearDraft, useDraftAutosave, usHolidayName } from "./lib";
 
 const P = {
   bg: "#06100C", bgTop: "#0B1813", surface: "#0F1B15", surfaceHover: "#132018",
@@ -186,7 +186,7 @@ function Legend() {
 
 /* ---------------------------------- Month view (drag to reschedule) ---------------------------------- */
 
-function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate }) {
+function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate, showHolidays }) {
   const [dragId, setDragId] = useState(null);
   const cells = useMemo(() => buildMonthGrid(viewMonth), [viewMonth]);
   const today = new Date();
@@ -208,6 +208,7 @@ function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate }) {
           const dayJobs = jobs.filter((j) => sameDay(jobDate(j), c.date));
           const isToday = sameDay(c.date, today);
           const isPreviewed = previewDate && sameDay(c.date, previewDate);
+          const holiday = showHolidays ? usHolidayName(c.date) : null;
           return (
             <div
               key={i}
@@ -225,7 +226,9 @@ function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate }) {
               <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
                 <span style={{ fontSize: 11.5, fontWeight: isPreviewed ? 800 : 600, color: isPreviewed ? P.accent : P.textSecondary }}>{c.date.getDate()}</span>
                 {isToday && <span title="Today" style={{ width: 4, height: 4, borderRadius: "50%", background: P.accent, flexShrink: 0 }} />}
+                {holiday && <span title={holiday} style={{ fontSize: 9, flexShrink: 0 }}>🎉</span>}
               </div>
+              {holiday && <div style={{ fontSize: 8.5, fontWeight: 600, color: P.secondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginBottom: 3 }}>{holiday}</div>}
               <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
                 {dayJobs.slice(0, 3).map((j) => (
                   <div
@@ -250,13 +253,22 @@ function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate }) {
   );
 }
 
-function DayPreview({ date, jobs, servicesById, openFullDay, onClose, onAddJob, onEditJob }) {
+function HolidayBanner({ name }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, background: P.secondarySoft, border: `1px solid ${P.secondary}55`, borderRadius: 10, padding: "9px 12px", fontSize: 12.5, fontWeight: 600, color: P.secondary }}>
+      🎉 {name}
+    </div>
+  );
+}
+
+function DayPreview({ date, jobs, servicesById, openFullDay, onClose, onAddJob, onEditJob, showHolidays }) {
   const dayJobs = jobs.filter((j) => sameDay(jobDate(j), date)).sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
   const dateLabel = date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const holiday = showHolidays ? usHolidayName(date) : null;
   return (
     <div style={{ background: P.surface, border: `1px solid ${P.accent}`, borderRadius: 14, overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", borderBottom: `1px solid ${P.border}` }}>
-        <span style={{ fontSize: 13.5, fontWeight: 700, color: P.textPrimary }}>{dateLabel}</span>
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: P.textPrimary }}>{dateLabel}{holiday ? ` · 🎉 ${holiday}` : ""}</span>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button onClick={openFullDay} style={{ background: "transparent", border: "none", color: P.accent, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Open full day →</button>
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", display: "flex" }}><X size={15} /></button>
@@ -341,22 +353,27 @@ function WeekView({ jobs, selectedDate, goToDate }) {
 
 /* ---------------------------------- Day view ---------------------------------- */
 
-function DayView({ jobs, selectedDate, servicesById, onEditJob }) {
+function DayView({ jobs, selectedDate, servicesById, onEditJob, showHolidays }) {
   const dayJobs = jobs.filter((j) => sameDay(jobDate(j), selectedDate)).sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
   const dateLabel = selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+  const holiday = showHolidays ? usHolidayName(selectedDate) : null;
 
   if (dayJobs.length === 0) {
     return (
-      <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, padding: "40px 18px", textAlign: "center" }}>
-        <Calendar size={22} color={P.textMuted} style={{ marginBottom: 10 }} />
-        <div style={{ fontSize: 14, fontWeight: 600, color: P.textPrimary }}>No jobs on {dateLabel}</div>
-        <div style={{ fontSize: 12.5, color: P.textMuted, marginTop: 4 }}>Enjoy the day, or schedule a new job.</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {holiday && <HolidayBanner name={holiday} />}
+        <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, padding: "40px 18px", textAlign: "center" }}>
+          <Calendar size={22} color={P.textMuted} style={{ marginBottom: 10 }} />
+          <div style={{ fontSize: 14, fontWeight: 600, color: P.textPrimary }}>No jobs on {dateLabel}</div>
+          <div style={{ fontSize: 12.5, color: P.textMuted, marginTop: 4 }}>Enjoy the day, or schedule a new job.</div>
+        </div>
       </div>
     );
   }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {holiday && <HolidayBanner name={holiday} />}
       {dayJobs.map((j) => {
         const est = estimateJobPrice(j, servicesById);
         return (
@@ -791,7 +808,7 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
   const [previewDate, setPreviewDate] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [visible, setVisible] = useState({ stats: true, ai: true });
+  const [visible, setVisible] = useState({ stats: true, ai: true, holidays: true });
 
   useEffect(() => {
     if (businessUiPrefs?.schedule) setVisible((v) => ({ ...v, ...businessUiPrefs.schedule }));
@@ -1032,12 +1049,12 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
             <div style={{ background: "rgba(255,107,94,0.1)", border: `1px solid ${P.danger}`, borderRadius: 14, padding: "18px", fontSize: 13, color: P.danger }}>{error}</div>
           ) : (
             <>
-              {view === "month" && <MonthView jobs={jobs} viewMonth={viewMonth} moveJob={moveJob} previewDate={previewDate} setPreviewDate={setPreviewDate} />}
+              {view === "month" && <MonthView jobs={jobs} viewMonth={viewMonth} moveJob={moveJob} previewDate={previewDate} setPreviewDate={setPreviewDate} showHolidays={visible.holidays} />}
               {view === "month" && previewDate && (
-                <DayPreview date={previewDate} jobs={jobs} servicesById={servicesById} openFullDay={() => goToDate(previewDate)} onClose={() => setPreviewDate(null)} onAddJob={openAddJob} onEditJob={setEditingJob} />
+                <DayPreview date={previewDate} jobs={jobs} servicesById={servicesById} openFullDay={() => goToDate(previewDate)} onClose={() => setPreviewDate(null)} onAddJob={openAddJob} onEditJob={setEditingJob} showHolidays={visible.holidays} />
               )}
               {view === "week" && <WeekView jobs={jobs} selectedDate={selectedDate} goToDate={goToDate} />}
-              {view === "day" && <DayView jobs={jobs} selectedDate={selectedDate} servicesById={servicesById} onEditJob={setEditingJob} />}
+              {view === "day" && <DayView jobs={jobs} selectedDate={selectedDate} servicesById={servicesById} onEditJob={setEditingJob} showHolidays={visible.holidays} />}
             </>
           )}
         </div>
