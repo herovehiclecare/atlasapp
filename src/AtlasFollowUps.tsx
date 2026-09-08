@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings, Plus,
   Sparkles, MoreHorizontal, Pencil, Camera, X, Check, Loader2,
-  ListChecks, Trash2, AlertCircle,
+  ListChecks, Trash2, AlertCircle, Phone, MessageSquare, Mail,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
@@ -20,6 +20,14 @@ const inputStyle = {
   borderRadius: 10, padding: "10px 12px", fontSize: 13.5, color: P.textPrimary, outline: "none", boxSizing: "border-box",
 };
 const labelStyle = { display: "block", fontSize: 12.5, fontWeight: 500, color: P.textSecondary, marginBottom: 6 };
+
+const METHODS = [
+  { value: "", label: "Not set", Icon: null },
+  { value: "call", label: "Call", Icon: Phone },
+  { value: "text", label: "Text", Icon: MessageSquare },
+  { value: "email", label: "Email", Icon: Mail },
+];
+function methodMeta(value) { return METHODS.find((m) => m.value === (value || "")) || METHODS[0]; }
 
 function AtlasMark({ size = 24 }) {
   const gid = "atlas-globe-followups";
@@ -132,6 +140,7 @@ function FollowUpModal({ businessId, customers, followUp, onClose, onSaved }) {
   const isEdit = !!followUp;
   const [note, setNote] = useState(followUp?.note || "");
   const [dueDate, setDueDate] = useState(followUp?.due_date || todayStr());
+  const [method, setMethod] = useState(followUp?.method || "");
   const [customerIds, setCustomerIds] = useState(followUp?.customer_ids || []);
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
@@ -150,7 +159,7 @@ function FollowUpModal({ businessId, customers, followUp, onClose, onSaved }) {
     if (!note.trim()) { setError("Enter what you need to follow up on."); return; }
     setSaving(true);
     setError("");
-    const payload = { note: note.trim(), due_date: dueDate || null, customer_ids: customerIds };
+    const payload = { note: note.trim(), due_date: dueDate || null, method: method || null, customer_ids: customerIds };
     const query = isEdit
       ? supabase.from("follow_ups").update(payload).eq("id", followUp.id)
       : supabase.from("follow_ups").insert({ business_id: businessId, ...payload });
@@ -174,9 +183,17 @@ function FollowUpModal({ businessId, customers, followUp, onClose, onSaved }) {
             <label style={labelStyle}>What do you need to follow up on?</label>
             <textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="e.g. Call these customers back about the spring promo" style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
           </div>
-          <div>
-            <label style={labelStyle}>Due date</label>
-            <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ ...inputStyle, colorScheme: "dark" }} />
+          <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Due date</label>
+              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ ...inputStyle, colorScheme: "dark" }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>How</label>
+              <select value={method} onChange={(e) => setMethod(e.target.value)} style={inputStyle}>
+                {METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+              </select>
+            </div>
           </div>
           <div>
             <label style={labelStyle}>Customers {customerIds.length > 0 ? `(${customerIds.length} selected)` : "(optional — pick one or several)"}</label>
@@ -193,8 +210,9 @@ function FollowUpModal({ businessId, customers, followUp, onClose, onSaved }) {
                   const checked = customerIds.includes(c.id);
                   return (
                     <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 8px", borderRadius: 7, cursor: "pointer", background: checked ? P.surfaceHover : "transparent" }}>
-                      <input type="checkbox" checked={checked} onChange={() => toggleCustomer(c.id)} style={{ accentColor: P.accent }} />
-                      <span style={{ fontSize: 13, color: P.textPrimary }}>{c.name}</span>
+                      <input type="checkbox" checked={checked} onChange={() => toggleCustomer(c.id)} style={{ accentColor: P.accent, flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, color: P.textPrimary, flex: 1, minWidth: 0 }}>{c.name}</span>
+                      <span style={{ fontSize: 11, color: P.textMuted, flexShrink: 0 }}>{c.phone || "No phone"}</span>
                     </label>
                   );
                 })
@@ -212,10 +230,36 @@ function FollowUpModal({ businessId, customers, followUp, onClose, onSaved }) {
 
 /* ---------------------------------- row + group ---------------------------------- */
 
+function ContactChip({ customer }) {
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: P.surfaceHover, border: `1px solid ${P.border}`, borderRadius: 20, padding: "3px 5px 3px 10px", fontSize: 11.5, color: P.textPrimary }}>
+      {customer.name}
+      {customer.phone ? (
+        <>
+          <a href={`tel:${customer.phone}`} title={`Call ${customer.name}`} onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 19, height: 19, borderRadius: "50%", background: P.accentSoft, color: P.accent, textDecoration: "none" }}>
+            <Phone size={10} />
+          </a>
+          <a href={`sms:${customer.phone}`} title={`Text ${customer.name}`} onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 19, height: 19, borderRadius: "50%", background: P.accentSoft, color: P.accent, textDecoration: "none" }}>
+            <MessageSquare size={10} />
+          </a>
+        </>
+      ) : customer.email ? (
+        <a href={`mailto:${customer.email}`} title={`Email ${customer.name}`} onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 19, height: 19, borderRadius: "50%", background: P.accentSoft, color: P.accent, textDecoration: "none" }}>
+          <Mail size={10} />
+        </a>
+      ) : (
+        <span title="No phone or email on file" style={{ fontSize: 10, color: P.textMuted, padding: "0 2px" }}>—</span>
+      )}
+    </span>
+  );
+}
+
 function FollowUpRow({ f, customersById, onToggle, onEdit, onDelete }) {
   const overdue = f.status === "pending" && f.due_date && f.due_date < todayStr();
-  const names = (f.customer_ids || []).map((id) => customersById[id]?.name).filter(Boolean);
-  const namesLabel = names.length > 2 ? `${names.slice(0, 2).join(", ")} +${names.length - 2} more` : names.join(", ");
+  const linkedCustomers = (f.customer_ids || []).map((id) => customersById[id]).filter(Boolean);
+  const shown = linkedCustomers.slice(0, 3);
+  const extra = linkedCustomers.length - shown.length;
+  const method = methodMeta(f.method);
   return (
     <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "13px 16px", borderBottom: `1px solid ${P.border}` }}>
       <button
@@ -226,11 +270,19 @@ function FollowUpRow({ f, customersById, onToggle, onEdit, onDelete }) {
         {f.status === "done" && <Check size={13} color={P.bg} />}
       </button>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13.5, color: f.status === "done" ? P.textMuted : P.textPrimary, textDecoration: f.status === "done" ? "line-through" : "none", lineHeight: 1.4 }}>{f.note}</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
-          {namesLabel && <span style={{ fontSize: 11.5, color: P.textSecondary }}>{namesLabel}</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <div style={{ fontSize: 13.5, color: f.status === "done" ? P.textMuted : P.textPrimary, textDecoration: f.status === "done" ? "line-through" : "none", lineHeight: 1.4 }}>{f.note}</div>
+          {method.Icon && (
+            <span title={`Follow up by ${method.label.toLowerCase()}`} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10.5, fontWeight: 700, color: P.secondary, background: P.secondarySoft, borderRadius: 20, padding: "2px 7px", flexShrink: 0 }}>
+              <method.Icon size={10} /> {method.label}
+            </span>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+          {shown.map((c) => <ContactChip key={c.id} customer={c} />)}
+          {extra > 0 && <span style={{ fontSize: 11, color: P.textMuted }}>+{extra} more</span>}
           {f.due_date && (
-            <span style={{ fontSize: 11, fontWeight: 600, color: overdue ? P.danger : P.textMuted }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: overdue ? P.danger : P.textMuted, marginLeft: linkedCustomers.length > 0 ? 2 : 0 }}>
               {overdue && <AlertCircle size={10} style={{ verticalAlign: -1, marginRight: 3 }} />}
               {formatDate(f.due_date)}
             </span>
@@ -276,7 +328,7 @@ export default function AtlasFollowUps({ onNavigate, currentPage = "followups" }
       setLoadingData(true);
       const [followUpsResult, customersResult] = await Promise.all([
         supabase.from("follow_ups").select("*").eq("business_id", businessId).order("due_date", { ascending: true, nullsFirst: false }),
-        supabase.from("customers").select("id, name").eq("business_id", businessId).order("name", { ascending: true }),
+        supabase.from("customers").select("id, name, phone, email").eq("business_id", businessId).order("name", { ascending: true }),
       ]);
       if (cancelled) return;
       if (followUpsResult.error) setDataError(followUpsResult.error.message);
