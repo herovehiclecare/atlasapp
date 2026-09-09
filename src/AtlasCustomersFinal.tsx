@@ -607,6 +607,7 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [customersError, setCustomersError] = useState("");
   const [query, setQuery] = useState("");
+  const [sortAsc, setSortAsc] = useState(true);
   const [selected, setSelected] = useState([]);
   const [detailCustomer, setDetailCustomer] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
@@ -676,7 +677,9 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
   const loading = bizLoading || (!!businessId && loadingCustomers);
   const error = bizError || customersError;
 
-  const filtered = customers.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()) || (c.phone || "").includes(query));
+  const filtered = customers
+    .filter((c) => c.name.toLowerCase().includes(query.toLowerCase()) || (c.phone || "").includes(query))
+    .sort((a, b) => (sortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)));
   const withEmail = customers.filter((c) => c.email).length;
   const missingPhone = customers.filter((c) => !c.phone).length;
 
@@ -765,8 +768,8 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
               <Search size={15} color={P.textMuted} />
               <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name or phone…" style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: P.textPrimary, fontSize: 13.5 }} />
             </div>
-            <button style={{ display: "flex", alignItems: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 10, padding: "9px 13px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
-              <SlidersHorizontal size={13} /> Name A–Z <ChevronDown size={13} />
+            <button onClick={() => setSortAsc((v) => !v)} title={sortAsc ? "Switch to Z–A" : "Switch to A–Z"} style={{ display: "flex", alignItems: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 10, padding: "9px 13px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
+              <SlidersHorizontal size={13} /> Name {sortAsc ? "A–Z" : "Z–A"} <ChevronDown size={13} style={{ transform: sortAsc ? "none" : "rotate(180deg)", transition: "transform 0.15s ease" }} />
             </button>
           </div>
 
