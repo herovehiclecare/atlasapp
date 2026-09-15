@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings, Plus,
   Sparkles, MoreHorizontal, Pencil, Camera, X, Check, Loader2,
-  ListChecks, Trash2, AlertCircle, Phone, MessageSquare, Mail,
+  ListChecks, Trash2, AlertCircle, Phone, MessageSquare, Mail, ChevronDown,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
@@ -254,43 +254,89 @@ function ContactChip({ customer }) {
   );
 }
 
+// A bigger, easier-to-tap version of a contact for the expanded panel — one
+// per line, name/contact-method on the left, real touch-sized call/text
+// buttons on the right. This is the actual "get in touch" list for a
+// follow-up with several people on it, not just a glance at who's involved.
+function ContactActionRow({ customer }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: P.surfaceHover, border: `1px solid ${P.border}`, borderRadius: 10, padding: "8px 8px 8px 12px" }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: P.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{customer.name}</div>
+        <div style={{ fontSize: 11, color: P.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{customer.phone || customer.email || "No contact info on file"}</div>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        {customer.phone ? (
+          <>
+            <a href={`tel:${customer.phone}`} title={`Call ${customer.name}`} onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 8, background: P.accentSoft, color: P.accent, textDecoration: "none" }}>
+              <Phone size={13} />
+            </a>
+            <a href={`sms:${customer.phone}`} title={`Text ${customer.name}`} onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 8, background: P.accentSoft, color: P.accent, textDecoration: "none" }}>
+              <MessageSquare size={13} />
+            </a>
+          </>
+        ) : customer.email ? (
+          <a href={`mailto:${customer.email}`} title={`Email ${customer.name}`} onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 8, background: P.accentSoft, color: P.accent, textDecoration: "none" }}>
+            <Mail size={13} />
+          </a>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function FollowUpRow({ f, customersById, onToggle, onEdit, onDelete }) {
+  const [expanded, setExpanded] = useState(false);
   const overdue = f.status === "pending" && f.due_date && f.due_date < todayStr();
   const linkedCustomers = (f.customer_ids || []).map((id) => customersById[id]).filter(Boolean);
-  const shown = linkedCustomers.slice(0, 3);
-  const extra = linkedCustomers.length - shown.length;
   const method = methodMeta(f.method);
+  const multiple = linkedCustomers.length > 1;
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "13px 16px", borderBottom: `1px solid ${P.border}` }}>
-      <button
-        onClick={() => onToggle(f)}
-        title={f.status === "done" ? "Mark as not done" : "Mark as done"}
-        style={{ width: 20, height: 20, borderRadius: 6, border: `1.5px solid ${f.status === "done" ? P.accent : P.border}`, background: f.status === "done" ? P.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, marginTop: 1, padding: 0 }}
-      >
-        {f.status === "done" && <Check size={13} color={P.bg} />}
-      </button>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <div style={{ fontSize: 13.5, color: f.status === "done" ? P.textMuted : P.textPrimary, textDecoration: f.status === "done" ? "line-through" : "none", lineHeight: 1.4 }}>{f.note}</div>
-          {method.Icon && (
-            <span title={`Follow up by ${method.label.toLowerCase()}`} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10.5, fontWeight: 700, color: P.secondary, background: P.secondarySoft, borderRadius: 20, padding: "2px 7px", flexShrink: 0 }}>
-              <method.Icon size={10} /> {method.label}
-            </span>
-          )}
+    <div style={{ borderBottom: `1px solid ${P.border}` }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "13px 16px" }}>
+        <button
+          onClick={() => onToggle(f)}
+          title={f.status === "done" ? "Mark as not done" : "Mark as done"}
+          style={{ width: 20, height: 20, borderRadius: 6, border: `1.5px solid ${f.status === "done" ? P.accent : P.border}`, background: f.status === "done" ? P.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, marginTop: 1, padding: 0 }}
+        >
+          {f.status === "done" && <Check size={13} color={P.bg} />}
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 13.5, color: f.status === "done" ? P.textMuted : P.textPrimary, textDecoration: f.status === "done" ? "line-through" : "none", lineHeight: 1.4 }}>{f.note}</div>
+            {method.Icon && (
+              <span title={`Follow up by ${method.label.toLowerCase()}`} style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10.5, fontWeight: 700, color: P.secondary, background: P.secondarySoft, borderRadius: 20, padding: "2px 7px", flexShrink: 0 }}>
+                <method.Icon size={10} /> {method.label}
+              </span>
+            )}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+            {!multiple && linkedCustomers.map((c) => <ContactChip key={c.id} customer={c} />)}
+            {multiple && (
+              <button
+                onClick={() => setExpanded((v) => !v)}
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, background: P.surfaceHover, border: `1px solid ${P.border}`, borderRadius: 20, padding: "3px 10px 3px 12px", fontSize: 11.5, fontWeight: 600, color: P.textPrimary, cursor: "pointer" }}
+              >
+                <Users size={11} color={P.textSecondary} /> {linkedCustomers.length} contacts
+                <ChevronDown size={12} color={P.textMuted} style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }} />
+              </button>
+            )}
+            {f.due_date && (
+              <span style={{ fontSize: 11, fontWeight: 600, color: overdue ? P.danger : P.textMuted, marginLeft: linkedCustomers.length > 0 ? 2 : 0 }}>
+                {overdue && <AlertCircle size={10} style={{ verticalAlign: -1, marginRight: 3 }} />}
+                {formatDate(f.due_date)}
+              </span>
+            )}
+          </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-          {shown.map((c) => <ContactChip key={c.id} customer={c} />)}
-          {extra > 0 && <span style={{ fontSize: 11, color: P.textMuted }}>+{extra} more</span>}
-          {f.due_date && (
-            <span style={{ fontSize: 11, fontWeight: 600, color: overdue ? P.danger : P.textMuted, marginLeft: linkedCustomers.length > 0 ? 2 : 0 }}>
-              {overdue && <AlertCircle size={10} style={{ verticalAlign: -1, marginRight: 3 }} />}
-              {formatDate(f.due_date)}
-            </span>
-          )}
-        </div>
+        <button onClick={() => onEdit(f)} title="Edit" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", flexShrink: 0 }}><Pencil size={14} /></button>
+        <button onClick={() => onDelete(f.id)} title="Delete" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", flexShrink: 0 }}><Trash2 size={14} /></button>
       </div>
-      <button onClick={() => onEdit(f)} title="Edit" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", flexShrink: 0 }}><Pencil size={14} /></button>
-      <button onClick={() => onDelete(f.id)} title="Delete" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", flexShrink: 0 }}><Trash2 size={14} /></button>
+      {multiple && expanded && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "0 16px 14px 48px" }}>
+          {linkedCustomers.map((c) => <ContactActionRow key={c.id} customer={c} />)}
+        </div>
+      )}
     </div>
   );
 }
