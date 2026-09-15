@@ -174,7 +174,7 @@ function FollowUpsQuickAdd({ customers, onAdd }) {
   );
 }
 
-function FollowUpsList({ items, customersById, onComplete }) {
+function FollowUpsList({ items, customersById, onComplete, onNavigate }) {
   if (items.length === 0) {
     return <div style={{ padding: "16px 18px", fontSize: 12.5, color: P.textMuted, textAlign: "center" }}>Nothing due — you're caught up.</div>;
   }
@@ -185,8 +185,12 @@ function FollowUpsList({ items, customersById, onComplete }) {
         const names = (f.customer_ids || []).map((id) => customersById[id]?.name).filter(Boolean);
         const namesLabel = names.length > 2 ? `${names.slice(0, 2).join(", ")} +${names.length - 2} more` : names.join(", ");
         return (
-          <div key={f.id} style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "11px 18px", borderBottom: i < Math.min(items.length, 5) - 1 ? `1px solid ${P.border}` : "none" }}>
-            <button onClick={() => onComplete(f)} title="Mark as done" style={{ width: 18, height: 18, borderRadius: 5, border: `1.5px solid ${P.border}`, background: "transparent", cursor: "pointer", flexShrink: 0, marginTop: 2, padding: 0 }} />
+          <div
+            key={f.id}
+            onClick={() => onNavigate("followups", { followUpId: f.id })}
+            style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "11px 18px", borderBottom: i < Math.min(items.length, 5) - 1 ? `1px solid ${P.border}` : "none", cursor: "pointer" }}
+          >
+            <button onClick={(e) => { e.stopPropagation(); onComplete(f); }} title="Mark as done" style={{ width: 18, height: 18, borderRadius: 5, border: `1.5px solid ${P.border}`, background: "transparent", cursor: "pointer", flexShrink: 0, marginTop: 2, padding: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, color: P.textPrimary, lineHeight: 1.4 }}>{f.note}</div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
@@ -463,7 +467,11 @@ function NotificationBell({ dueFollowUps = [], onNavigate }) {
             <>
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
                 {dueFollowUps.slice(0, 5).map((f) => (
-                  <div key={f.id} style={{ fontSize: 12, color: P.textSecondary, lineHeight: 1.4 }}>
+                  <div
+                    key={f.id}
+                    onClick={() => { setOpen(false); onNavigate("followups", { followUpId: f.id }); }}
+                    style={{ fontSize: 12, color: P.textSecondary, lineHeight: 1.4, cursor: "pointer" }}
+                  >
                     <span style={{ color: f.due_date < todayStr() ? P.danger : P.accent, fontWeight: 600 }}>{f.due_date < todayStr() ? "Overdue" : "Today"}</span> — {f.note}
                   </div>
                 ))}
@@ -772,7 +780,7 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
                   </Section>
                   <Section id="followups" title="Follow-ups" action="View all" onAction={() => onNavigate("followups")} editMode={editMode} visible={visible.followups} onToggle={() => toggle("followups")}>
                     <FollowUpsQuickAdd customers={customersList} onAdd={quickAddFollowUp} />
-                    <FollowUpsList items={dueFollowUps.length ? dueFollowUps : upcomingFollowUps} customersById={customersById} onComplete={completeFollowUp} />
+                    <FollowUpsList items={dueFollowUps.length ? dueFollowUps : upcomingFollowUps} customersById={customersById} onComplete={completeFollowUp} onNavigate={onNavigate} />
                   </Section>
                 </div>
               </div>

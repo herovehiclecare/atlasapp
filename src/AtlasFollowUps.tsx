@@ -309,7 +309,7 @@ function Group({ title, items, customersById, tone, onToggle, onEdit, onDelete }
 
 /* ---------------------------------- page ---------------------------------- */
 
-export default function AtlasFollowUps({ onNavigate, currentPage = "followups" }) {
+export default function AtlasFollowUps({ onNavigate, navParams, currentPage = "followups" }) {
   const { businessId, businessName, businessLogoUrl, loading: bizLoading, error: bizError } = useBusinessId();
   const now = useLiveClock();
   const [followUps, setFollowUps] = useState([]);
@@ -338,6 +338,21 @@ export default function AtlasFollowUps({ onNavigate, currentPage = "followups" }
     })();
     return () => { cancelled = true; };
   }, [businessId]);
+
+  // Deep-linked here from the Dashboard (its Follow-ups card, or the
+  // notifications bell) with a specific follow-up to jump straight to —
+  // tracked by object identity so closing the modal doesn't make it pop
+  // back open the next time `followUps` happens to re-render.
+  const consumedNavRef = useRef(null);
+  useEffect(() => {
+    if (!navParams?.followUpId || followUps.length === 0) return;
+    if (consumedNavRef.current === navParams) return;
+    const match = followUps.find((f) => f.id === navParams.followUpId);
+    if (match) {
+      setEditingFollowUp(match);
+      consumedNavRef.current = navParams;
+    }
+  }, [navParams, followUps]);
 
   const loading = bizLoading || (!!businessId && loadingData);
   const error = bizError || dataError;
