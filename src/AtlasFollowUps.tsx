@@ -172,6 +172,7 @@ function FollowUpModal({ businessId, customers, followUp, onClose, onSaved }) {
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 50 }} />
+      <style>{`@media (max-width: 420px) { .followup-date-method-row { flex-direction: column !important; } }`}</style>
       <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(460px, calc(100vw - 32px))", maxHeight: "calc(100vh - 40px)", overflowY: "auto", background: P.bg, border: `1px solid ${P.border}`, borderRadius: 16, zIndex: 51, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: P.textPrimary }}>{isEdit ? "Edit follow-up" : "Add follow-up"}</span>
@@ -183,7 +184,7 @@ function FollowUpModal({ businessId, customers, followUp, onClose, onSaved }) {
             <label style={labelStyle}>What do you need to follow up on?</label>
             <textarea autoFocus value={note} onChange={(e) => setNote(e.target.value)} rows={3} placeholder="e.g. Call these customers back about the spring promo" style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
           </div>
-          <div style={{ display: "flex", gap: 10 }}>
+          <div className="followup-date-method-row" style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label style={labelStyle}>Due date</label>
               <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ ...inputStyle, colorScheme: "dark" }} />
@@ -258,11 +259,18 @@ function ContactChip({ customer }) {
 // per line, name/contact-method on the left, real touch-sized call/text
 // buttons on the right. This is the actual "get in touch" list for a
 // follow-up with several people on it, not just a glance at who's involved.
-function ContactActionRow({ customer }) {
+function ContactActionRow({ customer, contacted, onToggle }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: P.surfaceHover, border: `1px solid ${P.border}`, borderRadius: 10, padding: "8px 8px 8px 12px" }}>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: P.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{customer.name}</div>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, background: P.surfaceHover, border: `1px solid ${P.border}`, borderRadius: 10, padding: "8px 8px 8px 10px", opacity: contacted ? 0.6 : 1 }}>
+      <button
+        onClick={onToggle}
+        title={contacted ? "Mark as not contacted yet" : "Mark as contacted"}
+        style={{ width: 18, height: 18, borderRadius: 5, border: `1.5px solid ${contacted ? P.accent : P.border}`, background: contacted ? P.accent : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, padding: 0 }}
+      >
+        {contacted && <Check size={11} color={P.bg} />}
+      </button>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: P.textPrimary, textDecoration: contacted ? "line-through" : "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{customer.name}</div>
         <div style={{ fontSize: 11, color: P.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{customer.phone || customer.email || "No contact info on file"}</div>
       </div>
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
@@ -285,14 +293,30 @@ function ContactActionRow({ customer }) {
   );
 }
 
-function FollowUpRow({ f, customersById, onToggle, onEdit, onDelete }) {
-  const [expanded, setExpanded] = useState(false);
+function FollowUpRow({ f, customersById, onToggle, onEdit, onDelete, onToggleContact, highlighted }) {
+  const [expanded, setExpanded] = useState(!!highlighted);
+  const [flash, setFlash] = useState(!!highlighted);
+  const rowRef = useRef(null);
+
+  // Deep-linked in from the Dashboard — scroll it into view and give it a
+  // brief highlight so it's obvious which one you were sent to look at.
+  // Runs once on arrival, not on every re-render (highlighted stays true
+  // upstream until a different follow-up is deep-linked to).
+  useEffect(() => {
+    if (!highlighted) return;
+    rowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const t = setTimeout(() => setFlash(false), 2200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const overdue = f.status === "pending" && f.due_date && f.due_date < todayStr();
   const linkedCustomers = (f.customer_ids || []).map((id) => customersById[id]).filter(Boolean);
+  const contactedIds = f.contacted_ids || [];
   const method = methodMeta(f.method);
   const multiple = linkedCustomers.length > 1;
   return (
-    <div style={{ borderBottom: `1px solid ${P.border}` }}>
+    <div ref={rowRef} style={{ borderBottom: `1px solid ${P.border}`, background: flash ? P.accentSoft : "transparent", transition: "background 0.6s ease" }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "13px 16px" }}>
         <button
           onClick={() => onToggle(f)}
@@ -317,7 +341,7 @@ function FollowUpRow({ f, customersById, onToggle, onEdit, onDelete }) {
                 onClick={() => setExpanded((v) => !v)}
                 style={{ display: "inline-flex", alignItems: "center", gap: 5, background: P.surfaceHover, border: `1px solid ${P.border}`, borderRadius: 20, padding: "3px 10px 3px 12px", fontSize: 11.5, fontWeight: 600, color: P.textPrimary, cursor: "pointer" }}
               >
-                <Users size={11} color={P.textSecondary} /> {linkedCustomers.length} contacts
+                <Users size={11} color={P.textSecondary} /> {contactedIds.length > 0 ? `${contactedIds.length} of ${linkedCustomers.length} contacted` : `${linkedCustomers.length} contacts`}
                 <ChevronDown size={12} color={P.textMuted} style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }} />
               </button>
             )}
@@ -334,21 +358,23 @@ function FollowUpRow({ f, customersById, onToggle, onEdit, onDelete }) {
       </div>
       {multiple && expanded && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "0 16px 14px 48px" }}>
-          {linkedCustomers.map((c) => <ContactActionRow key={c.id} customer={c} />)}
+          {linkedCustomers.map((c) => (
+            <ContactActionRow key={c.id} customer={c} contacted={contactedIds.includes(c.id)} onToggle={() => onToggleContact(f, c.id)} />
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-function Group({ title, items, customersById, tone, onToggle, onEdit, onDelete }) {
+function Group({ title, items, customersById, tone, onToggle, onEdit, onDelete, onToggleContact, highlightId }) {
   if (items.length === 0) return null;
   return (
     <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, overflow: "hidden" }}>
       <div style={{ padding: "12px 16px", borderBottom: `1px solid ${P.border}`, fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: tone || P.textMuted }}>
         {title} <span style={{ color: P.textMuted, fontWeight: 600 }}>({items.length})</span>
       </div>
-      {items.map((f) => <FollowUpRow key={f.id} f={f} customersById={customersById} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} />)}
+      {items.map((f) => <FollowUpRow key={f.id} f={f} customersById={customersById} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} onToggleContact={onToggleContact} highlighted={f.id === highlightId} />)}
     </div>
   );
 }
@@ -366,6 +392,7 @@ export default function AtlasFollowUps({ onNavigate, navParams, currentPage = "f
   const [addOpen, setAddOpen] = useState(false);
   const [editingFollowUp, setEditingFollowUp] = useState(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [highlightId, setHighlightId] = useState(null);
 
   useEffect(() => {
     if (!businessId) return;
@@ -386,16 +413,19 @@ export default function AtlasFollowUps({ onNavigate, navParams, currentPage = "f
   }, [businessId]);
 
   // Deep-linked here from the Dashboard (its Follow-ups card, or the
-  // notifications bell) with a specific follow-up to jump straight to —
-  // tracked by object identity so closing the modal doesn't make it pop
-  // back open the next time `followUps` happens to re-render.
+  // notifications bell) with a specific follow-up to jump straight to — this
+  // highlights + auto-expands that row in place (so a multi-contact
+  // follow-up shows its call/text list immediately) rather than popping open
+  // the edit form, which isn't what "take me to it" means. Tracked by object
+  // identity so closing/re-rendering doesn't make it retrigger.
   const consumedNavRef = useRef(null);
   useEffect(() => {
     if (!navParams?.followUpId || followUps.length === 0) return;
     if (consumedNavRef.current === navParams) return;
     const match = followUps.find((f) => f.id === navParams.followUpId);
     if (match) {
-      setEditingFollowUp(match);
+      setHighlightId(match.id);
+      if (match.status === "done") setShowDone(true);
       consumedNavRef.current = navParams;
     }
   }, [navParams, followUps]);
@@ -414,6 +444,17 @@ export default function AtlasFollowUps({ onNavigate, navParams, currentPage = "f
     setFollowUps((list) => list.filter((f) => f.id !== id));
     const { error: deleteError } = await supabase.from("follow_ups").delete().eq("id", id);
     if (deleteError) setDataError(deleteError.message);
+  }
+  // Tracks which of a follow-up's several linked customers have actually
+  // been reached, separate from the follow-up's own overall done/pending
+  // status — a 5-person "call these back" follow-up shouldn't be all-or-
+  // nothing, since you cross people off one at a time as you work down it.
+  async function toggleContact(f, customerId) {
+    const current = f.contacted_ids || [];
+    const next = current.includes(customerId) ? current.filter((id) => id !== customerId) : [...current, customerId];
+    setFollowUps((list) => list.map((x) => (x.id === f.id ? { ...x, contacted_ids: next } : x)));
+    const { error: updateError } = await supabase.from("follow_ups").update({ contacted_ids: next }).eq("id", f.id);
+    if (updateError) setDataError(updateError.message);
   }
   function handleSaved(f) {
     setFollowUps((list) => (list.some((x) => x.id === f.id) ? list.map((x) => (x.id === f.id ? f : x)) : [...list, f]));
@@ -476,17 +517,17 @@ export default function AtlasFollowUps({ onNavigate, navParams, currentPage = "f
             </div>
           ) : (
             <>
-              <Group title="Overdue" items={buckets.overdue} customersById={customersById} tone={P.danger} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} />
-              <Group title="Today" items={buckets.today} customersById={customersById} tone={P.accent} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} />
-              <Group title="Upcoming" items={buckets.upcoming} customersById={customersById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} />
-              <Group title="No due date" items={buckets.noDate} customersById={customersById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} />
+              <Group title="Overdue" items={buckets.overdue} customersById={customersById} tone={P.danger} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />
+              <Group title="Today" items={buckets.today} customersById={customersById} tone={P.accent} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />
+              <Group title="Upcoming" items={buckets.upcoming} customersById={customersById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />
+              <Group title="No due date" items={buckets.noDate} customersById={customersById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />
 
               {buckets.done.length > 0 && (
                 <div>
                   <button onClick={() => setShowDone((v) => !v)} style={{ background: "transparent", border: "none", color: P.textMuted, fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: "4px 0", marginBottom: showDone ? 10 : 0 }}>
                     {showDone ? "Hide" : "Show"} completed ({buckets.done.length})
                   </button>
-                  {showDone && <Group title="Completed" items={buckets.done} customersById={customersById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} />}
+                  {showDone && <Group title="Completed" items={buckets.done} customersById={customersById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />}
                 </div>
               )}
             </>
