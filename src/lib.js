@@ -78,6 +78,47 @@ export function downloadCsv(rows, filename) {
   URL.revokeObjectURL(url);
 }
 
+function icsEscape(s) {
+  return String(s ?? "").replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
+}
+
+// Exports a single reminder (a follow-up, e.g.) as a downloadable .ics file
+// so it can be added to the phone's actual calendar app, not just Atlas's
+// own Follow-ups list. `date` is a bare "YYYY-MM-DD" — rendered as a proper
+// all-day event (DTEND is exclusive, so it's set to the next day) since a
+// follow-up has no specific time attached, just a day it's due.
+export function downloadIcs({ title, description, date }, filename) {
+  const dt = date.replace(/-/g, "");
+  const end = parseDate(date);
+  end.setDate(end.getDate() + 1);
+  const endDt = `${end.getFullYear()}${String(end.getMonth() + 1).padStart(2, "0")}${String(end.getDate()).padStart(2, "0")}`;
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  const uid = `${Date.now()}-${Math.round(Math.random() * 1e6)}@atlas`;
+  const ics = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Atlas//Follow-up//EN",
+    "BEGIN:VEVENT",
+    `UID:${uid}`,
+    `DTSTAMP:${stamp}`,
+    `DTSTART;VALUE=DATE:${dt}`,
+    `DTEND;VALUE=DATE:${endDt}`,
+    `SUMMARY:${icsEscape(title)}`,
+    ...(description ? [`DESCRIPTION:${icsEscape(description)}`] : []),
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+  const blob = new Blob([ics], { type: "text/calendar;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // Used to embed a business logo (a remote Supabase Storage URL) into a
 // generated PDF, which needs the image as a data URI rather than a URL it
 // can fetch itself. Returns null on any failure so the PDF still generates,

@@ -3,11 +3,11 @@ import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings, Plus,
   Sparkles, Search, MoreHorizontal, SlidersHorizontal,
   Phone, MessageSquare, ChevronRight, Download, ChevronDown, Pencil, Camera,
-  X, Loader2, ListChecks, Navigation, Check, Trash2,
+  X, Loader2, ListChecks, Navigation, Check, Trash2, Mail, CalendarPlus,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { formatDate, downloadCsv, resizeImageToDataUrl, useLiveClock, formatDateTime, directionsUrl } from "./lib";
+import { formatDate, downloadCsv, downloadIcs, resizeImageToDataUrl, useLiveClock, formatDateTime, directionsUrl } from "./lib";
 
 const P = {
   bg: "#06100C", bgTop: "#0B1813", surface: "#0F1B15", surfaceHover: "#132018",
@@ -68,6 +68,16 @@ function colorForId(id) {
   for (let i = 0; i < id.length; i++) sum += id.charCodeAt(i);
   return hue(sum);
 }
+function todayStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+const CONTACT_METHODS = [
+  { value: "call", label: "Called", Icon: Phone },
+  { value: "text", label: "Texted", Icon: MessageSquare },
+  { value: "email", label: "Emailed", Icon: Mail },
+];
+function contactMethodLabel(value) { return CONTACT_METHODS.find((m) => m.value === value)?.label || value; }
 /* ---------------------------------- shared chrome ---------------------------------- */
 
 function NavItem({ item, active, onClick }) {
@@ -259,6 +269,15 @@ function CustomerDetail({ customer, vehicles, businessId, onClose, onUpdated, on
   const [vehicleError, setVehicleError] = useState("");
   const [deletingCustomer, setDeletingCustomer] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [loggingContact, setLoggingContact] = useState("");
+
+  const [addingFollowUp, setAddingFollowUp] = useState(false);
+  const [followUpNote, setFollowUpNote] = useState("");
+  const [followUpDate, setFollowUpDate] = useState(todayStr());
+  const [followUpMethod, setFollowUpMethod] = useState("");
+  const [savingFollowUp, setSavingFollowUp] = useState(false);
+  const [followUpError, setFollowUpError] = useState("");
+  const [savedFollowUp, setSavedFollowUp] = useState(null);
 
   const [jobs, setJobs] = useState([]);
   const [quotes, setQuotes] = useState([]);
@@ -295,6 +314,41 @@ function CustomerDetail({ customer, vehicles, businessId, onClose, onUpdated, on
   async function saveField(column, value) {
     const { data, error } = await supabase.from("customers").update({ [column]: value }).eq("id", customer.id).select().single();
     if (!error && data) onUpdated?.(data);
+  }
+
+  async function logContact(method) {
+    setLoggingContact(method);
+    const { data, error } = await supabase
+      .from("customers")
+      .update({ last_contacted_at: new Date().toISOString(), last_contact_method: method })
+      .eq("id", customer.id)
+      .select()
+      .single();
+    setLoggingContact("");
+    if (!error && data) onUpdated?.(data);
+  }
+
+  async function handleAddFollowUp(e) {
+    e.preventDefault();
+    if (!followUpNote.trim()) { setFollowUpError("Enter what you need to follow up on."); return; }
+    setSavingFollowUp(true);
+    setFollowUpError("");
+    const { data, error } = await supabase
+      .from("follow_ups")
+      .insert({ business_id: businessId, note: followUpNote.trim(), due_date: followUpDate || null, method: followUpMethod || null, customer_ids: [customer.id] })
+      .select()
+      .single();
+    setSavingFollowUp(false);
+    if (error) { setFollowUpError(error.message); return; }
+    setSavedFollowUp(data);
+    setFollowUpNote(""); setFollowUpMethod("");
+  }
+
+  function resetFollowUpForm() {
+    setAddingFollowUp(false);
+    setSavedFollowUp(null);
+    setFollowUpError("");
+    setFollowUpDate(todayStr());
   }
 
   async function handleAddVehicle(e) {
@@ -360,6 +414,28 @@ function CustomerDetail({ customer, vehicles, businessId, onClose, onUpdated, on
             )}
           </div>
 
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "8px 10px 8px 12px", flexWrap: "wrap" }}>
+            <div style={{ fontSize: 11.5, color: P.textMuted, minWidth: 0 }}>
+              {customer.last_contacted_at
+                ? <>Last contacted <strong style={{ color: P.textSecondary }}>{formatDate(customer.last_contacted_at)}</strong> via {contactMethodLabel(customer.last_contact_method)?.toLowerCase().replace("ed", "")}</>
+                : "Not contacted yet"}
+            </div>
+            <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+              {CONTACT_METHODS.map((m) => (
+                <button
+                  key={m.value}
+                  onClick={() => logContact(m.value)}
+                  disabled={!!loggingContact}
+                  title={`Log a ${m.label.toLowerCase().replace("ed", "")}`}
+                  style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 7, padding: "5px 8px", fontSize: 10.5, fontWeight: 600, cursor: loggingContact ? "default" : "pointer" }}
+                >
+                  {loggingContact === m.value ? <Loader2 size={11} className="animate-spin" /> : <m.Icon size={11} />}
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1, background: P.accentSoft, border: `1px solid ${P.accent}33`, borderRadius: 12, padding: "12px 14px" }}>
               <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, marginBottom: 4 }}>Total spent</div>
@@ -388,6 +464,51 @@ function CustomerDetail({ customer, vehicles, businessId, onClose, onUpdated, on
                 <EditableField label="Notes" value={customer.notes} placeholder="Anything worth remembering" onSave={(v) => saveField("notes", v)} />
               </div>
             </div>
+          </div>
+
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted }}>Follow-up</div>
+              {!addingFollowUp && (
+                <button onClick={() => setAddingFollowUp(true)} style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "none", color: P.accent, fontSize: 11, fontWeight: 600, cursor: "pointer" }}><Plus size={11} /> Add</button>
+              )}
+            </div>
+            {addingFollowUp && !savedFollowUp && (
+              <form onSubmit={handleAddFollowUp} style={{ border: `1px solid ${P.border}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+                {followUpError && <div style={{ fontSize: 12, color: P.danger }}>{followUpError}</div>}
+                <textarea autoFocus value={followUpNote} onChange={(e) => setFollowUpNote(e.target.value)} rows={2} placeholder="e.g. Call back about the ceramic coating quote" style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <input type="date" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} style={{ flex: "1 1 130px", ...inputStyle, padding: "7px 9px", fontSize: 12.5, colorScheme: "dark" }} />
+                  <select value={followUpMethod} onChange={(e) => setFollowUpMethod(e.target.value)} style={{ flex: "1 1 110px", ...inputStyle, padding: "7px 9px", fontSize: 12.5 }}>
+                    <option value="">How (optional)</option>
+                    {CONTACT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label.replace("ed", "")}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button type="button" onClick={resetFollowUpForm} style={{ flex: 1, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "8px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                  <button type="submit" disabled={savingFollowUp} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 9, padding: "8px", fontSize: 12, fontWeight: 700, cursor: savingFollowUp ? "default" : "pointer" }}>
+                    {savingFollowUp ? <Loader2 size={12} className="animate-spin" /> : "Save follow-up"}
+                  </button>
+                </div>
+              </form>
+            )}
+            {savedFollowUp && (
+              <div style={{ border: `1px solid ${P.accent}55`, background: P.accentSoft, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ fontSize: 12.5, color: P.textPrimary, display: "flex", alignItems: "center", gap: 6 }}><Check size={13} color={P.accent} /> Follow-up saved{savedFollowUp.due_date ? ` for ${formatDate(savedFollowUp.due_date)}` : ""}.</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {savedFollowUp.due_date && (
+                    <button
+                      type="button"
+                      onClick={() => downloadIcs({ title: savedFollowUp.note, description: `Follow up with ${customer.name}`, date: savedFollowUp.due_date }, `follow-up-${customer.name.replace(/\s+/g, "-").toLowerCase()}.ics`)}
+                      style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "transparent", border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 9, padding: "8px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                    >
+                      <CalendarPlus size={13} /> Add to calendar
+                    </button>
+                  )}
+                  <button type="button" onClick={resetFollowUpForm} style={{ flex: 1, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "8px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Done</button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
