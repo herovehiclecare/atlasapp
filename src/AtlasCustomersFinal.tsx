@@ -3,7 +3,7 @@ import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings, Plus,
   Sparkles, Search, MoreHorizontal, SlidersHorizontal,
   Phone, MessageSquare, ChevronRight, Download, ChevronDown, Pencil, Camera,
-  X, Loader2, ListChecks, Navigation, Check, Trash2, Mail, CalendarPlus,
+  X, Loader2, ListChecks, Navigation, Check, Trash2, Mail, CalendarPlus, Copy,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
@@ -78,6 +78,21 @@ const CONTACT_METHODS = [
   { value: "email", label: "Emailed", Icon: Mail },
 ];
 function contactMethodLabel(value) { return CONTACT_METHODS.find((m) => m.value === value)?.label || value; }
+
+// Suggested-text templates: Atlas drafts something reasonable, the owner
+// (or whoever's handling messages) always reviews/edits before it goes out —
+// nothing here is ever sent without a human tapping the send link
+// themselves. A follow-up already flagged "text" takes priority over the
+// generic new-lead warm-up, since it's more specific to what's actually
+// going on with this customer right now.
+const FOLLOW_UP_TEXT_SCRIPT = "Hi {name}, following up on this: {note}";
+const NEW_LEAD_SCRIPT = "Hi {name}, thanks for reaching out to {business}! We'd love to help get your vehicle looking its best — what's a good time to get you scheduled?";
+function fillScript(template, ctx) {
+  return (template || "")
+    .replace(/\{name\}/g, ctx.name || "there")
+    .replace(/\{note\}/g, ctx.note || "")
+    .replace(/\{business\}/g, ctx.business || "us");
+}
 /* ---------------------------------- shared chrome ---------------------------------- */
 
 function NavItem({ item, active, onClick }) {
@@ -260,7 +275,7 @@ function VehicleRow({ vehicle, onUpdated, onDeleted }) {
   );
 }
 
-function CustomerDetail({ customer, vehicles, businessId, onClose, onUpdated, onDeleted, onVehicleAdded, onVehicleUpdated, onVehicleDeleted, onNavigate }) {
+function CustomerDetail({ customer, vehicles, businessId, businessName, onClose, onUpdated, onDeleted, onVehicleAdded, onVehicleUpdated, onVehicleDeleted, onNavigate }) {
   const [addingVehicle, setAddingVehicle] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newType, setNewType] = useState("Car");
@@ -283,29 +298,56 @@ function CustomerDetail({ customer, vehicles, businessId, onClose, onUpdated, on
   const [quotes, setQuotes] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [servicesById, setServicesById] = useState({});
+  const [openTextFollowUp, setOpenTextFollowUp] = useState(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [script, setScript] = useState("");
+  const [scriptEdited, setScriptEdited] = useState(false);
+  const [scriptCopied, setScriptCopied] = useState(false);
 
   useEffect(() => {
     if (!customer?.id || !businessId) return;
     let cancelled = false;
     async function loadHistory() {
       setLoadingHistory(true);
-      const [jobsRes, quotesRes, invoicesRes, servicesRes] = await Promise.all([
+      const [jobsRes, quotesRes, invoicesRes, servicesRes, followUpRes] = await Promise.all([
         supabase.from("jobs").select("id, status, scheduled_at, service_ids, vehicles(label)").eq("business_id", businessId).eq("customer_id", customer.id).order("scheduled_at", { ascending: false }),
         supabase.from("quotes").select("id, status, totals, created_at").eq("business_id", businessId).eq("customer_id", customer.id).order("created_at", { ascending: false }),
         supabase.from("invoices").select("id, status, amount, paid_at, created_at").eq("business_id", businessId).eq("customer_id", customer.id).order("created_at", { ascending: false }),
         supabase.from("services").select("id, name").eq("business_id", businessId),
+        supabase.from("follow_ups").select("id, note, due_date").eq("business_id", businessId).eq("status", "pending").eq("method", "text").contains("customer_ids", [customer.id]).order("due_date", { ascending: true, nullsFirst: false }).limit(1),
       ]);
       if (cancelled) return;
       setJobs(jobsRes.data || []);
       setQuotes(quotesRes.data || []);
       setInvoices(invoicesRes.data || []);
+      setOpenTextFollowUp((followUpRes.data || [])[0] || null);
       setServicesById(Object.fromEntries((servicesRes.data || []).map((s) => [s.id, s])));
       setLoadingHistory(false);
     }
     loadHistory();
     return () => { cancelled = true; };
   }, [customer?.id, businessId]);
+
+  // Drafts a suggested text once we know whether there's an open "text"
+  // follow-up for this customer — that's more specific than the generic
+  // new-lead warm-up, so it wins when both apply. Only (re)drafts on a
+  // fresh customer or once the follow-up lookup resolves; never overwrites
+  // something the owner's already started editing.
+  useEffect(() => {
+    setScriptEdited(false);
+  }, [customer?.id]);
+  useEffect(() => {
+    if (loadingHistory || scriptEdited) return;
+    const firstName = customer.name?.split(" ")[0] || "there";
+    if (openTextFollowUp) {
+      setScript(fillScript(FOLLOW_UP_TEXT_SCRIPT, { name: firstName, note: openTextFollowUp.note, business: businessName }));
+    } else if (!customer.last_contacted_at) {
+      setScript(fillScript(NEW_LEAD_SCRIPT, { name: firstName, business: businessName }));
+    } else {
+      setScript("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingHistory, openTextFollowUp, customer?.id]);
 
   if (!customer) return null;
   const color = colorForId(customer.id);
@@ -435,6 +477,37 @@ function CustomerDetail({ customer, vehicles, businessId, onClose, onUpdated, on
               ))}
             </div>
           </div>
+
+          {script && customer.phone && (
+            <div style={{ background: P.secondarySoft, border: `1px solid ${P.secondary}55`, borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.secondary }}>
+                  <Sparkles size={11} /> {openTextFollowUp ? "Suggested follow-up text" : "Suggested welcome text"}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { navigator.clipboard?.writeText(script).catch(() => {}); setScriptCopied(true); setTimeout(() => setScriptCopied(false), 1500); }}
+                  style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "none", color: P.textSecondary, fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                >
+                  {scriptCopied ? <Check size={11} /> : <Copy size={11} />} {scriptCopied ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <textarea
+                value={script}
+                onChange={(e) => { setScript(e.target.value); setScriptEdited(true); }}
+                rows={3}
+                style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", fontSize: 12.5 }}
+              />
+              <p style={{ fontSize: 10, color: P.textMuted, margin: 0, fontStyle: "italic" }}>Drafted by Atlas — read it over, tweak anything, then send it yourself.</p>
+              <a
+                href={`sms:${customer.phone}?body=${encodeURIComponent(script)}`}
+                onClick={() => logContact("text")}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.secondary, color: P.bg, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}
+              >
+                <MessageSquare size={13} /> Text this to {customer.name.split(" ")[0]}
+              </a>
+            </div>
+          )}
 
           <div style={{ display: "flex", gap: 10 }}>
             <div style={{ flex: 1, background: P.accentSoft, border: `1px solid ${P.accent}33`, borderRadius: 12, padding: "12px 14px" }}>
@@ -951,6 +1024,7 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
           customer={detailCustomer}
           vehicles={vehicles.filter((v) => v.customer_id === detailCustomer.id)}
           businessId={businessId}
+          businessName={businessName}
           onClose={() => setDetailCustomer(null)}
           onUpdated={handleCustomerUpdated}
           onDeleted={handleCustomerDeleted}
