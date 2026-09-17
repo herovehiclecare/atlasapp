@@ -626,7 +626,15 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, onClose,
           </div>
 
           <div>
-            <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, marginBottom: 8 }}>Service history</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted }}>Service history</div>
+              {onNavigate && (
+                <button
+                  onClick={() => onNavigate("schedule", { addJobForCustomerId: customer.id, returnTo: { page: "customers", params: { customerId: customer.id } } })}
+                  style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "none", color: P.accent, fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                ><Plus size={11} /> Add job</button>
+              )}
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {loadingHistory && <p style={{ fontSize: 12, color: P.textMuted, fontStyle: "italic", margin: 0 }}>Loading…</p>}
               {!loadingHistory && jobs.length === 0 && (
@@ -635,7 +643,11 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, onClose,
               {jobs.map((j) => {
                 const names = (j.service_ids || []).map((id) => servicesById[id]?.name).filter(Boolean).join(", ");
                 return (
-                  <div key={j.id} onClick={() => onNavigate?.("schedule")} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "9px 12px", cursor: onNavigate ? "pointer" : "default" }}>
+                  <div
+                    key={j.id}
+                    onClick={() => onNavigate?.("schedule", { editJobId: j.id, returnTo: { page: "customers", params: { customerId: customer.id } } })}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "9px 12px", cursor: onNavigate ? "pointer" : "default" }}
+                  >
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 12.5, fontWeight: 600, color: P.textPrimary }}>{j.scheduled_at ? formatDate(j.scheduled_at) : "Unscheduled"}</div>
                       <div style={{ fontSize: 11, color: P.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{j.vehicles?.label || "No vehicle"}{names ? ` · ${names}` : ""}</div>

@@ -439,9 +439,9 @@ function formatJobDateTime(d) {
   };
 }
 
-function AddJobModal({ businessId, businessName, customers, vehicles, services, jobs, initialDate, job, onClose, onAdded, onDelete, onVehicleAdded }) {
+function AddJobModal({ businessId, businessName, customers, vehicles, services, jobs, initialDate, initialCustomerId, job, onClose, onAdded, onDelete, onVehicleAdded }) {
   const isEdit = !!job;
-  const [customerId, setCustomerId] = useState(job?.customer_id || "");
+  const [customerId, setCustomerId] = useState(job?.customer_id || initialCustomerId || "");
   const [vehicleId, setVehicleId] = useState(job?.vehicle_id || "");
   const [serviceIds, setServiceIds] = useState(job?.service_ids || []);
   const [date, setDate] = useState(toInputDate(job ? new Date(job.scheduled_at) : (initialDate || new Date())));
@@ -792,7 +792,7 @@ function AddJobModal({ businessId, businessName, customers, vehicles, services, 
 
 /* ---------------------------------- page ---------------------------------- */
 
-export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) {
+export default function AtlasSchedule({ onNavigate, navParams, currentPage = "schedule" }) {
   const { businessId, businessName, businessLogoUrl, businessUiPrefs, loading: bizLoading, error: bizError } = useBusinessId();
   const now = useLiveClock();
   const [jobs, setJobs] = useState([]);
@@ -864,6 +864,32 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
     setAddOpen(true);
   }
 
+  // Deep-linked here from another page (Customers' "Add Job" quick action,
+  // or a job row in a customer's service history) — either opens straight
+  // into a new job pre-filled with that customer, or a specific job for
+  // editing. `returnTo` carries where to bounce back to once the modal
+  // closes, so leaving a customer's profile to touch their schedule doesn't
+  // strand you on Schedule or dump you back at the bare customer list.
+  const consumedNavRef = useRef(null);
+  useEffect(() => {
+    if (!navParams || consumedNavRef.current === navParams) return;
+    if (navParams.editJobId) {
+      if (loadingJobs) return;
+      const match = jobs.find((j) => j.id === navParams.editJobId);
+      if (match) { setEditingJob(match); consumedNavRef.current = navParams; }
+    } else if (navParams.addJobForCustomerId) {
+      setAddDate(new Date());
+      setAddOpen(true);
+      consumedNavRef.current = navParams;
+    }
+  }, [navParams, jobs, loadingJobs]);
+
+  function closeJobModal() {
+    setAddOpen(false);
+    setEditingJob(null);
+    if (navParams?.returnTo) onNavigate(navParams.returnTo.page, navParams.returnTo.params);
+  }
+
   function handleAdded(job) {
     // Handles both a new job and an edit to an existing one — if the id
     // already exists in state this replaces it in place instead of
@@ -887,7 +913,8 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
     setJobs((js) => js.filter((j) => j.id !== id));
     setEditingJob(null);
     const { error: deleteError } = await supabase.from("jobs").delete().eq("id", id);
-    if (deleteError) setJobs(previous);
+    if (deleteError) { setJobs(previous); return; }
+    if (navParams?.returnTo) onNavigate(navParams.returnTo.page, navParams.returnTo.params);
   }
 
   async function moveJob(id, newDate) {
@@ -1093,8 +1120,9 @@ export default function AtlasSchedule({ onNavigate, currentPage = "schedule" }) 
           services={services}
           jobs={jobs}
           initialDate={addDate}
+          initialCustomerId={navParams?.addJobForCustomerId}
           job={editingJob}
-          onClose={() => { setAddOpen(false); setEditingJob(null); }}
+          onClose={closeJobModal}
           onAdded={handleAdded}
           onDelete={handleDeleteJob}
           onVehicleAdded={handleVehicleAdded}
