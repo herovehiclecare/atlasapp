@@ -2,7 +2,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 // Receives Meta (Facebook) Lead Ads webhook pings and turns each new lead
-// into an Atlas customer automatically. Two Meta setup steps point here:
+// into an Atlas customer automatically, tagged with which ad/campaign it
+// came from. Two Meta setup steps point here:
 //  1. Webhook verification (GET) - Meta calls this once when you save the
 //     webhook subscription in the Meta App dashboard, to prove you control
 //     this URL. It must echo back `hub.challenge` if `hub.verify_token`
@@ -83,7 +84,10 @@ async function processLead(leadgenId: string) {
     .maybeSingle();
   if (existing) return;
 
-  const res = await fetch(`https://graph.facebook.com/v21.0/${leadgenId}?access_token=${PAGE_ACCESS_TOKEN}`);
+  // Requesting these fields explicitly is what actually returns the human-
+  // readable ad/campaign names - they aren't included by default.
+  const leadFields = "field_data,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,form_id,platform";
+  const res = await fetch(`https://graph.facebook.com/v21.0/${leadgenId}?fields=${leadFields}&access_token=${PAGE_ACCESS_TOKEN}`);
   if (!res.ok) {
     console.error("Graph API lead fetch failed", leadgenId, res.status, await res.text());
     return;
@@ -99,6 +103,20 @@ async function processLead(leadgenId: string) {
   const email = fields.email || null;
   const phone = fields.phone_number || null;
 
+  // Kept separate from the flat name/email/phone columns since this is
+  // attribution metadata, not contact info - shown on the customer's
+  // profile as "came from" context, not something anyone edits.
+  const leadContext = {
+    ad_id: lead.ad_id || null,
+    ad_name: lead.ad_name || null,
+    adset_id: lead.adset_id || null,
+    adset_name: lead.adset_name || null,
+    campaign_id: lead.campaign_id || null,
+    campaign_name: lead.campaign_name || null,
+    form_id: lead.form_id || null,
+    platform: lead.platform || null,
+  };
+
   const { error } = await supabase.from("customers").insert({
     business_id: BUSINESS_ID,
     name,
@@ -106,6 +124,7 @@ async function processLead(leadgenId: string) {
     phone,
     source: "facebook_lead_ads",
     source_ref: leadgenId,
+    lead_context: leadContext,
   });
   if (error) console.error("Failed to insert lead customer", leadgenId, error.message);
 }

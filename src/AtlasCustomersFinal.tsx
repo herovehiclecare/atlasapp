@@ -456,6 +456,17 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, onClose,
             )}
           </div>
 
+          {customer.source === "facebook_lead_ads" && customer.lead_context && (customer.lead_context.ad_name || customer.lead_context.campaign_name) && (
+            <div title="Automatically captured from the Facebook Lead Ads webhook" style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(24,119,242,0.1)", border: "1px solid rgba(24,119,242,0.35)", borderRadius: 10, padding: "8px 12px", fontSize: 11.5, color: P.textSecondary }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: "#4C8DFF", textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0 }}>Facebook lead</span>
+              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {customer.lead_context.ad_name && <>Ad: <strong style={{ color: P.textPrimary }}>{customer.lead_context.ad_name}</strong></>}
+                {customer.lead_context.ad_name && customer.lead_context.campaign_name && " · "}
+                {customer.lead_context.campaign_name && <>Campaign: <strong style={{ color: P.textPrimary }}>{customer.lead_context.campaign_name}</strong></>}
+              </span>
+            </div>
+          )}
+
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "8px 10px 8px 12px", flexWrap: "wrap" }}>
             <div style={{ fontSize: 11.5, color: P.textMuted, minWidth: 0 }}>
               {customer.last_contacted_at
