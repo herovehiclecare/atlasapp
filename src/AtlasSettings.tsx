@@ -3,7 +3,7 @@ import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings as SettingsIcon, Sparkles,
   MoreHorizontal, Pencil, Camera, Plus, Trash2, Building2, Tag, Percent,
   UserCog, Clock, Bell, SlidersHorizontal, ChevronRight, Lock, Eye, EyeOff,
-  CalendarCheck, Globe, Copy, Check as CheckIcon, Image as ImageIcon, Plug, Loader2, ExternalLink, X, AlertCircle, ListChecks,
+  CalendarCheck, Globe, Copy, Check as CheckIcon, Image as ImageIcon, Plug, Loader2, ExternalLink, X, AlertCircle, ListChecks, ChevronUp, ChevronDown,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
@@ -444,7 +444,7 @@ function PriceField({ label, value, onChange, onBlur }) {
   );
 }
 
-function ServiceCard({ service, onUpdateLocal, onPersist, onDelete, onDuplicate }) {
+function ServiceCard({ service, onUpdateLocal, onPersist, onDelete, onDuplicate, onMoveUp, onMoveDown, canMoveUp, canMoveDown }) {
   const [expanded, setExpanded] = useState(false);
   const includes = service.includes || [];
 
@@ -463,6 +463,14 @@ function ServiceCard({ service, onUpdateLocal, onPersist, onDelete, onDuplicate 
     onUpdateLocal(updated);
     onPersist(updated);
   }
+  function moveBullet(i, direction) {
+    const j = i + direction;
+    if (j < 0 || j >= includes.length) return;
+    const next = [...includes];
+    [next[i], next[j]] = [next[j], next[i]];
+    onUpdateLocal({ ...service, includes: next });
+    onPersist({ ...service, includes: next });
+  }
   function addBullet() {
     onUpdateLocal({ ...service, includes: [...includes, ""] });
     setExpanded(true);
@@ -471,6 +479,10 @@ function ServiceCard({ service, onUpdateLocal, onPersist, onDelete, onDuplicate 
   return (
     <Card style={{ overflow: "hidden" }}>
       <div style={{ padding: "14px 16px", display: "flex", alignItems: "flex-start", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0, marginTop: 2 }}>
+          <button onClick={onMoveUp} disabled={!canMoveUp} title="Move up" style={{ background: "transparent", border: "none", color: canMoveUp ? P.textSecondary : P.border, cursor: canMoveUp ? "pointer" : "default", padding: 0, display: "flex" }}><ChevronUp size={15} /></button>
+          <button onClick={onMoveDown} disabled={!canMoveDown} title="Move down" style={{ background: "transparent", border: "none", color: canMoveDown ? P.textSecondary : P.border, cursor: canMoveDown ? "pointer" : "default", padding: 0, display: "flex" }}><ChevronDown size={15} /></button>
+        </div>
         <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 6 }}>
           <input value={service.name} onChange={(e) => set("name", e.target.value)} onBlur={commit} style={{ ...inputStyle, fontWeight: 700, fontSize: 14, padding: "6px 8px" }} />
           <input value={service.category || ""} onChange={(e) => set("category", e.target.value)} onBlur={commit} placeholder="Category, e.g. Maintenance Detailing" style={{ ...inputStyle, fontSize: 12, color: P.textSecondary, padding: "6px 8px" }} />
@@ -506,7 +518,11 @@ function ServiceCard({ service, onUpdateLocal, onPersist, onDelete, onDuplicate 
       {expanded && (
         <div style={{ padding: "10px 16px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
           {includes.map((item, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 3 }}>
+              <div style={{ display: "flex", flexDirection: "column", flexShrink: 0 }}>
+                <button onClick={() => moveBullet(i, -1)} disabled={i === 0} title="Move up" style={{ background: "transparent", border: "none", color: i === 0 ? P.border : P.textMuted, cursor: i === 0 ? "default" : "pointer", padding: 0, display: "flex" }}><ChevronUp size={12} /></button>
+                <button onClick={() => moveBullet(i, 1)} disabled={i === includes.length - 1} title="Move down" style={{ background: "transparent", border: "none", color: i === includes.length - 1 ? P.border : P.textMuted, cursor: i === includes.length - 1 ? "default" : "pointer", padding: 0, display: "flex" }}><ChevronDown size={12} /></button>
+              </div>
               <input value={item} onChange={(e) => updateBullet(i, e.target.value)} onBlur={commitIncludes} placeholder="e.g. Ceramic soap hand wash" style={{ ...inputStyle, flex: 1, padding: "6px 8px", fontSize: 12.5 }} />
               <button onClick={() => removeBullet(i)} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", flexShrink: 0 }}><X size={13} /></button>
             </div>
@@ -541,6 +557,21 @@ function ServicesPanel() {
   }, [businessId]);
 
   function updateLocal(id, next) { setServices((list) => list.map((s) => (s.id === id ? next : s))); }
+
+  // Renumbers the whole list sequentially on every move rather than just
+  // swapping two sort_order values, so it self-heals any legacy rows that
+  // shared the same sort_order (from before reordering existed) instead of
+  // leaving ties that could make a later move look like it did nothing.
+  async function moveService(index, direction) {
+    const otherIndex = index + direction;
+    if (otherIndex < 0 || otherIndex >= services.length) return;
+    const reordered = [...services];
+    [reordered[index], reordered[otherIndex]] = [reordered[otherIndex], reordered[index]];
+    const withSort = reordered.map((s, i) => ({ ...s, sort_order: i }));
+    setServices(withSort);
+    const { error: updateError } = await supabase.from("services").upsert(withSort.map((s) => ({ id: s.id, sort_order: s.sort_order })));
+    if (updateError) setError(updateError.message);
+  }
 
   async function persist(service) {
     const { error: updateError } = await supabase.from("services").update({
@@ -602,8 +633,19 @@ function ServicesPanel() {
         <p style={{ fontSize: 13, color: P.textMuted }}>Loading…</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {services.map((s) => (
-            <ServiceCard key={s.id} service={s} onUpdateLocal={(next) => updateLocal(s.id, next)} onPersist={persist} onDelete={() => deleteService(s.id)} onDuplicate={() => duplicateService(s)} />
+          {services.map((s, i) => (
+            <ServiceCard
+              key={s.id}
+              service={s}
+              onUpdateLocal={(next) => updateLocal(s.id, next)}
+              onPersist={persist}
+              onDelete={() => deleteService(s.id)}
+              onDuplicate={() => duplicateService(s)}
+              onMoveUp={() => moveService(i, -1)}
+              onMoveDown={() => moveService(i, 1)}
+              canMoveUp={i > 0}
+              canMoveDown={i < services.length - 1}
+            />
           ))}
           <button onClick={addService} disabled={!businessId} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "transparent", border: `1px dashed ${P.border}`, color: P.textMuted, borderRadius: 12, padding: "12px", fontSize: 13, fontWeight: 600, cursor: businessId ? "pointer" : "default", opacity: businessId ? 1 : 0.6 }}>
             <Plus size={14} /> Add service
