@@ -214,6 +214,7 @@ function hydrateQuote(row, vehiclesById) {
     tiers: row.tiers || [],
     addons: li.addonIds || [],
     discount: Number(row.discount) || 0,
+    discountLabel: row.discount_label || "",
     taxRate: Number(row.tax_rate) || 0,
     totals: row.totals && Object.keys(row.totals).length ? row.totals : { subtotal: 0, tax: 0, total: 0, isRange: false },
     description: row.description || "",
@@ -700,7 +701,7 @@ function TaxRateField({ taxRate, setTaxRate, taxEnabled }) {
   );
 }
 
-function StepCustomize({ addonsAll, addons, toggleAddon, discount, setDiscount, taxRate, setTaxRate, proposalMode, taxEnabled }) {
+function StepCustomize({ addonsAll, addons, toggleAddon, discount, setDiscount, discountLabel, setDiscountLabel, taxRate, setTaxRate, proposalMode, taxEnabled }) {
   if (proposalMode === "tiered") {
     return (
       <div>
@@ -742,7 +743,10 @@ function StepCustomize({ addonsAll, addons, toggleAddon, discount, setDiscount, 
       <div className="customize-discount-tax-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 12 }}>
         <div>
           <label style={{ fontSize: 12, fontWeight: 600, color: P.textSecondary, display: "block", marginBottom: 6 }}>Discount ($)</label>
-          <input type="number" min="0" value={discount} onChange={(e) => setDiscount(Number(e.target.value) || 0)} style={{ width: "100%", background: P.surface, border: `1px solid ${P.border}`, borderRadius: 9, padding: "9px 12px", color: P.textPrimary, fontSize: 13.5, outline: "none" }} />
+          <input type="number" min="0" value={discount} onChange={(e) => setDiscount(Number(e.target.value) || 0)} style={{ width: "100%", background: P.surface, border: `1px solid ${P.border}`, borderRadius: 9, padding: "9px 12px", color: P.textPrimary, fontSize: 13.5, outline: "none", boxSizing: "border-box" }} />
+          {discount > 0 && (
+            <input value={discountLabel} onChange={(e) => setDiscountLabel(e.target.value)} placeholder="Label, e.g. Fall Special" style={{ width: "100%", background: P.surface, border: `1px solid ${P.border}`, borderRadius: 9, padding: "7px 12px", color: P.textSecondary, fontSize: 12, outline: "none", boxSizing: "border-box", marginTop: 6 }} />
+          )}
         </div>
         <TaxRateField taxRate={taxRate} setTaxRate={setTaxRate} taxEnabled={taxEnabled} />
       </div>
@@ -791,9 +795,10 @@ function StepPhotos({ photos, addPhoto, removePhoto, notes, setNotes }) {
 /* ---------------------------------- step 6: review ---------------------------------- */
 
 function StepReview({
-  customer, vehicles, services, addonsAll, lineItems, addons, discount, taxRate, totals,
+  customer, vehicles, services, addonsAll, lineItems, addons, discount, discountLabel, taxRate, totals,
   description, setDescription, generateDescription, generating,
   scriptDisplay, onScriptChange, onCopyScript, scriptCopied, depositLink,
+  scriptEnabled, onToggleScript,
   onSaveDraft, draftSaved, savingDraft, saveError, onDownloadPdf, onPreview,
   proposalMode, tiers, quoteId,
 }) {
@@ -891,7 +896,7 @@ function StepReview({
               })}
               {discount > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
-                  <span style={{ color: P.textSecondary }}>Discount</span>
+                  <span style={{ color: P.textSecondary }}>{discountLabel || "Discount"}</span>
                   <span style={{ color: P.secondary, fontWeight: 600 }}>-${discount}</span>
                 </div>
               )}
@@ -917,19 +922,36 @@ function StepReview({
       </Card>
 
       <Card style={{ padding: "16px 18px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: scriptEnabled ? 8 : 0 }}>
           <span style={{ fontSize: 11.5, fontWeight: 700, color: P.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>What to say</span>
-          <button onClick={onCopyScript} style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "none", color: P.accent, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>
-            {scriptCopied ? <Check size={12} /> : <Copy size={12} />} {scriptCopied ? "Copied" : "Copy"}
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {scriptEnabled && (
+              <button onClick={onCopyScript} style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "none", color: P.accent, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>
+                {scriptCopied ? <Check size={12} /> : <Copy size={12} />} {scriptCopied ? "Copied" : "Copy"}
+              </button>
+            )}
+            <button
+              onClick={onToggleScript}
+              title={scriptEnabled ? "Turn off — keeps your text, just hides this" : "Turn back on"}
+              style={{ width: 32, height: 19, borderRadius: 20, border: "none", background: scriptEnabled ? P.accent : P.border, position: "relative", cursor: "pointer", flexShrink: 0, padding: 0 }}
+            >
+              <div style={{ width: 15, height: 15, borderRadius: "50%", background: P.bg, position: "absolute", top: 2, left: scriptEnabled ? 15 : 2, transition: "left 0.15s ease" }} />
+            </button>
+          </div>
         </div>
-        <textarea
-          value={scriptDisplay}
-          onChange={(e) => onScriptChange(e.target.value)}
-          rows={3}
-          style={{ width: "100%", background: P.surface, border: `1px solid ${P.border}`, borderRadius: 8, padding: "8px 10px", color: P.textSecondary, fontSize: 12.5, outline: "none", resize: "vertical", fontFamily: "inherit", lineHeight: 1.6 }}
-        />
-        <p style={{ fontSize: 10.5, color: P.textMuted, margin: "8px 0 0" }}>Edited here for just this quote. The reusable starting template lives in Quote settings.</p>
+        {scriptEnabled ? (
+          <>
+            <textarea
+              value={scriptDisplay}
+              onChange={(e) => onScriptChange(e.target.value)}
+              rows={3}
+              style={{ width: "100%", background: P.surface, border: `1px solid ${P.border}`, borderRadius: 8, padding: "8px 10px", color: P.textSecondary, fontSize: 12.5, outline: "none", resize: "vertical", fontFamily: "inherit", lineHeight: 1.6 }}
+            />
+            <p style={{ fontSize: 10.5, color: P.textMuted, margin: "8px 0 0" }}>Edited here for just this quote. The reusable starting template lives in Quote settings.</p>
+          </>
+        ) : (
+          <p style={{ fontSize: 11.5, color: P.textMuted, fontStyle: "italic", margin: 0 }}>Off for this quote — your text is still here, toggle back on to see it.</p>
+        )}
       </Card>
     </div>
   );
@@ -1492,6 +1514,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
   const [tiers, setTiers] = useState([]);
   const [addons, setAddons] = useState([]);
   const [discount, setDiscount] = useState(0);
+  const [discountLabel, setDiscountLabel] = useState("");
   const [taxRate, setTaxRate] = useState(7);
   useEffect(() => {
     if (!bizLoading && currentQuoteId === null) setTaxRate(businessTaxEnabled ? businessDefaultTaxRate : 0);
@@ -1512,6 +1535,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
   const [script, setScript] = useState(DEFAULT_SCRIPT);
   const [showBusinessPanel, setShowBusinessPanel] = useState(false);
   const [scriptCopied, setScriptCopied] = useState(false);
+  const [scriptEnabled, setScriptEnabled] = useState(true);
   // Per-quote override of the "What to say" text, so it's directly editable
   // on the Review step without changing the reusable template in Quote
   // settings. Null means "just show the template filled in for this quote."
@@ -1686,6 +1710,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
       line_items: { vehicleIds: vehicles.map((v) => v.id), addonIds: addons, byVehicle: lineItems },
       tiers,
       discount,
+      discount_label: discountLabel.trim() || null,
       tax_rate: taxRate,
       totals,
       description: description || null,
@@ -1718,6 +1743,23 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
     setTimeout(() => setDraftSaved(false), 1600);
   }
 
+  // Autosaves in the background as the quote is built, so closing the tab
+  // or losing signal mid-way through doesn't lose real progress — the
+  // manual "Save draft" button on Review still exists too, for the
+  // reassurance of a deliberate save. Guarded to a draft-or-new quote only:
+  // a quote already marked Sent/Approved must never get silently flipped
+  // back to "draft" just because autosave fired after reopening it to view.
+  const currentQuoteStatus = currentQuoteId ? savedQuotes.find((q) => q.id === currentQuoteId)?.status : null;
+  const canAutosave = !sent && (!currentQuoteId || currentQuoteStatus === "draft");
+  useEffect(() => {
+    if (!canAutosave) return;
+    const hasProgress = !!customer || vehicles.length > 0;
+    if (!hasProgress) return;
+    const t = setTimeout(() => { saveDraft(); }, 1800);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canAutosave, customer, vehicles, lineItems, tiers, addons, discount, discountLabel, taxRate, description, proposalMode]);
+
   function openQuote(q) {
     setCurrentQuoteId(q.id);
     setCustomer(q.customer);
@@ -1727,6 +1769,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
     setTiers(q.tiers || []);
     setAddons(q.addons);
     setDiscount(q.discount);
+    setDiscountLabel(q.discountLabel || "");
     setTaxRate(q.taxRate);
     setDescription(q.description);
     setScriptOverride(null);
@@ -1750,7 +1793,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
   function resetQuote() {
     setCurrentQuoteId(null);
     setStep(0); setCustomer(null); setVehicles([]); setProposalMode("single"); setLineItems({}); setTiers([]); setAddons([]);
-    setDiscount(0); setTaxRate(businessTaxEnabled ? businessDefaultTaxRate : 0); setPhotos([]); setNotes(""); setDescription("");
+    setDiscount(0); setDiscountLabel(""); setTaxRate(businessTaxEnabled ? businessDefaultTaxRate : 0); setPhotos([]); setNotes(""); setDescription("");
     setChannels(["email"]); setSent(false); setLastSent(null); setSaveError(""); setScriptOverride(null);
   }
 
@@ -1898,16 +1941,17 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
                   onToggleTierPackage={toggleTierPackage} onToggleTierAddon={toggleTierAddon}
                 />
               )}
-              {step === 3 && <StepCustomize addonsAll={addonsAll} addons={addons} toggleAddon={toggleAddon} discount={discount} setDiscount={setDiscount} taxRate={taxRate} setTaxRate={setTaxRate} proposalMode={proposalMode} taxEnabled={businessTaxEnabled} />}
+              {step === 3 && <StepCustomize addonsAll={addonsAll} addons={addons} toggleAddon={toggleAddon} discount={discount} setDiscount={setDiscount} discountLabel={discountLabel} setDiscountLabel={setDiscountLabel} taxRate={taxRate} setTaxRate={setTaxRate} proposalMode={proposalMode} taxEnabled={businessTaxEnabled} />}
               {step === 4 && <StepPhotos photos={photos} addPhoto={addPhoto} removePhoto={removePhoto} notes={notes} setNotes={setNotes} />}
               {step === 5 && (
                 <StepReview
                   customer={customer} vehicles={vehicles} services={services} addonsAll={addonsAll} lineItems={lineItems} addons={addons}
-                  discount={discount} taxRate={taxRate} totals={totals}
+                  discount={discount} discountLabel={discountLabel} taxRate={taxRate} totals={totals}
                   proposalMode={proposalMode} tiers={tiers} quoteId={currentQuoteId}
                   description={description} setDescription={setDescription}
                   generateDescription={generateDescription} generating={generating}
                   scriptDisplay={scriptDisplay} onScriptChange={setScriptOverride} onCopyScript={copyScript} scriptCopied={scriptCopied}
+                  scriptEnabled={scriptEnabled} onToggleScript={() => setScriptEnabled((v) => !v)}
                   depositLink={depositLink}
                   onSaveDraft={saveDraft} draftSaved={draftSaved} savingDraft={savingDraft} saveError={saveError}
                   onDownloadPdf={() => downloadQuotePdf(buildLocalSnapshot())}
