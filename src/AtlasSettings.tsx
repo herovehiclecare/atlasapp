@@ -444,6 +444,18 @@ function PriceField({ label, value, onChange, onBlur }) {
   );
 }
 
+function DurationField({ value, onChange, onBlur }) {
+  return (
+    <div>
+      <label style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, display: "block", marginBottom: 4 }}>Duration (optional)</label>
+      <div style={{ display: "flex", alignItems: "center", gap: 3, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 8, padding: "6px 8px" }}>
+        <input type="number" step="0.25" min="0" value={value ?? ""} onChange={onChange} onBlur={onBlur} placeholder="—" style={{ width: "100%", background: "transparent", border: "none", outline: "none", color: P.textPrimary, fontSize: 12.5 }} />
+        <span style={{ fontSize: 11, color: P.textMuted, flexShrink: 0 }}>hrs</span>
+      </div>
+    </div>
+  );
+}
+
 function ServiceCard({ service, onUpdateLocal, onPersist, onDelete, onDuplicate, onMoveUp, onMoveDown, canMoveUp, canMoveDown }) {
   const [expanded, setExpanded] = useState(false);
   const includes = service.includes || [];
@@ -496,6 +508,7 @@ function ServiceCard({ service, onUpdateLocal, onPersist, onDelete, onDuplicate,
       <div style={{ padding: "0 16px 14px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(90px, 1fr))", gap: 8 }}>
         <PriceField label="Car" value={service.price_car_low} onChange={(e) => setNum("price_car_low", e.target.value)} onBlur={commit} />
         <PriceField label="SUV/Truck/Van" value={service.price_suv_low} onChange={(e) => setNum("price_suv_low", e.target.value)} onBlur={commit} />
+        <DurationField value={service.duration_hours} onChange={(e) => setNum("duration_hours", e.target.value)} onBlur={commit} />
       </div>
 
       <div style={{ padding: "0 16px 14px" }}>
@@ -619,6 +632,7 @@ function ServicesPanel() {
       deposit_required: service.deposit_required,
       includes: service.includes,
       description: service.description,
+      duration_hours: service.duration_hours,
     }).eq("id", service.id);
     if (updateError) setError(updateError.message);
   }
@@ -642,6 +656,7 @@ function ServicesPanel() {
         deposit_required: service.deposit_required,
         includes: service.includes,
         description: service.description,
+        duration_hours: service.duration_hours,
         sort_order: nextSort,
       })
       .select()

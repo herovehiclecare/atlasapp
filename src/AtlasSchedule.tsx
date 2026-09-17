@@ -55,6 +55,10 @@ const MORE_PAGES = [
 ];
 
 function money(n) { return `$${Math.round(n).toLocaleString()}`; }
+function formatHours(n) {
+  const rounded = Math.round((n || 0) * 4) / 4; // nearest quarter-hour, matching the duration field's step
+  return `${rounded % 1 === 0 ? rounded : rounded.toFixed(2).replace(/0$/, "")} hr${rounded === 1 ? "" : "s"}`;
+}
 function sameDay(a, b) { return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
 function sameMonth(a, b) { return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth(); }
 function toInputDate(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
@@ -82,6 +86,22 @@ function estimateJobPrice(job, servicesById) {
     const svc = servicesById[id];
     const price = isSuv ? (svc?.price_suv_low ?? svc?.price_car_low) : svc?.price_car_low;
     if (price != null) { total += Number(price); known = true; }
+  }
+  return known ? total : null;
+}
+
+// Mirrors estimateJobPrice, but for hours — duration is optional per
+// service (set in Settings → Services), so a job whose services have no
+// duration set contributes nothing rather than a made-up number. Unlike
+// price, duration doesn't vary by vehicle size, so there's no car/SUV split.
+function estimateJobHours(job, servicesById) {
+  const ids = Array.isArray(job.service_ids) ? job.service_ids : [];
+  if (ids.length === 0) return null;
+  let total = 0;
+  let known = false;
+  for (const id of ids) {
+    const hours = servicesById[id]?.duration_hours;
+    if (hours != null) { total += Number(hours); known = true; }
   }
   return known ? total : null;
 }
@@ -836,7 +856,7 @@ export default function AtlasSchedule({ onNavigate, navParams, currentPage = "sc
         supabase.from("jobs").select("*, customers(name, phone, address), vehicles(label, size_class)").eq("business_id", businessId).order("scheduled_at", { ascending: true }),
         supabase.from("customers").select("id, name, phone").eq("business_id", businessId).order("name", { ascending: true }),
         supabase.from("vehicles").select("id, label, customer_id, size_class").eq("business_id", businessId).order("label", { ascending: true }),
-        supabase.from("services").select("id, name, category, price_car_low, price_suv_low").eq("business_id", businessId).order("sort_order", { ascending: true }),
+        supabase.from("services").select("id, name, category, price_car_low, price_suv_low, duration_hours").eq("business_id", businessId).order("sort_order", { ascending: true }),
       ]);
 
       if (cancelled) return;
@@ -953,6 +973,20 @@ export default function AtlasSchedule({ onNavigate, navParams, currentPage = "sc
     return scoped.reduce((s, j) => s + (estimateJobPrice(j, servicesById) || 0), 0);
   }, [jobs, view, selectedDate, viewMonth, servicesById]);
 
+  const periodHours = useMemo(() => {
+    const active = jobs.filter((j) => j.status !== "cancelled" && j.scheduled_at);
+    let scoped;
+    if (view === "day") scoped = active.filter((j) => sameDay(jobDate(j), selectedDate));
+    else if (view === "week") {
+      const start = new Date(selectedDate); start.setDate(start.getDate() - start.getDay()); start.setHours(0, 0, 0, 0);
+      const end = new Date(start); end.setDate(end.getDate() + 6); end.setHours(23, 59, 59, 999);
+      scoped = active.filter((j) => { const d = jobDate(j); return d >= start && d <= end; });
+    } else {
+      scoped = active.filter((j) => sameMonth(jobDate(j), viewMonth));
+    }
+    return scoped.reduce((s, j) => s + (estimateJobHours(j, servicesById) || 0), 0);
+  }, [jobs, view, selectedDate, viewMonth, servicesById]);
+
   const monthStats = useMemo(() => {
     const monthJobs = jobs.filter((j) => j.scheduled_at && sameMonth(jobDate(j), viewMonth));
     const active = monthJobs.filter((j) => j.status !== "cancelled");
@@ -965,8 +999,9 @@ export default function AtlasSchedule({ onNavigate, navParams, currentPage = "sc
           .filter((d) => d > today.getDate() && !active.some((j) => jobDate(j).getDate() === d && jobDate(j).getMonth() === viewMonth.getMonth()))
           .length
       : 0;
-    return { jobCount: active.length, cancelledCount, openDaysAhead };
-  }, [jobs, viewMonth]);
+    const hours = active.reduce((s, j) => s + (estimateJobHours(j, servicesById) || 0), 0);
+    return { jobCount: active.length, cancelledCount, openDaysAhead, hours };
+  }, [jobs, viewMonth, servicesById]);
 
   const periodLabel = view === "day"
     ? selectedDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
@@ -1020,8 +1055,15 @@ export default function AtlasSchedule({ onNavigate, navParams, currentPage = "sc
               <span style={{ fontSize: 14, fontWeight: 700, color: P.textPrimary }}>{periodLabel}</span>
               <button onClick={() => (view === "day" ? shiftDay(1) : view === "week" ? shiftWeek(1) : shiftMonth(1))} style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${P.border}`, background: "transparent", color: P.textSecondary, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}><ChevronRight size={15} /></button>
             </div>
-            <div style={{ background: P.accentSoft, border: `1px solid ${P.accent}`, borderRadius: 20, padding: "6px 14px", fontSize: 12.5, fontWeight: 700, color: P.accent }}>
-              {view === "day" ? "Day" : view === "week" ? "Week" : "Month"} revenue (est.): {money(periodRevenue)}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ background: P.accentSoft, border: `1px solid ${P.accent}`, borderRadius: 20, padding: "6px 14px", fontSize: 12.5, fontWeight: 700, color: P.accent }}>
+                {view === "day" ? "Day" : view === "week" ? "Week" : "Month"} revenue (est.): {money(periodRevenue)}
+              </div>
+              {periodHours > 0 && (
+                <div title="Only counts jobs with services that have a duration set in Settings" style={{ background: "rgba(76,141,255,0.14)", border: "1px solid #4C8DFF", borderRadius: 20, padding: "6px 14px", fontSize: 12.5, fontWeight: 700, color: "#4C8DFF" }}>
+                  {formatHours(periodHours)} scheduled
+                </div>
+              )}
             </div>
           </div>
 
@@ -1044,6 +1086,12 @@ export default function AtlasSchedule({ onNavigate, navParams, currentPage = "sc
                     <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted }}>Est. Revenue</div>
                     <div style={{ fontSize: 22, fontWeight: 800, color: P.textPrimary, marginTop: 4 }}>{money(periodRevenue)}</div>
                   </div>
+                  {monthStats.hours > 0 && (
+                    <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 12, padding: "12px 16px" }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted }}>Hours This Month</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: P.textPrimary, marginTop: 4 }}>{formatHours(monthStats.hours)}</div>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
