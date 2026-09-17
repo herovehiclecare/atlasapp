@@ -85,8 +85,8 @@ function contactMethodLabel(value) { return CONTACT_METHODS.find((m) => m.value 
 // themselves. A follow-up already flagged "text" takes priority over the
 // generic new-lead warm-up, since it's more specific to what's actually
 // going on with this customer right now.
-const FOLLOW_UP_TEXT_SCRIPT = "Hi {name}, following up on this: {note}";
-const NEW_LEAD_SCRIPT = "Hi {name}, thanks for reaching out to {business}! We'd love to help get your vehicle looking its best — what's a good time to get you scheduled?";
+const FOLLOW_UP_TEXT_SCRIPT = "Hey {name}, following up on this: {note}";
+const NEW_LEAD_SCRIPT = "Hey {name}, thanks for reaching out! We'd love to help get your vehicle looking its best — what's a good time to get you scheduled?";
 function fillScript(template, ctx) {
   return (template || "")
     .replace(/\{name\}/g, ctx.name || "there")
@@ -338,7 +338,7 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, onClose,
   }, [customer?.id]);
   useEffect(() => {
     if (loadingHistory || scriptEdited) return;
-    const firstName = customer.name?.split(" ")[0] || "there";
+    const firstName = customer.preferred_name?.trim() || customer.name?.split(" ")[0] || "there";
     if (openTextFollowUp) {
       setScript(fillScript(FOLLOW_UP_TEXT_SCRIPT, { name: firstName, note: openTextFollowUp.note, business: businessName }));
     } else if (!customer.last_contacted_at) {
@@ -504,7 +504,7 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, onClose,
                 onClick={() => logContact("text")}
                 style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.secondary, color: P.bg, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}
               >
-                <MessageSquare size={13} /> Text this to {customer.name.split(" ")[0]}
+                <MessageSquare size={13} /> Text this to {customer.preferred_name?.trim() || customer.name.split(" ")[0]}
               </a>
             </div>
           )}
@@ -524,6 +524,9 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, onClose,
             <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, marginBottom: 8 }}>Contact</div>
             <p style={{ fontSize: 10.5, color: P.textMuted, margin: "0 0 8px", fontStyle: "italic" }}>Tap any field to edit it.</p>
             <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
+                <EditableField label="Call them" value={customer.preferred_name} placeholder={`Nickname, if different from "${customer.name.split(" ")[0]}"`} onSave={(v) => saveField("preferred_name", v)} />
+              </div>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
                 <EditableField label="Phone" value={customer.phone} placeholder="(555) 123-4567" onSave={(v) => saveField("phone", v)} />
               </div>
