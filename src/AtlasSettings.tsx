@@ -536,6 +536,33 @@ function ServiceCard({ service, onUpdateLocal, onPersist, onDelete, onDuplicate,
   );
 }
 
+// Preferred display order for known categories — anything else (a category
+// the owner typed in that isn't one of these, or blank) sorts after, in
+// alphabetical order, with blank/no-category services grouped last under
+// "Uncategorized" so a service never just silently disappears from view.
+const CATEGORY_ORDER = ["Mobile Maintenance", "Ceramic Coatings", "Paint Correction", "Add-Ons"];
+function categoryRank(category) {
+  const idx = CATEGORY_ORDER.indexOf(category);
+  return idx === -1 ? CATEGORY_ORDER.length : idx;
+}
+function groupServices(list) {
+  const groups = {};
+  for (const s of list) {
+    const key = (s.category || "").trim() || "Uncategorized";
+    (groups[key] ||= []).push(s);
+  }
+  return Object.entries(groups)
+    .sort(([a], [b]) => {
+      const ra = categoryRank(a === "Uncategorized" ? "\0" : a);
+      const rb = categoryRank(b === "Uncategorized" ? "\0" : b);
+      if (ra !== rb) return ra - rb;
+      if (a === "Uncategorized") return 1;
+      if (b === "Uncategorized") return -1;
+      return a.localeCompare(b);
+    })
+    .map(([category, items]) => ({ category, items }));
+}
+
 function ServicesPanel() {
   const { businessId } = useBusinessId();
   const [services, setServices] = useState([]);
@@ -558,16 +585,24 @@ function ServicesPanel() {
 
   function updateLocal(id, next) { setServices((list) => list.map((s) => (s.id === id ? next : s))); }
 
-  // Renumbers the whole list sequentially on every move rather than just
-  // swapping two sort_order values, so it self-heals any legacy rows that
-  // shared the same sort_order (from before reordering existed) instead of
-  // leaving ties that could make a later move look like it did nothing.
-  async function moveService(index, direction) {
-    const otherIndex = index + direction;
-    if (otherIndex < 0 || otherIndex >= services.length) return;
-    const reordered = [...services];
-    [reordered[index], reordered[otherIndex]] = [reordered[otherIndex], reordered[index]];
-    const withSort = reordered.map((s, i) => ({ ...s, sort_order: i }));
+  // "Move up/down" reorders within a service's own category group, not the
+  // whole flat list — jumping a card into a different category on a plain
+  // up/down tap would be surprising. Every move still renumbers sort_order
+  // across the *entire* list afterward (categories flattened back in
+  // CATEGORY_ORDER), so the plain sort_order the rest of the app already
+  // queries by (QuickQuote's service picker, Invoices, etc.) stays a valid
+  // ordering too — it just now happens to read as "grouped by category."
+  async function moveService(id, direction) {
+    const groups = groupServices(services);
+    for (const g of groups) {
+      const idx = g.items.findIndex((s) => s.id === id);
+      if (idx === -1) continue;
+      const otherIdx = idx + direction;
+      if (otherIdx < 0 || otherIdx >= g.items.length) return;
+      [g.items[idx], g.items[otherIdx]] = [g.items[otherIdx], g.items[idx]];
+      break;
+    }
+    const withSort = groups.flatMap((g) => g.items).map((s, i) => ({ ...s, sort_order: i }));
     setServices(withSort);
     const { error: updateError } = await supabase.from("services").upsert(withSort.map((s) => ({ id: s.id, sort_order: s.sort_order })));
     if (updateError) setError(updateError.message);
@@ -632,20 +667,29 @@ function ServicesPanel() {
       {loading ? (
         <p style={{ fontSize: 13, color: P.textMuted }}>Loading…</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {services.map((s, i) => (
-            <ServiceCard
-              key={s.id}
-              service={s}
-              onUpdateLocal={(next) => updateLocal(s.id, next)}
-              onPersist={persist}
-              onDelete={() => deleteService(s.id)}
-              onDuplicate={() => duplicateService(s)}
-              onMoveUp={() => moveService(i, -1)}
-              onMoveDown={() => moveService(i, 1)}
-              canMoveUp={i > 0}
-              canMoveDown={i < services.length - 1}
-            />
+        <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+          {groupServices(services).map((group) => (
+            <div key={group.category}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, marginBottom: 10 }}>
+                {group.category} <span style={{ color: P.border, fontWeight: 600 }}>({group.items.length})</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {group.items.map((s, i) => (
+                  <ServiceCard
+                    key={s.id}
+                    service={s}
+                    onUpdateLocal={(next) => updateLocal(s.id, next)}
+                    onPersist={persist}
+                    onDelete={() => deleteService(s.id)}
+                    onDuplicate={() => duplicateService(s)}
+                    onMoveUp={() => moveService(s.id, -1)}
+                    onMoveDown={() => moveService(s.id, 1)}
+                    canMoveUp={i > 0}
+                    canMoveDown={i < group.items.length - 1}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
           <button onClick={addService} disabled={!businessId} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "transparent", border: `1px dashed ${P.border}`, color: P.textMuted, borderRadius: 12, padding: "12px", fontSize: 13, fontWeight: 600, cursor: businessId ? "pointer" : "default", opacity: businessId ? 1 : 0.6 }}>
             <Plus size={14} /> Add service
