@@ -59,6 +59,16 @@ const DEFAULT_SCRIPT =
 
 const TIER_NAMES = ["Essential", "Signature", "Premium"];
 
+// Matches the category order set in Settings -> Services & Packages, so
+// browsing a quote's service list groups the same way the owner organized
+// it there. Anything else (a category typed in that isn't one of these, or
+// blank) sorts after, alphabetically.
+const CATEGORY_ORDER = ["Mobile Maintenance", "Ceramic Coatings", "Paint Correction", "Add-Ons"];
+function categoryRank(category) {
+  const idx = CATEGORY_ORDER.indexOf(category);
+  return idx === -1 ? CATEGORY_ORDER.length : idx;
+}
+
 function hue(i) { return HUES[i % HUES.length]; }
 function initials(name) { return name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase(); }
 function money(n) { return `$${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
@@ -448,34 +458,58 @@ function TiersPreview({ tiers, vehicle, services, addonsAll, taxRate, light }) {
 
 function StepCustomer({ customers, customer, setCustomer, onNavigate }) {
   const [q, setQ] = useState("");
+  // Once a customer's picked, the full search+grid collapses into a compact
+  // confirmation row instead of staying on screen to scroll past to hit
+  // Continue — "Change" brings the picker back if it's the wrong one.
+  const [picking, setPicking] = useState(!customer);
   const filtered = customers.filter((c) => c.name.toLowerCase().includes(q.toLowerCase()));
+
+  function pick(c) {
+    setCustomer(c);
+    setPicking(false);
+  }
+
   return (
     <div>
       <h2 style={{ fontSize: 18, fontWeight: 700, color: P.textPrimary, margin: "0 0 4px" }}>Who's this quote for?</h2>
       <p style={{ fontSize: 13, color: P.textSecondary, margin: "0 0 16px" }}>Pick an existing customer, or add a new one from the Customers page.</p>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "9px 12px", marginBottom: 14 }}>
-        <Search size={15} color={P.textMuted} />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search customers…" style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: P.textPrimary, fontSize: 13.5 }} />
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
-        <button onClick={() => onNavigate("customers")} style={{ display: "flex", alignItems: "center", gap: 10, background: "transparent", border: `1px dashed ${P.border}`, borderRadius: 12, padding: "13px 14px", cursor: "pointer", color: P.textMuted }}>
-          <div style={{ width: 34, height: 34, borderRadius: "50%", border: `1px dashed ${P.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Plus size={15} /></div>
-          <span style={{ fontSize: 13, fontWeight: 600 }}>New customer</span>
-        </button>
-        {filtered.map((c, i) => {
-          const active = customer?.id === c.id;
-          return (
-            <button key={c.id} onClick={() => setCustomer(c)} style={{ display: "flex", alignItems: "center", gap: 10, background: active ? P.accentSoft : P.surface, border: `1px solid ${active ? P.accent : P.border}`, borderRadius: 12, padding: "13px 14px", cursor: "pointer", textAlign: "left" }}>
-              <div style={{ width: 34, height: 34, borderRadius: "50%", background: `${hue(i)}22`, color: hue(i), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>{initials(c.name)}</div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>{c.name}</div>
-                <div style={{ fontSize: 11.5, color: P.textMuted }}>{c.phone || c.email || "—"}</div>
-              </div>
-              {active && <Check size={16} color={P.accent} style={{ marginLeft: "auto" }} />}
+      {customer && !picking ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 12, background: P.accentSoft, border: `1px solid ${P.accent}`, borderRadius: 12, padding: "13px 14px" }}>
+          <div style={{ width: 34, height: 34, borderRadius: "50%", background: `${P.accent}22`, color: P.accent, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>{initials(customer.name)}</div>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>{customer.name}</div>
+            <div style={{ fontSize: 11.5, color: P.textMuted }}>{customer.phone || customer.email || "—"}</div>
+          </div>
+          <Check size={16} color={P.accent} style={{ flexShrink: 0 }} />
+          <button onClick={() => setPicking(true)} style={{ background: "transparent", border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>Change</button>
+        </div>
+      ) : (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "9px 12px", marginBottom: 14 }}>
+            <Search size={15} color={P.textMuted} />
+            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search customers…" style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: P.textPrimary, fontSize: 13.5 }} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
+            <button onClick={() => onNavigate("customers")} style={{ display: "flex", alignItems: "center", gap: 10, background: "transparent", border: `1px dashed ${P.border}`, borderRadius: 12, padding: "13px 14px", cursor: "pointer", color: P.textMuted }}>
+              <div style={{ width: 34, height: 34, borderRadius: "50%", border: `1px dashed ${P.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Plus size={15} /></div>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>New customer</span>
             </button>
-          );
-        })}
-      </div>
+            {filtered.map((c, i) => {
+              const active = customer?.id === c.id;
+              return (
+                <button key={c.id} onClick={() => pick(c)} style={{ display: "flex", alignItems: "center", gap: 10, background: active ? P.accentSoft : P.surface, border: `1px solid ${active ? P.accent : P.border}`, borderRadius: 12, padding: "13px 14px", cursor: "pointer", textAlign: "left" }}>
+                  <div style={{ width: 34, height: 34, borderRadius: "50%", background: `${hue(i)}22`, color: hue(i), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>{initials(c.name)}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>{c.name}</div>
+                    <div style={{ fontSize: 11.5, color: P.textMuted }}>{c.phone || c.email || "—"}</div>
+                  </div>
+                  {active && <Check size={16} color={P.accent} style={{ marginLeft: "auto" }} />}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -590,6 +624,16 @@ function StepServices({
   const canOfferTiers = vehicles.length === 1;
   const suggested = services.length ? [...services].sort((a, b) => (Number(b.price_car_low) || 0) - (Number(a.price_car_low) || 0))[0] : null;
 
+  // Filters the list shown per vehicle to one category at a time, matching
+  // how services are organized in Settings — with a lot of packages, "find
+  // your ceramic coatings" beats scrolling one long list.
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const categories = useMemo(
+    () => [...new Set(services.map((s) => (s.category || "").trim()).filter(Boolean))].sort((a, b) => categoryRank(a) - categoryRank(b) || a.localeCompare(b)),
+    [services]
+  );
+  const visibleServices = categoryFilter === "All" ? services : services.filter((s) => (s.category || "").trim() === categoryFilter);
+
   return (
     <div>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
@@ -599,6 +643,12 @@ function StepServices({
             {proposalMode === "tiered" ? "Build 2–3 priced options for this vehicle." : "Pick one or more services for each vehicle — they don't have to match."}
           </p>
         </div>
+        {categories.length > 1 && proposalMode !== "tiered" && (
+          <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} style={{ flexShrink: 0, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 9, padding: "8px 10px", color: P.textPrimary, fontSize: 12.5, outline: "none" }}>
+            <option value="All">All categories</option>
+            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        )}
       </div>
 
       {canOfferTiers && (
@@ -634,6 +684,17 @@ function StepServices({
         {vehicles.map((v) => {
           const selected = lineItems[v.id] || [];
           const vTotal = selected.reduce((s, id) => s + svcPrice(findService(services, id), v), 0);
+          // Once a ceramic coating or paint correction package is on this
+          // vehicle, surface the Add-Ons category as a one-tap upsell —
+          // customers getting either of those commonly add wheel/glass/
+          // interior coating too, and it's easy to forget to mention.
+          const hasUpsellTrigger = selected.some((id) => {
+            const cat = (findService(services, id)?.category || "").trim();
+            return cat === "Ceramic Coatings" || cat === "Paint Correction";
+          });
+          const addOnSuggestions = hasUpsellTrigger
+            ? services.filter((s) => (s.category || "").trim() === "Add-Ons" && !selected.includes(s.id))
+            : [];
           return (
             <div key={v.id}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
@@ -643,11 +704,11 @@ function StepServices({
                 </div>
                 {vTotal > 0 && <span style={{ fontSize: 12.5, fontWeight: 600, color: P.accent }}>${vTotal}</span>}
               </div>
-              {services.length === 0 ? (
-                <p style={{ fontSize: 12.5, color: P.textMuted, fontStyle: "italic", margin: 0 }}>No services set up yet.</p>
+              {visibleServices.length === 0 ? (
+                <p style={{ fontSize: 12.5, color: P.textMuted, fontStyle: "italic", margin: 0 }}>{services.length === 0 ? "No services set up yet." : "No services in this category."}</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {services.map((p) => {
+                  {visibleServices.map((p) => {
                     const active = selected.includes(p.id);
                     return (
                       <label key={p.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: active ? P.accentSoft : P.surface, border: `1px solid ${active ? P.accent : P.border}`, borderRadius: 10, padding: "11px 14px", cursor: "pointer" }}>
@@ -669,6 +730,20 @@ function StepServices({
                       </label>
                     );
                   })}
+                </div>
+              )}
+              {addOnSuggestions.length > 0 && (
+                <div style={{ marginTop: 10, background: P.secondarySoft, border: `1px solid ${P.secondary}55`, borderRadius: 10, padding: "10px 12px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700, color: P.secondary, marginBottom: 7 }}>
+                    <Sparkles size={11} /> Often added with this
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {addOnSuggestions.map((s) => (
+                      <button key={s.id} type="button" onClick={() => togglePackage(v.id, s.id)} style={{ display: "flex", alignItems: "center", gap: 5, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 20, padding: "5px 11px", fontSize: 12, fontWeight: 600, color: P.textPrimary, cursor: "pointer" }}>
+                        <Plus size={11} color={P.secondary} /> {s.name}{svcPrice(s, v) > 0 ? ` (+$${svcPrice(s, v)})` : ""}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
