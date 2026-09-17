@@ -63,6 +63,19 @@ function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+// A quick "who is this" line for someone who didn't already know the
+// customer — vehicle, when they last actually showed up, and what they've
+// spent lifetime. Built from contextById, computed once per page load from
+// vehicles/jobs/invoices so a team member picking up a follow-up isn't
+// starting from just a name and a phone number.
+function formatContextLine(ctx) {
+  if (!ctx) return "New contact — no visit history yet";
+  const parts = [];
+  if (ctx.vehicleLabels?.length) parts.push(ctx.vehicleLabels.length > 1 ? `${ctx.vehicleLabels[0]} +${ctx.vehicleLabels.length - 1} more` : ctx.vehicleLabels[0]);
+  parts.push(ctx.lastVisit ? `Last visit ${formatDate(ctx.lastVisit)}` : "No visits yet");
+  if (ctx.totalSpent > 0) parts.push(`$${ctx.totalSpent.toLocaleString()} lifetime`);
+  return parts.join(" · ");
+}
 function bucketOf(f, today) {
   if (f.status === "done") return "done";
   if (!f.due_date) return "noDate";
@@ -259,7 +272,7 @@ function ContactChip({ customer }) {
 // per line, name/contact-method on the left, real touch-sized call/text
 // buttons on the right. This is the actual "get in touch" list for a
 // follow-up with several people on it, not just a glance at who's involved.
-function ContactActionRow({ customer, contacted, onToggle }) {
+function ContactActionRow({ customer, context, contacted, onToggle }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, background: P.surfaceHover, border: `1px solid ${P.border}`, borderRadius: 10, padding: "8px 8px 8px 10px", opacity: contacted ? 0.6 : 1 }}>
       <button
@@ -272,6 +285,8 @@ function ContactActionRow({ customer, contacted, onToggle }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: P.textPrimary, textDecoration: contacted ? "line-through" : "none", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{customer.name}</div>
         <div style={{ fontSize: 11, color: P.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{customer.phone || customer.email || "No contact info on file"}</div>
+        <div style={{ fontSize: 10.5, color: P.textSecondary, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatContextLine(context)}</div>
+        {customer.notes && <div style={{ fontSize: 10.5, color: P.textMuted, marginTop: 2, fontStyle: "italic", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>"{customer.notes}"</div>}
       </div>
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
         {customer.phone ? (
@@ -293,7 +308,7 @@ function ContactActionRow({ customer, contacted, onToggle }) {
   );
 }
 
-function FollowUpRow({ f, customersById, onToggle, onEdit, onDelete, onToggleContact, highlighted }) {
+function FollowUpRow({ f, customersById, contextById, onToggle, onEdit, onDelete, onToggleContact, highlighted }) {
   const [expanded, setExpanded] = useState(!!highlighted);
   const [flash, setFlash] = useState(!!highlighted);
   const rowRef = useRef(null);
@@ -352,6 +367,12 @@ function FollowUpRow({ f, customersById, onToggle, onEdit, onDelete, onToggleCon
               </span>
             )}
           </div>
+          {!multiple && linkedCustomers.length === 1 && (
+            <div style={{ fontSize: 10.5, color: P.textSecondary, marginTop: 3 }}>{formatContextLine(contextById[linkedCustomers[0].id])}</div>
+          )}
+          {!multiple && linkedCustomers[0]?.notes && (
+            <div style={{ fontSize: 10.5, color: P.textMuted, marginTop: 2, fontStyle: "italic" }}>"{linkedCustomers[0].notes}"</div>
+          )}
         </div>
         <button onClick={() => onEdit(f)} title="Edit" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", flexShrink: 0 }}><Pencil size={14} /></button>
         <button onClick={() => onDelete(f.id)} title="Delete" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", flexShrink: 0 }}><Trash2 size={14} /></button>
@@ -359,7 +380,7 @@ function FollowUpRow({ f, customersById, onToggle, onEdit, onDelete, onToggleCon
       {multiple && expanded && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "0 16px 14px 48px" }}>
           {linkedCustomers.map((c) => (
-            <ContactActionRow key={c.id} customer={c} contacted={contactedIds.includes(c.id)} onToggle={() => onToggleContact(f, c.id)} />
+            <ContactActionRow key={c.id} customer={c} context={contextById[c.id]} contacted={contactedIds.includes(c.id)} onToggle={() => onToggleContact(f, c.id)} />
           ))}
         </div>
       )}
@@ -367,14 +388,14 @@ function FollowUpRow({ f, customersById, onToggle, onEdit, onDelete, onToggleCon
   );
 }
 
-function Group({ title, items, customersById, tone, onToggle, onEdit, onDelete, onToggleContact, highlightId }) {
+function Group({ title, items, customersById, contextById, tone, onToggle, onEdit, onDelete, onToggleContact, highlightId }) {
   if (items.length === 0) return null;
   return (
     <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, overflow: "hidden" }}>
       <div style={{ padding: "12px 16px", borderBottom: `1px solid ${P.border}`, fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: tone || P.textMuted }}>
         {title} <span style={{ color: P.textMuted, fontWeight: 600 }}>({items.length})</span>
       </div>
-      {items.map((f) => <FollowUpRow key={f.id} f={f} customersById={customersById} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} onToggleContact={onToggleContact} highlighted={f.id === highlightId} />)}
+      {items.map((f) => <FollowUpRow key={f.id} f={f} customersById={customersById} contextById={contextById} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} onToggleContact={onToggleContact} highlighted={f.id === highlightId} />)}
     </div>
   );
 }
@@ -386,6 +407,7 @@ export default function AtlasFollowUps({ onNavigate, navParams, currentPage = "f
   const now = useLiveClock();
   const [followUps, setFollowUps] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [contextById, setContextById] = useState({});
   const [loadingData, setLoadingData] = useState(true);
   const [dataError, setDataError] = useState("");
   const [showDone, setShowDone] = useState(false);
@@ -399,14 +421,34 @@ export default function AtlasFollowUps({ onNavigate, navParams, currentPage = "f
     let cancelled = false;
     (async () => {
       setLoadingData(true);
-      const [followUpsResult, customersResult] = await Promise.all([
+      const [followUpsResult, customersResult, vehiclesResult, jobsResult, invoicesResult] = await Promise.all([
         supabase.from("follow_ups").select("*").eq("business_id", businessId).order("due_date", { ascending: true, nullsFirst: false }),
-        supabase.from("customers").select("id, name, phone, email").eq("business_id", businessId).order("name", { ascending: true }),
+        supabase.from("customers").select("id, name, phone, email, notes").eq("business_id", businessId).order("name", { ascending: true }),
+        supabase.from("vehicles").select("customer_id, label").eq("business_id", businessId),
+        supabase.from("jobs").select("customer_id, status, scheduled_at").eq("business_id", businessId).eq("status", "completed"),
+        supabase.from("invoices").select("customer_id, amount, status").eq("business_id", businessId).eq("status", "paid"),
       ]);
       if (cancelled) return;
       if (followUpsResult.error) setDataError(followUpsResult.error.message);
       else setFollowUps(followUpsResult.data || []);
       setCustomers(customersResult.data || []);
+
+      // Team members handling someone else's follow-up shouldn't have to go
+      // dig through Customers for basic context — build a per-customer
+      // summary (vehicle, last completed job, lifetime paid total) once here
+      // so every contact row on this page can show it directly.
+      const ctx = {};
+      for (const v of vehiclesResult.data || []) {
+        (ctx[v.customer_id] ||= { vehicleLabels: [], lastVisit: null, totalSpent: 0 }).vehicleLabels.push(v.label);
+      }
+      for (const j of jobsResult.data || []) {
+        const c = (ctx[j.customer_id] ||= { vehicleLabels: [], lastVisit: null, totalSpent: 0 });
+        if (j.scheduled_at && (!c.lastVisit || j.scheduled_at > c.lastVisit)) c.lastVisit = j.scheduled_at;
+      }
+      for (const inv of invoicesResult.data || []) {
+        (ctx[inv.customer_id] ||= { vehicleLabels: [], lastVisit: null, totalSpent: 0 }).totalSpent += Number(inv.amount) || 0;
+      }
+      setContextById(ctx);
       setLoadingData(false);
     })();
     return () => { cancelled = true; };
@@ -517,17 +559,17 @@ export default function AtlasFollowUps({ onNavigate, navParams, currentPage = "f
             </div>
           ) : (
             <>
-              <Group title="Overdue" items={buckets.overdue} customersById={customersById} tone={P.danger} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />
-              <Group title="Today" items={buckets.today} customersById={customersById} tone={P.accent} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />
-              <Group title="Upcoming" items={buckets.upcoming} customersById={customersById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />
-              <Group title="No due date" items={buckets.noDate} customersById={customersById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />
+              <Group title="Overdue" items={buckets.overdue} customersById={customersById} contextById={contextById} tone={P.danger} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />
+              <Group title="Today" items={buckets.today} customersById={customersById} contextById={contextById} tone={P.accent} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />
+              <Group title="Upcoming" items={buckets.upcoming} customersById={customersById} contextById={contextById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />
+              <Group title="No due date" items={buckets.noDate} customersById={customersById} contextById={contextById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />
 
               {buckets.done.length > 0 && (
                 <div>
                   <button onClick={() => setShowDone((v) => !v)} style={{ background: "transparent", border: "none", color: P.textMuted, fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: "4px 0", marginBottom: showDone ? 10 : 0 }}>
                     {showDone ? "Hide" : "Show"} completed ({buckets.done.length})
                   </button>
-                  {showDone && <Group title="Completed" items={buckets.done} customersById={customersById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />}
+                  {showDone && <Group title="Completed" items={buckets.done} customersById={customersById} contextById={contextById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />}
                 </div>
               )}
             </>
