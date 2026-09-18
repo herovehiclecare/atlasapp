@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { formatDate, downloadCsv, downloadIcs, resizeImageToDataUrl, useLiveClock, formatDateTime, directionsUrl } from "./lib";
+import { formatDate, downloadCsv, downloadIcs, resizeImageToDataUrl, useLiveClock, formatDateTime, directionsUrl, callHref, textHref } from "./lib";
 
 const P = {
   bg: "#06100C", bgTop: "#0B1813", surface: "#0F1B15", surfaceHover: "#132018",
@@ -158,17 +158,17 @@ function StatCard({ label, value, sub }) {
   );
 }
 
-function QuickActions({ size = 32, iconSize = 13, phone, onOpen }) {
+function QuickActions({ size = 32, iconSize = 13, phone, commApp, onOpen }) {
   const actionStyle = { width: size, height: size, borderRadius: 8, border: `1px solid ${P.border}`, background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
       {phone ? (
-        <a href={`tel:${phone}`} title={`Call ${phone}`} style={{ ...actionStyle, color: P.textSecondary, textDecoration: "none", cursor: "pointer" }}><Phone size={iconSize} /></a>
+        <a href={callHref(phone, commApp)} title={`Call ${phone}`} style={{ ...actionStyle, color: P.textSecondary, textDecoration: "none", cursor: "pointer" }}><Phone size={iconSize} /></a>
       ) : (
         <span title="No phone on file" style={{ ...actionStyle, color: P.textMuted, opacity: 0.4, cursor: "default" }}><Phone size={iconSize} /></span>
       )}
       {phone ? (
-        <a href={`sms:${phone}`} title={`Text ${phone}`} style={{ ...actionStyle, color: P.textSecondary, textDecoration: "none", cursor: "pointer" }}><MessageSquare size={iconSize} /></a>
+        <a href={textHref(phone, null, commApp)} title={`Text ${phone}`} style={{ ...actionStyle, color: P.textSecondary, textDecoration: "none", cursor: "pointer" }}><MessageSquare size={iconSize} /></a>
       ) : (
         <span title="No phone on file" style={{ ...actionStyle, color: P.textMuted, opacity: 0.4, cursor: "default" }}><MessageSquare size={iconSize} /></span>
       )}
@@ -179,7 +179,7 @@ function QuickActions({ size = 32, iconSize = 13, phone, onOpen }) {
 
 /* ---------------------------------- list view ---------------------------------- */
 
-function RowsView({ list, selected, toggleSelect, onOpenDetail }) {
+function RowsView({ list, selected, toggleSelect, onOpenDetail, commApp }) {
   return (
     <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, overflow: "hidden" }}>
       {list.map((c, i) => (
@@ -193,7 +193,7 @@ function RowsView({ list, selected, toggleSelect, onOpenDetail }) {
           <div className="hidden lg:block" style={{ textAlign: "right", flexShrink: 0, marginRight: 8 }}>
             <div style={{ fontSize: 11, color: P.textMuted }}>Added {formatDate(c.created_at)}</div>
           </div>
-          <QuickActions phone={c.phone} onOpen={() => onOpenDetail(c)} />
+          <QuickActions phone={c.phone} commApp={commApp} onOpen={() => onOpenDetail(c)} />
         </div>
       ))}
     </div>
@@ -275,7 +275,7 @@ function VehicleRow({ vehicle, onUpdated, onDeleted }) {
   );
 }
 
-function CustomerDetail({ customer, vehicles, businessId, businessName, onClose, onUpdated, onDeleted, onVehicleAdded, onVehicleUpdated, onVehicleDeleted, onNavigate }) {
+function CustomerDetail({ customer, vehicles, businessId, businessName, commApp, onClose, onUpdated, onDeleted, onVehicleAdded, onVehicleUpdated, onVehicleDeleted, onNavigate }) {
   const [addingVehicle, setAddingVehicle] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newType, setNewType] = useState("Car");
@@ -440,12 +440,12 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, onClose,
         <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 18 }}>
           <div style={{ display: "flex", gap: 6 }}>
             {customer.phone ? (
-              <a href={`tel:${customer.phone}`} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", textDecoration: "none" }}><Phone size={13} /> Call</a>
+              <a href={callHref(customer.phone, commApp)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", textDecoration: "none" }}><Phone size={13} /> Call</a>
             ) : (
               <span title="No phone on file" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textMuted, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, opacity: 0.5, cursor: "default" }}><Phone size={13} /> Call</span>
             )}
             {customer.phone ? (
-              <a href={`sms:${customer.phone}`} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", textDecoration: "none" }}><MessageSquare size={13} /> Text</a>
+              <a href={textHref(customer.phone, null, commApp)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, cursor: "pointer", textDecoration: "none" }}><MessageSquare size={13} /> Text</a>
             ) : (
               <span title="No phone on file" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textMuted, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, opacity: 0.5, cursor: "default" }}><MessageSquare size={13} /> Text</span>
             )}
@@ -511,7 +511,7 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, onClose,
               />
               <p style={{ fontSize: 10, color: P.textMuted, margin: 0, fontStyle: "italic" }}>Drafted by Atlas — read it over, tweak anything, then send it yourself.</p>
               <a
-                href={`sms:${customer.phone}?body=${encodeURIComponent(script)}`}
+                href={textHref(customer.phone, script, commApp)}
                 onClick={() => logContact("text")}
                 style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.secondary, color: P.bg, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 700, textDecoration: "none" }}
               >
@@ -820,7 +820,7 @@ function AddCustomerModal({ businessId, onClose, onAdded, onVehicleAdded }) {
 /* ---------------------------------- page ---------------------------------- */
 
 export default function AtlasCustomers({ onNavigate, navParams, currentPage = "customers" }) {
-  const { businessId, businessName, businessLogoUrl, loading: bizLoading, error: bizError } = useBusinessId();
+  const { businessId, businessName, businessLogoUrl, businessPreferredCommApp, loading: bizLoading, error: bizError } = useBusinessId();
   const now = useLiveClock();
   const [customers, setCustomers] = useState([]);
   const [vehicles, setVehicles] = useState([]);
@@ -1015,7 +1015,7 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
               {customers.length === 0 ? "No customers yet — add your first one." : `No customers match "${query}"`}
             </div>
           ) : (
-            <RowsView list={filtered} selected={selected} toggleSelect={toggleSelect} onOpenDetail={setDetailCustomer} />
+            <RowsView list={filtered} selected={selected} toggleSelect={toggleSelect} onOpenDetail={setDetailCustomer} commApp={businessPreferredCommApp} />
           )}
         </div>
       </div>
@@ -1051,6 +1051,7 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
           vehicles={vehicles.filter((v) => v.customer_id === detailCustomer.id)}
           businessId={businessId}
           businessName={businessName}
+          commApp={businessPreferredCommApp}
           onClose={() => setDetailCustomer(null)}
           onUpdated={handleCustomerUpdated}
           onDeleted={handleCustomerDeleted}

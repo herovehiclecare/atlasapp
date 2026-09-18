@@ -50,6 +50,25 @@ export function findService(services, id) { return services.find((s) => s.id ===
 // the customer's phone actually has.
 export function directionsUrl(address) { return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`; }
 
+// A business can route Call/Text links through the phone's native
+// dialer/messages app (default) or through Quo (formerly OpenPhone), if
+// that's the number/app the business actually texts customers from —
+// Quo registers its own openphone:// URL scheme on the phone it's
+// installed on, same mechanism as tel:/sms:, just a different app claims
+// it. Set business-wide in Settings, not per-device, since a whole team
+// texting from the same Quo number wants this to just work the same way
+// for everyone. Returns null (renders nothing) if there's no phone at all.
+export function callHref(phone, app) {
+  if (!phone) return null;
+  return app === "quo" ? `openphone://dial?number=${encodeURIComponent(phone)}&action=call` : `tel:${phone}`;
+}
+export function textHref(phone, body, app) {
+  if (!phone) return null;
+  const bodyParam = body ? `${app === "quo" ? "text" : "body"}=${encodeURIComponent(body)}` : "";
+  if (app === "quo") return `openphone://message?number=${encodeURIComponent(phone)}${bodyParam ? `&${bodyParam}` : ""}`;
+  return `sms:${phone}${bodyParam ? `?${bodyParam}` : ""}`;
+}
+
 // Services are priced per size class (car vs. suv/truck/van) rather than a
 // single flat number, so every price lookup needs the vehicle it applies to.
 // Shared by Quick Quote and Invoices so both itemize services identically.

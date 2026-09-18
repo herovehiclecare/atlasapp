@@ -188,7 +188,7 @@ function Card({ children, style }) {
 /* ---------------------------------- Business Profile ---------------------------------- */
 
 function ProfilePanel() {
-  const { businessId, businessName, businessLogoUrl, businessTagline, businessQuoteLabel, businessInvoiceLabel, businessPhone, businessEmail, businessAddress, loading: bizLoading } = useBusinessId();
+  const { businessId, businessName, businessLogoUrl, businessTagline, businessQuoteLabel, businessInvoiceLabel, businessPhone, businessEmail, businessAddress, businessPreferredCommApp, loading: bizLoading } = useBusinessId();
   const [logo, setLogo] = useState(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [name, setName] = useState("");
@@ -212,6 +212,8 @@ function ProfilePanel() {
   const [address, setAddress] = useState("");
   const [savingAddress, setSavingAddress] = useState(false);
   const [addressSaved, setAddressSaved] = useState(false);
+  const [commApp, setCommApp] = useState("native");
+  const [savingCommApp, setSavingCommApp] = useState(false);
   const [error, setError] = useState("");
   const fileRef = useRef(null);
 
@@ -223,6 +225,7 @@ function ProfilePanel() {
   useEffect(() => { setPhone(businessPhone); }, [businessPhone]);
   useEffect(() => { setEmail(businessEmail); }, [businessEmail]);
   useEffect(() => { setAddress(businessAddress); }, [businessAddress]);
+  useEffect(() => { setCommApp(businessPreferredCommApp || "native"); }, [businessPreferredCommApp]);
 
   async function onPick(e) {
     const file = e.target.files?.[0];
@@ -316,6 +319,16 @@ function ProfilePanel() {
     if (updateError) { setError(updateError.message); return; }
     setAddressSaved(true);
     setTimeout(() => setAddressSaved(false), 1600);
+  }
+
+  async function saveCommApp(value) {
+    setCommApp(value);
+    if (!businessId) return;
+    setSavingCommApp(true);
+    setError("");
+    const { error: updateError } = await supabase.from("businesses").update({ preferred_comm_app: value }).eq("id", businessId).select().single();
+    setSavingCommApp(false);
+    if (updateError) setError(updateError.message);
   }
 
   return (
@@ -425,6 +438,17 @@ function ProfilePanel() {
           </Field>
         </div>
       </div>
+
+      <div style={{ marginTop: 18 }}>
+        <Field label="Open calls/texts in">
+          <select value={commApp} onChange={(e) => saveCommApp(e.target.value)} disabled={savingCommApp || bizLoading} style={inputStyle}>
+            <option value="native">Native phone app (default)</option>
+            <option value="quo">Quo (formerly OpenPhone)</option>
+          </select>
+        </Field>
+        <p style={{ fontSize: 11, color: P.textMuted, margin: "6px 0 0" }}>Applies to Call/Text buttons across Atlas — Customers, Follow-ups, and Schedule. Quo only opens if it's installed on the device you tap from.</p>
+      </div>
+
       <p style={{ fontSize: 11, color: P.textMuted, marginTop: 14 }}>All fields here are saved for real — quotes and invoices pull from here.</p>
     </Panel>
   );

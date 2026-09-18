@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { resizeImageToDataUrl, useLiveClock, formatDateTime, mergeBusinessJsonb, directionsUrl, readDraft, clearDraft, useDraftAutosave, usHolidayName } from "./lib";
+import { resizeImageToDataUrl, useLiveClock, formatDateTime, mergeBusinessJsonb, directionsUrl, readDraft, clearDraft, useDraftAutosave, usHolidayName, textHref } from "./lib";
 
 const P = {
   bg: "#06100C", bgTop: "#0B1813", surface: "#0F1B15", surfaceHover: "#132018",
@@ -459,7 +459,7 @@ function formatJobDateTime(d) {
   };
 }
 
-function AddJobModal({ businessId, businessName, customers, vehicles, services, jobs, initialDate, initialCustomerId, job, onClose, onAdded, onDelete, onVehicleAdded }) {
+function AddJobModal({ businessId, businessName, commApp, customers, vehicles, services, jobs, initialDate, initialCustomerId, job, onClose, onAdded, onDelete, onVehicleAdded }) {
   const isEdit = !!job;
   const [customerId, setCustomerId] = useState(job?.customer_id || initialCustomerId || "");
   const [vehicleId, setVehicleId] = useState(job?.vehicle_id || "");
@@ -675,7 +675,7 @@ function AddJobModal({ businessId, businessName, customers, vehicles, services, 
 
             {createdJob.customers?.phone ? (
               <a
-                href={`sms:${createdJob.customers.phone}?body=${encodeURIComponent(script)}`}
+                href={textHref(createdJob.customers.phone, script, commApp)}
                 style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: `linear-gradient(120deg, ${P.accent}, ${P.secondary})`, color: P.bg, borderRadius: 10, padding: "11px 16px", fontSize: 13.5, fontWeight: 700, textDecoration: "none" }}
               >
                 <MessageSquare size={15} /> Text this to {createdJob.customers.name?.split(" ")[0] || "customer"}
@@ -813,7 +813,7 @@ function AddJobModal({ businessId, businessName, customers, vehicles, services, 
 /* ---------------------------------- page ---------------------------------- */
 
 export default function AtlasSchedule({ onNavigate, navParams, currentPage = "schedule" }) {
-  const { businessId, businessName, businessLogoUrl, businessUiPrefs, loading: bizLoading, error: bizError } = useBusinessId();
+  const { businessId, businessName, businessLogoUrl, businessUiPrefs, businessPreferredCommApp, loading: bizLoading, error: bizError } = useBusinessId();
   const now = useLiveClock();
   const [jobs, setJobs] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -1163,6 +1163,7 @@ export default function AtlasSchedule({ onNavigate, navParams, currentPage = "sc
         <AddJobModal
           businessId={businessId}
           businessName={businessName}
+          commApp={businessPreferredCommApp}
           customers={customers}
           vehicles={vehicles}
           services={services}

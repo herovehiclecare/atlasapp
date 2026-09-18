@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { resizeImageToDataUrl, useLiveClock, formatDateTime, parseDate, formatDate } from "./lib";
+import { resizeImageToDataUrl, useLiveClock, formatDateTime, parseDate, formatDate, callHref, textHref } from "./lib";
 
 const P = {
   bg: "#06100C", bgTop: "#0B1813", surface: "#0F1B15", surfaceHover: "#132018",
@@ -244,16 +244,16 @@ function FollowUpModal({ businessId, customers, followUp, onClose, onSaved }) {
 
 /* ---------------------------------- row + group ---------------------------------- */
 
-function ContactChip({ customer }) {
+function ContactChip({ customer, commApp }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5, background: P.surfaceHover, border: `1px solid ${P.border}`, borderRadius: 20, padding: "3px 5px 3px 10px", fontSize: 11.5, color: P.textPrimary }}>
       {customer.name}
       {customer.phone ? (
         <>
-          <a href={`tel:${customer.phone}`} title={`Call ${customer.name}`} onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 19, height: 19, borderRadius: "50%", background: P.accentSoft, color: P.accent, textDecoration: "none" }}>
+          <a href={callHref(customer.phone, commApp)} title={`Call ${customer.name}`} onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 19, height: 19, borderRadius: "50%", background: P.accentSoft, color: P.accent, textDecoration: "none" }}>
             <Phone size={10} />
           </a>
-          <a href={`sms:${customer.phone}`} title={`Text ${customer.name}`} onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 19, height: 19, borderRadius: "50%", background: P.accentSoft, color: P.accent, textDecoration: "none" }}>
+          <a href={textHref(customer.phone, null, commApp)} title={`Text ${customer.name}`} onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 19, height: 19, borderRadius: "50%", background: P.accentSoft, color: P.accent, textDecoration: "none" }}>
             <MessageSquare size={10} />
           </a>
         </>
@@ -272,7 +272,7 @@ function ContactChip({ customer }) {
 // per line, name/contact-method on the left, real touch-sized call/text
 // buttons on the right. This is the actual "get in touch" list for a
 // follow-up with several people on it, not just a glance at who's involved.
-function ContactActionRow({ customer, context, contacted, onToggle }) {
+function ContactActionRow({ customer, context, contacted, onToggle, commApp }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, background: P.surfaceHover, border: `1px solid ${P.border}`, borderRadius: 10, padding: "8px 8px 8px 10px", opacity: contacted ? 0.6 : 1 }}>
       <button
@@ -291,10 +291,10 @@ function ContactActionRow({ customer, context, contacted, onToggle }) {
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
         {customer.phone ? (
           <>
-            <a href={`tel:${customer.phone}`} title={`Call ${customer.name}`} onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 8, background: P.accentSoft, color: P.accent, textDecoration: "none" }}>
+            <a href={callHref(customer.phone, commApp)} title={`Call ${customer.name}`} onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 8, background: P.accentSoft, color: P.accent, textDecoration: "none" }}>
               <Phone size={13} />
             </a>
-            <a href={`sms:${customer.phone}`} title={`Text ${customer.name}`} onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 8, background: P.accentSoft, color: P.accent, textDecoration: "none" }}>
+            <a href={textHref(customer.phone, null, commApp)} title={`Text ${customer.name}`} onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 8, background: P.accentSoft, color: P.accent, textDecoration: "none" }}>
               <MessageSquare size={13} />
             </a>
           </>
@@ -308,7 +308,7 @@ function ContactActionRow({ customer, context, contacted, onToggle }) {
   );
 }
 
-function FollowUpRow({ f, customersById, contextById, onToggle, onEdit, onDelete, onToggleContact, highlighted }) {
+function FollowUpRow({ f, customersById, contextById, onToggle, onEdit, onDelete, onToggleContact, highlighted, commApp }) {
   const [expanded, setExpanded] = useState(!!highlighted);
   const [flash, setFlash] = useState(!!highlighted);
   const rowRef = useRef(null);
@@ -350,7 +350,7 @@ function FollowUpRow({ f, customersById, contextById, onToggle, onEdit, onDelete
             )}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-            {!multiple && linkedCustomers.map((c) => <ContactChip key={c.id} customer={c} />)}
+            {!multiple && linkedCustomers.map((c) => <ContactChip key={c.id} customer={c} commApp={commApp} />)}
             {multiple && (
               <button
                 onClick={() => setExpanded((v) => !v)}
@@ -380,7 +380,7 @@ function FollowUpRow({ f, customersById, contextById, onToggle, onEdit, onDelete
       {multiple && expanded && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, padding: "0 16px 14px 48px" }}>
           {linkedCustomers.map((c) => (
-            <ContactActionRow key={c.id} customer={c} context={contextById[c.id]} contacted={contactedIds.includes(c.id)} onToggle={() => onToggleContact(f, c.id)} />
+            <ContactActionRow key={c.id} customer={c} context={contextById[c.id]} contacted={contactedIds.includes(c.id)} onToggle={() => onToggleContact(f, c.id)} commApp={commApp} />
           ))}
         </div>
       )}
@@ -388,14 +388,14 @@ function FollowUpRow({ f, customersById, contextById, onToggle, onEdit, onDelete
   );
 }
 
-function Group({ title, items, customersById, contextById, tone, onToggle, onEdit, onDelete, onToggleContact, highlightId }) {
+function Group({ title, items, customersById, contextById, tone, onToggle, onEdit, onDelete, onToggleContact, highlightId, commApp }) {
   if (items.length === 0) return null;
   return (
     <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, overflow: "hidden" }}>
       <div style={{ padding: "12px 16px", borderBottom: `1px solid ${P.border}`, fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: tone || P.textMuted }}>
         {title} <span style={{ color: P.textMuted, fontWeight: 600 }}>({items.length})</span>
       </div>
-      {items.map((f) => <FollowUpRow key={f.id} f={f} customersById={customersById} contextById={contextById} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} onToggleContact={onToggleContact} highlighted={f.id === highlightId} />)}
+      {items.map((f) => <FollowUpRow key={f.id} f={f} customersById={customersById} contextById={contextById} onToggle={onToggle} onEdit={onEdit} onDelete={onDelete} onToggleContact={onToggleContact} highlighted={f.id === highlightId} commApp={commApp} />)}
     </div>
   );
 }
@@ -403,7 +403,7 @@ function Group({ title, items, customersById, contextById, tone, onToggle, onEdi
 /* ---------------------------------- page ---------------------------------- */
 
 export default function AtlasFollowUps({ onNavigate, navParams, currentPage = "followups" }) {
-  const { businessId, businessName, businessLogoUrl, loading: bizLoading, error: bizError } = useBusinessId();
+  const { businessId, businessName, businessLogoUrl, businessPreferredCommApp, loading: bizLoading, error: bizError } = useBusinessId();
   const now = useLiveClock();
   const [followUps, setFollowUps] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -559,17 +559,17 @@ export default function AtlasFollowUps({ onNavigate, navParams, currentPage = "f
             </div>
           ) : (
             <>
-              <Group title="Overdue" items={buckets.overdue} customersById={customersById} contextById={contextById} tone={P.danger} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />
-              <Group title="Today" items={buckets.today} customersById={customersById} contextById={contextById} tone={P.accent} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />
-              <Group title="Upcoming" items={buckets.upcoming} customersById={customersById} contextById={contextById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />
-              <Group title="No due date" items={buckets.noDate} customersById={customersById} contextById={contextById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />
+              <Group title="Overdue" items={buckets.overdue} customersById={customersById} contextById={contextById} tone={P.danger} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} commApp={businessPreferredCommApp} />
+              <Group title="Today" items={buckets.today} customersById={customersById} contextById={contextById} tone={P.accent} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} commApp={businessPreferredCommApp} />
+              <Group title="Upcoming" items={buckets.upcoming} customersById={customersById} contextById={contextById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} commApp={businessPreferredCommApp} />
+              <Group title="No due date" items={buckets.noDate} customersById={customersById} contextById={contextById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} commApp={businessPreferredCommApp} />
 
               {buckets.done.length > 0 && (
                 <div>
                   <button onClick={() => setShowDone((v) => !v)} style={{ background: "transparent", border: "none", color: P.textMuted, fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: "4px 0", marginBottom: showDone ? 10 : 0 }}>
                     {showDone ? "Hide" : "Show"} completed ({buckets.done.length})
                   </button>
-                  {showDone && <Group title="Completed" items={buckets.done} customersById={customersById} contextById={contextById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} />}
+                  {showDone && <Group title="Completed" items={buckets.done} customersById={customersById} contextById={contextById} onToggle={toggle} onEdit={setEditingFollowUp} onDelete={remove} onToggleContact={toggleContact} highlightId={highlightId} commApp={businessPreferredCommApp} />}
                 </div>
               )}
             </>

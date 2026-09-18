@@ -14,6 +14,7 @@ export function useBusinessId() {
   const [businessPhone, setBusinessPhone] = useState("");
   const [businessEmail, setBusinessEmail] = useState("");
   const [businessAddress, setBusinessAddress] = useState("");
+  const [businessPreferredCommApp, setBusinessPreferredCommApp] = useState("native");
   const [businessHours, setBusinessHours] = useState([]);
   const [businessNotificationPrefs, setBusinessNotificationPrefs] = useState({});
   const [businessUiPrefs, setBusinessUiPrefs] = useState({});
@@ -40,7 +41,7 @@ export function useBusinessId() {
 
         const { data, error: memberError } = await supabase
           .from("business_members")
-          .select("business_id, businesses(name, logo_url, tagline, quote_label, invoice_label, phone, email, address, hours, notification_prefs, ui_prefs, default_tax_rate, tax_enabled)")
+          .select("business_id, businesses(name, logo_url, tagline, quote_label, invoice_label, phone, email, address, preferred_comm_app, hours, notification_prefs, ui_prefs, default_tax_rate, tax_enabled)")
           .eq("user_id", user.id)
           .limit(1)
           .single();
@@ -58,6 +59,7 @@ export function useBusinessId() {
           setBusinessPhone(data.businesses?.phone || "");
           setBusinessEmail(data.businesses?.email || "");
           setBusinessAddress(data.businesses?.address || "");
+          setBusinessPreferredCommApp(data.businesses?.preferred_comm_app || "native");
           setBusinessHours(data.businesses?.hours || []);
           setBusinessNotificationPrefs(data.businesses?.notification_prefs || {});
           setBusinessUiPrefs(data.businesses?.ui_prefs || {});
@@ -75,5 +77,5 @@ export function useBusinessId() {
     return () => { cancelled = true; };
   }, []);
 
-  return { businessId, businessName, businessLogoUrl, businessTagline, businessQuoteLabel, businessInvoiceLabel, businessPhone, businessEmail, businessAddress, businessHours, businessNotificationPrefs, businessUiPrefs, businessDefaultTaxRate, businessTaxEnabled, loading, error };
+  return { businessId, businessName, businessLogoUrl, businessTagline, businessQuoteLabel, businessInvoiceLabel, businessPhone, businessEmail, businessAddress, businessPreferredCommApp, businessHours, businessNotificationPrefs, businessUiPrefs, businessDefaultTaxRate, businessTaxEnabled, loading, error };
 }
