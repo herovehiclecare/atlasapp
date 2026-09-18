@@ -876,7 +876,12 @@ function StepReview({
   scriptEnabled, onToggleScript,
   onSaveDraft, draftSaved, savingDraft, saveError, onDownloadPdf, onPreview,
   proposalMode, tiers, quoteId,
+  onTogglePackage, onToggleAddon, onEditServices,
 }) {
+  // Last-chance edits without leaving Review: each line can be pulled off the
+  // quote right here, and "Edit services" jumps back to the full picker for
+  // anything bigger (adding a service, switching a vehicle's selections).
+  const [editing, setEditing] = useState(false);
   return (
     <div>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
@@ -935,27 +940,47 @@ function StepReview({
         ) : (
           <>
             {/* per-vehicle line items */}
-            <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${P.border}`, display: "flex", flexDirection: "column", gap: 14 }}>
-              {vehicles.map((v) => {
-                const ids = lineItems[v.id] || [];
-                if (ids.length === 0) return null;
-                return (
-                  <div key={v.id}>
-                    <div style={{ fontSize: 12.5, fontWeight: 700, color: P.textPrimary, marginBottom: 6, display: "flex", alignItems: "center", gap: 7 }}>
-                      <div style={{ width: 14, height: 14, borderRadius: 4, background: v.color_hex || P.surfaceHover, border: `1px solid ${P.border}` }} /> {v.label}
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${P.border}` }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: P.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Services</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <button onClick={() => setEditing((v) => !v)} style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "none", color: editing ? P.accent : P.textSecondary, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>
+                    <Pencil size={11} /> {editing ? "Done" : "Edit"}
+                  </button>
+                  <button onClick={onEditServices} title="Go back to the full service picker" style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "none", color: P.accent, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>
+                    <Plus size={11} /> Add / change
+                  </button>
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {vehicles.map((v) => {
+                  const ids = lineItems[v.id] || [];
+                  if (ids.length === 0) return null;
+                  return (
+                    <div key={v.id}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: P.textPrimary, marginBottom: 6, display: "flex", alignItems: "center", gap: 7 }}>
+                        <div style={{ width: 14, height: 14, borderRadius: 4, background: v.color_hex || P.surfaceHover, border: `1px solid ${P.border}` }} /> {v.label}
+                      </div>
+                      {ids.map((id) => {
+                        const p = findService(services, id);
+                        return (
+                          <div key={id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 13, marginBottom: 5, paddingLeft: 21 }}>
+                            <span style={{ color: P.textSecondary, minWidth: 0 }}>{p?.name}</span>
+                            <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                              <span style={{ color: P.textPrimary, fontWeight: 600 }}>${svcPrice(p, v)}</span>
+                              {editing && (
+                                <button onClick={() => onTogglePackage(v.id, id)} title={`Remove ${p?.name || "this service"}`} style={{ display: "flex", background: "transparent", border: "none", color: P.danger, cursor: "pointer", padding: 0 }}>
+                                  <X size={13} />
+                                </button>
+                              )}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
-                    {ids.map((id) => {
-                      const p = findService(services, id);
-                      return (
-                        <div key={id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5, paddingLeft: 21 }}>
-                          <span style={{ color: P.textSecondary }}>{p?.name}</span>
-                          <span style={{ color: P.textPrimary, fontWeight: 600 }}>${svcPrice(p, v)}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
 
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${P.border}` }}>
@@ -963,9 +988,16 @@ function StepReview({
                 const a = findAddon(addonsAll, id);
                 if (!a) return null;
                 return (
-                  <div key={id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 6 }}>
-                    <span style={{ color: P.textSecondary }}>{a.name}</span>
-                    <span style={{ color: P.textPrimary, fontWeight: 600 }}>${a.price ?? 0}</span>
+                  <div key={id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 13, marginBottom: 6 }}>
+                    <span style={{ color: P.textSecondary, minWidth: 0 }}>{a.name}</span>
+                    <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                      <span style={{ color: P.textPrimary, fontWeight: 600 }}>${a.price ?? 0}</span>
+                      {editing && (
+                        <button onClick={() => onToggleAddon(id)} title={`Remove ${a.name}`} style={{ display: "flex", background: "transparent", border: "none", color: P.danger, cursor: "pointer", padding: 0 }}>
+                          <X size={13} />
+                        </button>
+                      )}
+                    </span>
                   </div>
                 );
               })}
@@ -2027,6 +2059,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
                   generateDescription={generateDescription} generating={generating}
                   scriptDisplay={scriptDisplay} onScriptChange={setScriptOverride} onCopyScript={copyScript} scriptCopied={scriptCopied}
                   scriptEnabled={scriptEnabled} onToggleScript={() => setScriptEnabled((v) => !v)}
+                  onTogglePackage={togglePackage} onToggleAddon={toggleAddon} onEditServices={() => setStep(2)}
                   depositLink={depositLink}
                   onSaveDraft={saveDraft} draftSaved={draftSaved} savingDraft={savingDraft} saveError={saveError}
                   onDownloadPdf={() => downloadQuotePdf(buildLocalSnapshot())}
