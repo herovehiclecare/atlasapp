@@ -31,6 +31,15 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 //                           since there's no Page-id-to-business mapping
 //                           table yet - fine for a single-business app.
 //
+// Optional secrets, for a same-second SMS alert on every new lead:
+//   OPENPHONE_API_KEY     - from Quo (OpenPhone) -> Settings -> API keys.
+//   OPENPHONE_FROM_NUMBER - the Quo business number to send the alert
+//                           from, in E.164 form (e.g. +15551234567).
+//   OWNER_ALERT_PHONE     - the phone that should receive the alert text,
+//                           in E.164 form. Leaving any of these three
+//                           unset just skips the SMS step - the customer
+//                           and follow-up still get created either way.
+//
 // SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are provided automatically by
 // the Edge Functions runtime and don't need to be set.
 
@@ -38,6 +47,9 @@ const VERIFY_TOKEN = Deno.env.get("FB_VERIFY_TOKEN") || "";
 const APP_SECRET = Deno.env.get("FB_APP_SECRET") || "";
 const PAGE_ACCESS_TOKEN = Deno.env.get("FB_PAGE_ACCESS_TOKEN") || "";
 const BUSINESS_ID = Deno.env.get("ATLAS_BUSINESS_ID") || "";
+const OPENPHONE_API_KEY = Deno.env.get("OPENPHONE_API_KEY") || "";
+const OPENPHONE_FROM_NUMBER = Deno.env.get("OPENPHONE_FROM_NUMBER") || "";
+const OWNER_ALERT_PHONE = Deno.env.get("OWNER_ALERT_PHONE") || "";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -66,6 +78,29 @@ async function isValidSignature(req: Request, rawBody: string): Promise<boolean>
   // doesn't leak useful timing information the way a raw string diff over
   // variable-length secret data would.
   return expected === header;
+}
+
+// Text alert via Quo's (OpenPhone's) API so the owner can react within
+// seconds of a lead coming in, not just whenever they next open Atlas.
+// Never allowed to fail lead processing - errors are logged, not thrown.
+async function sendLeadAlertText(name: string, phone: string | null) {
+  if (!OPENPHONE_API_KEY || !OPENPHONE_FROM_NUMBER || !OWNER_ALERT_PHONE) return;
+  try {
+    const who = name && name !== "Facebook lead" ? name : "Someone";
+    const contact = phone ? ` (${phone})` : "";
+    const res = await fetch("https://api.openphone.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: OPENPHONE_API_KEY },
+      body: JSON.stringify({
+        content: `New Facebook lead: ${who}${contact}. Reach out ASAP! Check Atlas for details.`,
+        from: OPENPHONE_FROM_NUMBER,
+        to: [OWNER_ALERT_PHONE],
+      }),
+    });
+    if (!res.ok) console.error("Lead alert text failed", res.status, await res.text());
+  } catch (err) {
+    console.error("Lead alert text threw", err);
+  }
 }
 
 async function processLead(leadgenId: string) {
@@ -149,6 +184,12 @@ async function processLead(leadgenId: string) {
     customer_ids: [newCustomer.id],
   });
   if (followUpError) console.error("Failed to create lead follow-up", leadgenId, followUpError.message);
+
+  // Awaited (rather than fire-and-forget) so it can't get cut off if the
+  // function instance is recycled right after the response goes out -
+  // errors inside are already caught/logged, never thrown, so this can't
+  // fail lead processing even if the text send itself fails.
+  await sendLeadAlertText(name, phone);
 }
 
 Deno.serve(async (req) => {
