@@ -454,7 +454,7 @@ function NotificationBell({ dueFollowUps = [], onNavigate }) {
   }, [open]);
   return (
     <div ref={ref} style={{ position: "relative" }}>
-      <button className="hidden lg:flex" onClick={() => setOpen((o) => !o)} style={{ position: "relative", width: 32, height: 32, borderRadius: 8, border: `1px solid ${P.border}`, background: open ? P.surfaceHover : "transparent", alignItems: "center", justifyContent: "center", color: P.textSecondary, cursor: "pointer" }}>
+      <button onClick={() => setOpen((o) => !o)} style={{ position: "relative", display: "flex", width: 32, height: 32, borderRadius: 8, border: `1px solid ${P.border}`, background: open ? P.surfaceHover : "transparent", alignItems: "center", justifyContent: "center", color: P.textSecondary, cursor: "pointer" }}>
         <Bell size={14} />
         {dueFollowUps.length > 0 && <span style={{ position: "absolute", top: -3, right: -3, width: 8, height: 8, borderRadius: "50%", background: P.danger, border: `1.5px solid ${P.bg}` }} />}
       </button>
