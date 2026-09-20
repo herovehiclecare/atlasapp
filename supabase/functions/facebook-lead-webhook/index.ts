@@ -117,16 +117,38 @@ async function processLead(leadgenId: string) {
     platform: lead.platform || null,
   };
 
-  const { error } = await supabase.from("customers").insert({
+  const { data: newCustomer, error } = await supabase
+    .from("customers")
+    .insert({
+      business_id: BUSINESS_ID,
+      name,
+      email,
+      phone,
+      source: "facebook_lead_ads",
+      source_ref: leadgenId,
+      lead_context: leadContext,
+    })
+    .select("id")
+    .single();
+  if (error) {
+    console.error("Failed to insert lead customer", leadgenId, error.message);
+    return;
+  }
+
+  // Ported from an earlier, separate attempt at this integration
+  // (meta-lead-webhook) that this function replaces: a fresh lead is easy
+  // to forget about once it's just another row in Customers, so this drops
+  // a same-day Follow-up automatically. method: "text" means opening it in
+  // Atlas surfaces the existing AI-suggested-text card (drafted, not
+  // auto-sent) rather than a bare reminder with nothing to act on.
+  const { error: followUpError } = await supabase.from("follow_ups").insert({
     business_id: BUSINESS_ID,
-    name,
-    email,
-    phone,
-    source: "facebook_lead_ads",
-    source_ref: leadgenId,
-    lead_context: leadContext,
+    note: `New Facebook lead${name && name !== "Facebook lead" ? `: ${name}` : ""} — reach out and get them scheduled.`,
+    due_date: new Date().toISOString().slice(0, 10),
+    method: "text",
+    customer_ids: [newCustomer.id],
   });
-  if (error) console.error("Failed to insert lead customer", leadgenId, error.message);
+  if (followUpError) console.error("Failed to create lead follow-up", leadgenId, followUpError.message);
 }
 
 Deno.serve(async (req) => {
