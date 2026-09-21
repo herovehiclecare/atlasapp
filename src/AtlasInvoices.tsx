@@ -4,7 +4,7 @@ import pdfFonts from "pdfmake/build/vfs_fonts";
 import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings, Sparkles,
   MoreHorizontal, Pencil, Camera, Plus, Search, Download,
-  CreditCard, X, Loader2, Image as ImageIcon, FileText, ListChecks,
+  CreditCard, X, Loader2, Image as ImageIcon, FileText, ListChecks, Trash2,
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
@@ -167,36 +167,39 @@ function InvoiceRow({ inv, i, onMarkPaid, onPreview, onEdit, marking }) {
   const status = effectiveStatus(inv);
   const overdueDays = status === "overdue" && inv.due_date ? daysBetween(new Date(), parseDate(inv.due_date)) : null;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", flexWrap: "wrap" }}>
-      <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${hue(i)}22`, color: hue(i), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>{initials(inv.customers?.name || "—")}</div>
-
-      <div style={{ flex: "1 1 220px", minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>{inv.customers?.name || "No customer"}</span>
-          <span style={{ fontSize: 11, color: P.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>INV-{shortId(inv.id)}</span>
-          {inv.quote_id && <span style={{ fontSize: 9.5, fontWeight: 700, color: P.accent, background: P.accentSoft, borderRadius: 20, padding: "1px 7px" }}>from quote</span>}
+    <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4" style={{ padding: "14px 18px" }}>
+      <div className="flex items-center gap-3 min-w-0">
+        <div style={{ width: 36, height: 36, borderRadius: "50%", background: `${hue(i)}22`, color: hue(i), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>{initials(inv.customers?.name || "—")}</div>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>{inv.customers?.name || "No customer"}</span>
+            <span style={{ fontSize: 11, color: P.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>INV-{shortId(inv.id)}</span>
+            {inv.quote_id && <span style={{ fontSize: 9.5, fontWeight: 700, color: P.accent, background: P.accentSoft, borderRadius: 20, padding: "1px 7px" }}>from quote</span>}
+          </div>
+          {status === "paid" && <div style={{ fontSize: 11, color: P.textMuted, marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}><CreditCard size={11} /> Marked paid · {formatDate(inv.paid_at || inv.created_at)}</div>}
+          {status === "overdue" && <div style={{ fontSize: 11, color: P.danger, marginTop: 3 }}>{overdueDays > 0 ? `${overdueDays} days overdue · ` : ""}was due {formatDate(inv.due_date)}</div>}
+          {status === "unpaid" && <div style={{ fontSize: 11, color: P.textMuted, marginTop: 3 }}>{inv.due_date ? `Due ${formatDate(inv.due_date)}` : "No due date set"}</div>}
         </div>
-        {status === "paid" && <div style={{ fontSize: 11, color: P.textMuted, marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}><CreditCard size={11} /> Marked paid · {formatDate(inv.paid_at || inv.created_at)}</div>}
-        {status === "overdue" && <div style={{ fontSize: 11, color: P.danger, marginTop: 3 }}>{overdueDays > 0 ? `${overdueDays} days overdue · ` : ""}was due {formatDate(inv.due_date)}</div>}
-        {status === "unpaid" && <div style={{ fontSize: 11, color: P.textMuted, marginTop: 3 }}>{inv.due_date ? `Due ${formatDate(inv.due_date)}` : "No due date set"}</div>}
       </div>
 
-      <StatusBadge status={status} />
-
-      <div style={{ fontSize: 15, fontWeight: 700, color: P.textPrimary, width: 74, textAlign: "right", flexShrink: 0 }}>{money(inv.amount)}</div>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-        <button onClick={() => onEdit(inv)} title="Edit" style={{ background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 8, padding: 6, cursor: "pointer", display: "flex" }}>
-          <Pencil size={12} />
-        </button>
-        <button onClick={() => onPreview(inv)} style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 8, padding: "6px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>
-          <FileText size={12} /> PDF
-        </button>
-        {(status === "unpaid" || status === "overdue") && (
-          <button onClick={() => onMarkPaid(inv.id)} disabled={marking} style={{ display: "flex", alignItems: "center", gap: 5, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 8, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: marking ? "default" : "pointer", opacity: marking ? 0.7 : 1 }}>
-            {marking ? <Loader2 size={12} className="animate-spin" /> : <CreditCard size={12} />} Mark paid
+      <div className="flex items-center justify-between sm:justify-end gap-3 sm:ml-auto" style={{ flexWrap: "wrap" }}>
+        <div className="flex items-center gap-3">
+          <StatusBadge status={status} />
+          <div style={{ fontSize: 15, fontWeight: 700, color: P.textPrimary, minWidth: 60, textAlign: "right", flexShrink: 0 }}>{money(inv.amount)}</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <button onClick={() => onEdit(inv)} title="Edit" style={{ background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 8, padding: 6, cursor: "pointer", display: "flex" }}>
+            <Pencil size={12} />
           </button>
-        )}
+          <button onClick={() => onPreview(inv)} style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 8, padding: "6px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>
+            <FileText size={12} /> PDF
+          </button>
+          {(status === "unpaid" || status === "overdue") && (
+            <button onClick={() => onMarkPaid(inv.id)} disabled={marking} style={{ display: "flex", alignItems: "center", gap: 5, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 8, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: marking ? "default" : "pointer", opacity: marking ? 0.7 : 1 }}>
+              {marking ? <Loader2 size={12} className="animate-spin" /> : <CreditCard size={12} />} Mark paid
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -204,8 +207,9 @@ function InvoiceRow({ inv, i, onMarkPaid, onPreview, onEdit, marking }) {
 
 /* ---------------------------------- Invoice modal (create + edit) ---------------------------------- */
 
-function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoice, taxEnabled, defaultTaxRate, onClose, onSaved }) {
+function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoice, taxEnabled, defaultTaxRate, onClose, onSaved, onDeleted }) {
   const isEdit = !!invoice;
+  const [deleting, setDeleting] = useState(false);
   const [customerId, setCustomerId] = useState(invoice?.customer_id || "");
   const [quoteId, setQuoteId] = useState(invoice?.quote_id || "");
   const [vehicleId, setVehicleId] = useState(invoice?.vehicle_id || "");
@@ -267,6 +271,17 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
   function handleCloseModal() {
     if (!isEdit) discardDraft();
     onClose();
+  }
+
+  async function handleDelete() {
+    if (!invoice) return;
+    if (!window.confirm(`Delete this invoice for ${invoice.customers?.name || "this customer"}? This can't be undone.`)) return;
+    setDeleting(true);
+    setError("");
+    const { error: deleteError } = await supabase.from("invoices").delete().eq("id", invoice.id);
+    setDeleting(false);
+    if (deleteError) { setError(deleteError.message); return; }
+    onDeleted?.(invoice.id);
   }
 
   const quotesForCustomer = customerId ? quotes.filter((q) => q.customer_id === customerId) : [];
@@ -461,7 +476,7 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 10 }}>
+          <div className="flex flex-col sm:flex-row" style={{ gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label style={labelStyle}>Tax rate (%)</label>
               {taxEnabled ? (
@@ -483,7 +498,7 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 10 }}>
+          <div className="flex flex-col sm:flex-row" style={{ gap: 10 }}>
             <div style={{ flex: 1 }}>
               <label style={labelStyle}>Due date</label>
               <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} style={{ ...inputStyle, colorScheme: "dark" }} />
@@ -524,9 +539,16 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
             <p style={{ fontSize: 11, color: P.textMuted, margin: "6px 0 0" }}>Attached to this invoice's PDF, so the customer sees the finished job.</p>
           </div>
 
-          <button type="submit" disabled={saving} style={{ marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: `linear-gradient(120deg, ${P.accent}, ${P.secondary})`, color: P.bg, border: "none", borderRadius: 10, padding: "11px 16px", fontSize: 13.5, fontWeight: 700, cursor: saving ? "default" : "pointer", opacity: saving ? 0.85 : 1 }}>
-            {saving ? <><Loader2 size={15} className="animate-spin" /> {isEdit ? "Saving…" : "Uploading & saving…"}</> : isEdit ? "Save changes" : "Create invoice"}
-          </button>
+          <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+            {isEdit && (
+              <button type="button" onClick={handleDelete} disabled={deleting || saving} title="Delete invoice" style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: `1px solid ${P.border}`, color: P.danger, borderRadius: 10, padding: "0 14px", cursor: deleting ? "default" : "pointer", opacity: deleting ? 0.6 : 1 }}>
+                {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+              </button>
+            )}
+            <button type="submit" disabled={saving} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: `linear-gradient(120deg, ${P.accent}, ${P.secondary})`, color: P.bg, border: "none", borderRadius: 10, padding: "11px 16px", fontSize: 13.5, fontWeight: 700, cursor: saving ? "default" : "pointer", opacity: saving ? 0.85 : 1 }}>
+              {saving ? <><Loader2 size={15} className="animate-spin" /> {isEdit ? "Saving…" : "Uploading & saving…"}</> : isEdit ? "Save changes" : "Create invoice"}
+            </button>
+          </div>
         </form>
       </div>
     </>
@@ -750,6 +772,12 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
     setEditingInvoice(null);
   }
 
+  function handleDeleted(id) {
+    setInvoices((list) => list.filter((inv) => inv.id !== id));
+    setAddOpen(false);
+    setEditingInvoice(null);
+  }
+
   function handleExport() {
     const rows = [["Invoice", "Customer", "Amount", "Status", "Due Date", "Created"]].concat(
       filtered.map((inv) => [`INV-${shortId(inv.id)}`, inv.customers?.name || "", inv.amount, inv.status, inv.due_date || "", formatDate(inv.created_at)])
@@ -891,6 +919,7 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
           invoice={editingInvoice}
           onClose={() => { setAddOpen(false); setEditingInvoice(null); }}
           onSaved={handleSaved}
+          onDeleted={handleDeleted}
         />
       )}
     </div>

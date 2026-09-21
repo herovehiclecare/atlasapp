@@ -314,7 +314,7 @@ function Stepper({ step }) {
   );
 }
 
-function NavButtons({ step, setStep, canNext, onSend, sending }) {
+function NavButtons({ step, setStep, canNext, onNext, onSend, sending }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 24 }}>
       <button
@@ -326,7 +326,7 @@ function NavButtons({ step, setStep, canNext, onSend, sending }) {
       </button>
       {step < STEPS.length - 1 ? (
         <button
-          onClick={() => canNext && setStep((s) => Math.min(STEPS.length - 1, s + 1))}
+          onClick={() => canNext && (onNext ? onNext() : setStep((s) => Math.min(STEPS.length - 1, s + 1)))}
           disabled={!canNext}
           style={{ display: "flex", alignItems: "center", gap: 6, background: canNext ? `linear-gradient(120deg, ${P.accent}, ${P.secondary})` : P.surface, color: canNext ? P.bg : P.textMuted, border: canNext ? "none" : `1px solid ${P.border}`, borderRadius: 9, padding: "10px 18px", fontSize: 13.5, fontWeight: 700, cursor: canNext ? "pointer" : "default" }}
         >
@@ -1872,6 +1872,17 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
   function generateDescription() {
     setGenerating(true);
     setTimeout(() => {
+      // Tiered quotes keep their selections in `tiers`, not `lineItems` (that's
+      // single-mode only) - reading lineItems here always came up empty for a
+      // tiered quote, producing a description with no services actually named.
+      if (proposalMode === "tiered") {
+        const optionSummaries = tiers.map((t) => `${t.name} (${tierDescription(t, services, addonsAll).replace(/^Includes /, "").replace(/\.$/, "")})`);
+        setDescription(
+          `Thanks for choosing ${businessName || "us"}! Here are ${tiers.length} options for your ${vehicles[0]?.label || "vehicle"}: ${optionSummaries.join("; ")}. Let me know which works best and we'll get it on the schedule.`
+        );
+        setGenerating(false);
+        return;
+      }
       const vehicleSummaries = vehicles
         .filter((v) => (lineItems[v.id] || []).length > 0)
         .map((v) => {
@@ -2092,8 +2103,21 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
   }
 
   const allVehiclesHaveService = vehicles.length > 0 && vehicles.every((v) => (lineItems[v.id] || []).length > 0);
-  const tiersReady = proposalMode === "tiered" && tiers.length >= 2 && tiers.every((t) => t.packageIds.length > 0);
+  // Only tiers that actually have a package picked count toward "ready" -
+  // a leftover empty option (e.g. auto-suggested but not wanted) shouldn't
+  // block moving on; it's silently dropped instead, in handleServicesNext.
+  const filledTiers = tiers.filter((t) => t.packageIds.length > 0);
+  const tiersReady = proposalMode === "tiered" && filledTiers.length >= 2;
   const servicesStepReady = proposalMode === "tiered" ? tiersReady : allVehiclesHaveService;
+
+  // Advancing past the tiered Services step drops any option left with no
+  // package selected, rather than forcing every auto-suggested slot to be
+  // filled or manually removed first - "only want two options" should just
+  // work without an extra cleanup step.
+  function handleServicesNext() {
+    if (proposalMode === "tiered" && filledTiers.length !== tiers.length) setTiers(filledTiers);
+    setStep((s) => Math.min(STEPS.length - 1, s + 1));
+  }
 
   const canNext = [
     !!customer,
@@ -2218,7 +2242,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
                 />
               )}
 
-              {!sent && <NavButtons step={step} setStep={setStep} canNext={canNext} onSend={handleSend} sending={sending} />}
+              {!sent && <NavButtons step={step} setStep={setStep} canNext={canNext} onNext={step === 2 ? handleServicesNext : undefined} onSend={handleSend} sending={sending} />}
             </>
           )}
         </div>
