@@ -126,7 +126,7 @@ async function processLead(leadgenId: string) {
 
   // Requesting these fields explicitly is what actually returns the human-
   // readable ad/campaign names - they aren't included by default.
-  const leadFields = "field_data,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,form_id,platform";
+  const leadFields = "field_data,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,form_id,platform,created_time";
   const res = await fetch(`https://graph.facebook.com/v21.0/${leadgenId}?fields=${leadFields}&access_token=${PAGE_ACCESS_TOKEN}`);
   if (!res.ok) {
     console.error("Graph API lead fetch failed", leadgenId, res.status, await res.text());
@@ -143,6 +143,18 @@ async function processLead(leadgenId: string) {
   const email = fields.email || null;
   const phone = fields.phone_number || null;
 
+  // Everything on the form beyond name/email/phone (interest, vehicle info,
+  // preferred contact method, or whatever custom questions a given form
+  // asks) has no fixed field names - Meta returns whatever the form's own
+  // questions are keyed as. Rather than hardcode question names this app
+  // doesn't control, every other answer is kept as-is so it can still be
+  // shown on the lead, whatever the form happens to ask.
+  const KNOWN_FIELDS = new Set(["full_name", "first_name", "last_name", "email", "phone_number"]);
+  const otherAnswers: Record<string, string> = {};
+  for (const [key, value] of Object.entries(fields)) {
+    if (!KNOWN_FIELDS.has(key)) otherAnswers[key] = value;
+  }
+
   // Kept separate from the flat name/email/phone columns since this is
   // attribution metadata, not contact info - shown on the customer's
   // profile as "came from" context, not something anyone edits.
@@ -155,6 +167,8 @@ async function processLead(leadgenId: string) {
     campaign_name: lead.campaign_name || null,
     form_id: lead.form_id || null,
     platform: lead.platform || null,
+    submitted_at: lead.created_time ? new Date(lead.created_time * 1000).toISOString() : null,
+    answers: otherAnswers,
   };
 
   const { data: newCustomer, error } = await supabase

@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { resizeImageToDataUrl, useLiveClock, formatDateTime, parseDate, formatDate, callHref, textHref } from "./lib";
+import { resizeImageToDataUrl, useLiveClock, formatDateTime, parseDate, formatDate, callHref, textHref, leadAnswerEntries } from "./lib";
 
 const P = {
   bg: "#06100C", bgTop: "#0B1813", surface: "#0F1B15", surfaceHover: "#132018",
@@ -287,6 +287,13 @@ function ContactActionRow({ customer, context, contacted, onToggle, commApp }) {
         <div style={{ fontSize: 11, color: P.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{customer.phone || customer.email || "No contact info on file"}</div>
         <div style={{ fontSize: 10.5, color: P.textSecondary, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatContextLine(context)}</div>
         {customer.notes && <div style={{ fontSize: 10.5, color: P.textMuted, marginTop: 2, fontStyle: "italic", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>"{customer.notes}"</div>}
+        {customer.source === "facebook_lead_ads" && customer.lead_context && (
+          <div style={{ fontSize: 10.5, color: "#4C8DFF", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            Facebook lead
+            {customer.lead_context.submitted_at && ` · ${formatDateTime(new Date(customer.lead_context.submitted_at))}`}
+            {leadAnswerEntries(customer.lead_context).map(({ label, value }) => ` · ${label}: ${value}`).join("")}
+          </div>
+        )}
       </div>
       <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
         {customer.phone ? (
@@ -373,6 +380,16 @@ function FollowUpRow({ f, customersById, contextById, onToggle, onEdit, onDelete
           {!multiple && linkedCustomers[0]?.notes && (
             <div style={{ fontSize: 10.5, color: P.textMuted, marginTop: 2, fontStyle: "italic" }}>"{linkedCustomers[0].notes}"</div>
           )}
+          {!multiple && linkedCustomers[0]?.source === "facebook_lead_ads" && linkedCustomers[0]?.lead_context && (
+            <div style={{ fontSize: 10.5, color: "#4C8DFF", marginTop: 2 }}>
+              Facebook lead
+              {linkedCustomers[0].lead_context.submitted_at && ` · ${formatDateTime(new Date(linkedCustomers[0].lead_context.submitted_at))}`}
+              {(linkedCustomers[0].lead_context.ad_name || linkedCustomers[0].lead_context.campaign_name) && (
+                <> · {[linkedCustomers[0].lead_context.ad_name, linkedCustomers[0].lead_context.campaign_name].filter(Boolean).join(" / ")}</>
+              )}
+              {leadAnswerEntries(linkedCustomers[0].lead_context).map(({ label, value }) => ` · ${label}: ${value}`).join("")}
+            </div>
+          )}
         </div>
         <button onClick={() => onEdit(f)} title="Edit" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", flexShrink: 0 }}><Pencil size={14} /></button>
         <button onClick={() => onDelete(f.id)} title="Delete" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", flexShrink: 0 }}><Trash2 size={14} /></button>
@@ -423,7 +440,7 @@ export default function AtlasFollowUps({ onNavigate, navParams, currentPage = "f
       setLoadingData(true);
       const [followUpsResult, customersResult, vehiclesResult, jobsResult, invoicesResult] = await Promise.all([
         supabase.from("follow_ups").select("*").eq("business_id", businessId).order("due_date", { ascending: true, nullsFirst: false }),
-        supabase.from("customers").select("id, name, phone, email, notes").eq("business_id", businessId).order("name", { ascending: true }),
+        supabase.from("customers").select("id, name, phone, email, notes, source, lead_context").eq("business_id", businessId).order("name", { ascending: true }),
         supabase.from("vehicles").select("customer_id, label").eq("business_id", businessId),
         supabase.from("jobs").select("customer_id, status, scheduled_at").eq("business_id", businessId).eq("status", "completed"),
         supabase.from("invoices").select("customer_id, amount, status").eq("business_id", businessId).eq("status", "paid"),

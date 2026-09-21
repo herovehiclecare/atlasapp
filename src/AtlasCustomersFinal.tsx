@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { formatDate, downloadCsv, downloadIcs, resizeImageToDataUrl, useLiveClock, formatDateTime, directionsUrl, callHref, textHref } from "./lib";
+import { formatDate, downloadCsv, downloadIcs, resizeImageToDataUrl, useLiveClock, formatDateTime, directionsUrl, callHref, textHref, leadAnswerEntries } from "./lib";
 
 const P = {
   bg: "#06100C", bgTop: "#0B1813", surface: "#0F1B15", surfaceHover: "#132018",
@@ -456,14 +456,26 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, commApp,
             )}
           </div>
 
-          {customer.source === "facebook_lead_ads" && customer.lead_context && (customer.lead_context.ad_name || customer.lead_context.campaign_name) && (
-            <div title="Automatically captured from the Facebook Lead Ads webhook" style={{ display: "flex", alignItems: "center", gap: 8, background: "rgba(24,119,242,0.1)", border: "1px solid rgba(24,119,242,0.35)", borderRadius: 10, padding: "8px 12px", fontSize: 11.5, color: P.textSecondary }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: "#4C8DFF", textTransform: "uppercase", letterSpacing: "0.04em", flexShrink: 0 }}>Facebook lead</span>
-              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {customer.lead_context.ad_name && <>Ad: <strong style={{ color: P.textPrimary }}>{customer.lead_context.ad_name}</strong></>}
-                {customer.lead_context.ad_name && customer.lead_context.campaign_name && " · "}
-                {customer.lead_context.campaign_name && <>Campaign: <strong style={{ color: P.textPrimary }}>{customer.lead_context.campaign_name}</strong></>}
-              </span>
+          {customer.source === "facebook_lead_ads" && customer.lead_context && (
+            <div title="Automatically captured from the Facebook Lead Ads webhook" style={{ background: "rgba(24,119,242,0.1)", border: "1px solid rgba(24,119,242,0.35)", borderRadius: 10, padding: "10px 12px", fontSize: 11.5, color: P.textSecondary, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "#4C8DFF", textTransform: "uppercase", letterSpacing: "0.04em" }}>Facebook lead</span>
+                {customer.lead_context.submitted_at && <span style={{ fontSize: 11, color: P.textMuted }}>{formatDateTime(new Date(customer.lead_context.submitted_at))}</span>}
+              </div>
+              {(customer.lead_context.ad_name || customer.lead_context.campaign_name) && (
+                <div>
+                  {customer.lead_context.ad_name && <>Ad: <strong style={{ color: P.textPrimary }}>{customer.lead_context.ad_name}</strong></>}
+                  {customer.lead_context.ad_name && customer.lead_context.campaign_name && " · "}
+                  {customer.lead_context.campaign_name && <>Campaign: <strong style={{ color: P.textPrimary }}>{customer.lead_context.campaign_name}</strong></>}
+                </div>
+              )}
+              {leadAnswerEntries(customer.lead_context).length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 3, borderTop: "1px solid rgba(24,119,242,0.25)", paddingTop: 6, marginTop: 2 }}>
+                  {leadAnswerEntries(customer.lead_context).map(({ label, value }) => (
+                    <div key={label}>{label}: <strong style={{ color: P.textPrimary }}>{value}</strong></div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

@@ -38,6 +38,25 @@ export function formatDate(input) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+// Facebook Lead Ads field names are whatever a form's own questions are
+// keyed as (e.g. "vehicle_type", "preferred_contact_method") - this turns
+// that into a readable label without needing to hardcode a fixed question
+// set ahead of time, since different lead forms ask different things.
+export function prettifyFieldKey(key) {
+  return key.replace(/[_-]+/g, " ").replace(/\?$/, "").trim().replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Turns a Facebook lead's stored answers (customers.lead_context.answers,
+// whatever a form's own custom questions happened to be) into a display-
+// ready {label, value} list, for the Customer profile and Follow-ups pages
+// to render identically without duplicating this shaping logic.
+export function leadAnswerEntries(leadContext) {
+  if (!leadContext?.answers) return [];
+  return Object.entries(leadContext.answers)
+    .filter(([, value]) => value)
+    .map(([key, value]) => ({ label: prettifyFieldKey(key), value }));
+}
+
 // Real ids are UUIDs — this gives a short, human-readable reference (e.g. for
 // "Quote #A1B2C3D4") without displaying the full 36-character id everywhere.
 export function shortId(id) { return id ? id.slice(0, 8).toUpperCase() : "NEW"; }
