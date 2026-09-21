@@ -459,11 +459,11 @@ function formatJobDateTime(d) {
   };
 }
 
-function AddJobModal({ businessId, businessName, commApp, customers, vehicles, services, jobs, initialDate, initialCustomerId, job, onClose, onAdded, onDelete, onVehicleAdded }) {
+function AddJobModal({ businessId, businessName, commApp, customers, vehicles, services, jobs, initialDate, initialCustomerId, initialVehicleId, initialServiceIds, job, onClose, onAdded, onDelete, onVehicleAdded }) {
   const isEdit = !!job;
   const [customerId, setCustomerId] = useState(job?.customer_id || initialCustomerId || "");
-  const [vehicleId, setVehicleId] = useState(job?.vehicle_id || "");
-  const [serviceIds, setServiceIds] = useState(job?.service_ids || []);
+  const [vehicleId, setVehicleId] = useState(job?.vehicle_id || initialVehicleId || "");
+  const [serviceIds, setServiceIds] = useState(job?.service_ids || initialServiceIds || []);
   const [date, setDate] = useState(toInputDate(job ? new Date(job.scheduled_at) : (initialDate || new Date())));
   const [time, setTime] = useState(job ? toInputTime(new Date(job.scheduled_at)) : "09:00");
   const [status, setStatus] = useState(job?.status || "scheduled");
@@ -919,6 +919,12 @@ export default function AtlasSchedule({ onNavigate, navParams, currentPage = "sc
       const next = exists ? js.map((j) => (j.id === job.id ? job : j)) : [...js, job];
       return next.sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
     });
+    // Deep-linked here from QuickQuote's "Book job" (Pipeline stage move) -
+    // links the quote to the job it actually became, once the job is real
+    // (has a date/time), rather than at the moment the button was clicked.
+    if (!editingJob && navParams?.quoteId) {
+      supabase.from("quotes").update({ job_id: job.id }).eq("id", navParams.quoteId);
+    }
     // For a brand-new job the modal stays open — it switches itself to a
     // confirmation-text preview screen and closes only when dismissed from
     // there. Edits close immediately since there's no "just booked" moment.
@@ -1170,6 +1176,8 @@ export default function AtlasSchedule({ onNavigate, navParams, currentPage = "sc
           jobs={jobs}
           initialDate={addDate}
           initialCustomerId={navParams?.addJobForCustomerId}
+          initialVehicleId={navParams?.initialVehicleId}
+          initialServiceIds={navParams?.initialServiceIds}
           job={editingJob}
           onClose={closeJobModal}
           onAdded={handleAdded}

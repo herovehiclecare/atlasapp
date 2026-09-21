@@ -214,6 +214,7 @@ function hydrateQuote(row, vehiclesById) {
   return {
     id: row.id,
     status: row.status,
+    jobId: row.job_id || null,
     createdAt: formatDate(row.created_at),
     customer,
     customerName: customer?.name || "No customer",
@@ -348,13 +349,18 @@ function Card({ children, style }) {
   return <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, ...style }}>{children}</div>;
 }
 
+// Order also defines the pipeline board's column order (left to right).
+const PIPELINE_STAGES = [
+  { id: "draft", bg: "rgba(146,170,157,0.15)", color: P.textSecondary, label: "Draft" },
+  { id: "sent", bg: "rgba(76,141,255,0.15)", color: "#4C8DFF", label: "Sent" },
+  { id: "approved", bg: P.accentSoft, color: P.accent, label: "Approved" },
+  { id: "booked", bg: "rgba(155,107,255,0.15)", color: "#9B6BFF", label: "Booked" },
+];
+const LOST_STAGE = { id: "lost", bg: "rgba(255,107,94,0.14)", color: P.danger, label: "Lost" };
+const STAGE_BY_ID = Object.fromEntries([...PIPELINE_STAGES, LOST_STAGE].map((s) => [s.id, s]));
+
 function StatusBadge({ status }) {
-  const map = {
-    draft: { bg: "rgba(146,170,157,0.15)", color: P.textSecondary, label: "Draft" },
-    sent: { bg: "rgba(76,141,255,0.15)", color: "#4C8DFF", label: "Sent" },
-    approved: { bg: P.accentSoft, color: P.accent, label: "Approved" },
-  };
-  const s = map[status] || map.draft;
+  const s = STAGE_BY_ID[status] || STAGE_BY_ID.draft;
   return <span style={{ fontSize: 10.5, fontWeight: 700, color: s.color, background: s.bg, borderRadius: 20, padding: "3px 9px", textTransform: "uppercase", letterSpacing: "0.03em", flexShrink: 0 }}>{s.label}</span>;
 }
 
@@ -1141,7 +1147,40 @@ function StepSend({ channels, toggleChannel, sent, customer, depositLink, onAddT
 
 /* ---------------------------------- saved quotes ---------------------------------- */
 
-function SavedQuotesList({ quotes, loading, error, onView, onDelete, onDownloadPdf, onExportCSV, onNew }) {
+// Buttons for moving a quote to its next pipeline stage — shared between
+// the flat Saved list and the Pipeline board so the actions stay in sync.
+function StageActions({ q, onSetStatus, onBookJob, onViewJob }) {
+  const btnStyle = { display: "flex", alignItems: "center", gap: 5, border: "none", borderRadius: 7, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" };
+  if (q.status === "sent") {
+    return (
+      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        <button onClick={() => onSetStatus(q.id, "approved")} style={{ ...btnStyle, background: P.accentSoft, color: P.accent }}><Check size={12} /> Approved</button>
+        <button onClick={() => onSetStatus(q.id, "lost")} style={{ ...btnStyle, background: "rgba(255,107,94,0.14)", color: P.danger }}><X size={12} /> Lost</button>
+      </div>
+    );
+  }
+  if (q.status === "approved") {
+    return (
+      <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        <button onClick={() => onBookJob(q)} style={{ ...btnStyle, background: "rgba(155,107,255,0.15)", color: "#9B6BFF" }}><CalendarPlus size={12} /> Book job</button>
+        <button onClick={() => onSetStatus(q.id, "lost")} style={{ ...btnStyle, background: "rgba(255,107,94,0.14)", color: P.danger }}><X size={12} /> Lost</button>
+      </div>
+    );
+  }
+  if (q.status === "booked" && q.jobId) {
+    return (
+      <button onClick={() => onViewJob(q)} style={{ ...btnStyle, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary }}><Calendar size={12} /> View job</button>
+    );
+  }
+  if (q.status === "lost") {
+    return (
+      <button onClick={() => onSetStatus(q.id, "sent")} style={{ ...btnStyle, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary }}>Reopen</button>
+    );
+  }
+  return null;
+}
+
+function SavedQuotesList({ quotes, loading, error, onView, onDelete, onDownloadPdf, onExportCSV, onNew, onSetStatus, onBookJob, onViewJob }) {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
@@ -1188,6 +1227,7 @@ function SavedQuotesList({ quotes, loading, error, onView, onDelete, onDownloadP
               <div style={{ fontSize: 14, fontWeight: 700, color: P.textPrimary, flexShrink: 0, minWidth: 64, textAlign: "right" }}>
                 {q.totals.isRange ? `${money(q.totals.rangeLow)}–${money(q.totals.rangeHigh)}` : money(q.totals.total)}
               </div>
+              <StageActions q={q} onSetStatus={onSetStatus} onBookJob={onBookJob} onViewJob={onViewJob} />
               <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                 <button onClick={() => onView(q)} title="View / edit" style={{ background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 7, padding: 6, cursor: "pointer", display: "flex" }}><Eye size={13} /></button>
                 <button onClick={() => onDownloadPdf(q)} title="Download PDF" style={{ background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 7, padding: 6, cursor: "pointer", display: "flex" }}><Download size={13} /></button>
@@ -1197,6 +1237,69 @@ function SavedQuotesList({ quotes, loading, error, onView, onDelete, onDownloadP
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ---------------------------------- pipeline board ---------------------------------- */
+
+function PipelineCard({ q, onView, onSetStatus, onBookJob, onViewJob, i }) {
+  return (
+    <Card style={{ padding: "12px 13px", display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }} onClick={() => onView(q)}>
+        <div style={{ width: 26, height: 26, borderRadius: "50%", background: `${hue(i)}22`, color: hue(i), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10.5, fontWeight: 700, flexShrink: 0 }}>{initials(q.customerName)}</div>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 600, color: P.textPrimary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{q.customerName}</div>
+          <div style={{ fontSize: 10.5, color: P.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{q.vehicleSummary}</div>
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: P.textPrimary }}>
+          {q.totals.isRange ? `${money(q.totals.rangeLow)}–${money(q.totals.rangeHigh)}` : money(q.totals.total)}
+        </span>
+        <span style={{ fontSize: 10.5, color: P.textMuted }}>{q.createdAt}</span>
+      </div>
+      <StageActions q={q} onSetStatus={onSetStatus} onBookJob={onBookJob} onViewJob={onViewJob} />
+    </Card>
+  );
+}
+
+// Kanban-style board: each quote sits in exactly one column for its current
+// stage, so it's obvious at a glance where things are piling up (e.g. a lot
+// stuck in "Sent" means follow-ups are needed) — Draft/Sent/Approved/Booked
+// read left to right as the normal path; Lost sits off to the side as the
+// one stage a quote can drop out to instead of advancing.
+function QuotePipeline({ quotes, onView, onSetStatus, onBookJob, onViewJob }) {
+  const columns = [...PIPELINE_STAGES, LOST_STAGE];
+  return (
+    <div>
+      <div style={{ marginBottom: 16 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 700, color: P.textPrimary, margin: "0 0 4px" }}>Pipeline</h2>
+        <p style={{ fontSize: 13, color: P.textSecondary, margin: 0 }}>Every quote's stage, from first draft to booked job.</p>
+      </div>
+      <div style={{ display: "flex", gap: 14, overflowX: "auto", paddingBottom: 8 }}>
+        {columns.map((stage) => {
+          const items = quotes.filter((q) => q.status === stage.id);
+          return (
+            <div key={stage.id} style={{ flex: "0 0 240px", width: 240 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "0 2px" }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: stage.color, flexShrink: 0 }} />
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: P.textPrimary }}>{stage.label}</span>
+                <span style={{ fontSize: 11, color: P.textMuted }}>{items.length}</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, minHeight: 40 }}>
+                {items.length === 0 ? (
+                  <div style={{ fontSize: 11.5, color: P.textMuted, padding: "10px 2px" }}>—</div>
+                ) : (
+                  items.map((q, i) => (
+                    <PipelineCard key={q.id} q={q} i={i} onView={onView} onSetStatus={onSetStatus} onBookJob={onBookJob} onViewJob={onViewJob} />
+                  ))
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1897,6 +2000,38 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
     if (deleteErr) setSavedQuotes(previous);
   }
 
+  // Moves a quote to a new pipeline stage (e.g. Sent -> Approved, or either
+  // -> Lost). Optimistic like deleteQuote above, rolled back on failure.
+  async function setQuoteStatus(id, status) {
+    const previous = savedQuotes;
+    setSavedQuotes((qs) => qs.map((q) => (q.id === id ? { ...q, status } : q)));
+    const { error: updateErr } = await supabase.from("quotes").update({ status }).eq("id", id);
+    if (updateErr) setSavedQuotes(previous);
+  }
+
+  // "Book job": marks the quote Booked right away (the intent is decided),
+  // then hands off to Schedule pre-filled with everything already known -
+  // customer, vehicle, and the services from this quote's first vehicle
+  // (a tiered quote has no single "chosen" tier on record since that's
+  // decided over a call/text, so those just prefill the customer/vehicle
+  // and leave services to be picked). Schedule links the job back to this
+  // quote (quotes.job_id) once it's actually saved with a date/time.
+  function bookJob(q) {
+    setQuoteStatus(q.id, "booked");
+    const vehicle = q.vehicles[0];
+    const serviceIds = vehicle ? q.lineItems[vehicle.id] || [] : [];
+    onNavigate("schedule", {
+      addJobForCustomerId: q.customer?.id || null,
+      initialVehicleId: vehicle?.id || null,
+      initialServiceIds: serviceIds,
+      quoteId: q.id,
+    });
+  }
+
+  function viewJob(q) {
+    onNavigate("schedule", { editJobId: q.jobId });
+  }
+
   function resetQuote() {
     setCurrentQuoteId(null);
     setStep(0); setCustomer(null); setVehicles([]); setProposalMode("single"); setLineItems({}); setTiers([]); setAddons([]);
@@ -2008,6 +2143,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
             <div style={{ display: "flex", gap: 3, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: 3 }}>
               <button onClick={() => setView("new")} style={{ background: view === "new" ? P.accentSoft : "transparent", color: view === "new" ? P.accent : P.textSecondary, border: "none", borderRadius: 7, padding: "6px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>New quote</button>
               <button onClick={() => setView("saved")} style={{ background: view === "saved" ? P.accentSoft : "transparent", color: view === "saved" ? P.accent : P.textSecondary, border: "none", borderRadius: 7, padding: "6px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Saved ({savedQuotes.length})</button>
+              <button onClick={() => setView("pipeline")} style={{ background: view === "pipeline" ? P.accentSoft : "transparent", color: view === "pipeline" ? P.accent : P.textSecondary, border: "none", borderRadius: 7, padding: "6px 12px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>Pipeline</button>
             </div>
             <button onClick={() => setShowBusinessPanel(true)} title="Deposit link & sales script" style={{ display: "flex", alignItems: "center", gap: 6, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "7px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
               <Settings2 size={13} /> Quote settings
@@ -2017,7 +2153,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
           {view === "new" && <Stepper step={step} />}
         </div>
 
-        <div style={{ padding: "22px 24px", maxWidth: view === "saved" ? 760 : 640 }}>
+        <div style={{ padding: "22px 24px", maxWidth: view === "saved" ? 760 : view === "pipeline" ? "none" : 640 }}>
           {view === "saved" ? (
             <SavedQuotesList
               quotes={savedQuotes}
@@ -2028,7 +2164,12 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
               onDownloadPdf={(q) => downloadQuotePdf(q)}
               onExportCSV={() => downloadText(`atlas-quotes-${Date.now()}.csv`, quotesToCSV(savedQuotes), "text/csv")}
               onNew={() => { resetQuote(); setView("new"); }}
+              onSetStatus={setQuoteStatus}
+              onBookJob={bookJob}
+              onViewJob={viewJob}
             />
+          ) : view === "pipeline" ? (
+            <QuotePipeline quotes={savedQuotes} onView={openQuote} onSetStatus={setQuoteStatus} onBookJob={bookJob} onViewJob={viewJob} />
           ) : loading ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "40px 0", color: P.textMuted, fontSize: 13 }}>
               <Loader2 size={15} className="animate-spin" /> Loading…
