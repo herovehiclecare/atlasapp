@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { formatDate, downloadCsv, downloadIcs, resizeImageToDataUrl, useLiveClock, formatDateTime, directionsUrl, callHref, textHref, leadAnswerEntries } from "./lib";
+import { formatDate, downloadCsv, downloadIcs, resizeImageToDataUrl, useLiveClock, formatDateTime, directionsUrl, callHref, textHref, leadAnswerEntries, completeOpenFollowUps } from "./lib";
 
 const P = {
   bg: "#06100C", bgTop: "#0B1813", surface: "#0F1B15", surfaceHover: "#132018",
@@ -367,7 +367,10 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, commApp,
       .select()
       .single();
     setLoggingContact("");
-    if (!error && data) onUpdated?.(data);
+    if (!error && data) {
+      onUpdated?.(data);
+      completeOpenFollowUps(supabase, customer.id);
+    }
   }
 
   async function handleAddFollowUp(e) {

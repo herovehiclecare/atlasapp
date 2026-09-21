@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { formatDate, shortId, findService, svcPrice, resizeImageToDataUrl, urlToDataUri } from "./lib";
+import { formatDate, shortId, findService, svcPrice, resizeImageToDataUrl, urlToDataUri, completeOpenFollowUps } from "./lib";
 
 pdfMake.vfs = pdfFonts;
 
@@ -2100,6 +2100,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
     if (sendErr) { setSaveError(sendErr.message); return; }
     setSent(true);
     setLastSent({ ...data, photos, notes });
+    completeOpenFollowUps(supabase, customer?.id);
   }
 
   const allVehiclesHaveService = vehicles.length > 0 && vehicles.every((v) => (lineItems[v.id] || []).length > 0);

@@ -42,6 +42,23 @@ export function formatDate(input) {
 // keyed as (e.g. "vehicle_type", "preferred_contact_method") - this turns
 // that into a readable label without needing to hardcode a fixed question
 // set ahead of time, since different lead forms ask different things.
+// Auto-completes any open follow-up for a customer when a real, trackable
+// action happens for them elsewhere in Atlas (a quote sent, an invoice
+// created, a call/text/email logged) - so "mark as done" isn't a separate
+// manual step duplicating something the app already knows happened. Never
+// throws - a follow-up staying open on a failed update isn't worth failing
+// the action that triggered this.
+export async function completeOpenFollowUps(supabase, customerId) {
+  if (!customerId) return;
+  try {
+    await supabase
+      .from("follow_ups")
+      .update({ status: "done", completed_at: new Date().toISOString() })
+      .eq("status", "pending")
+      .contains("customer_ids", [customerId]);
+  } catch {}
+}
+
 export function prettifyFieldKey(key) {
   return key.replace(/[_-]+/g, " ").replace(/\?$/, "").trim().replace(/\b\w/g, (c) => c.toUpperCase());
 }

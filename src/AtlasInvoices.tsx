@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
-import { formatDate, downloadCsv, shortId, uploadImages, parseDate, findService, svcPrice, resizeImageToDataUrl, useLiveClock, formatDateTime, urlToDataUri, readDraft, clearDraft, useDraftAutosave } from "./lib";
+import { formatDate, downloadCsv, shortId, uploadImages, parseDate, findService, svcPrice, resizeImageToDataUrl, useLiveClock, formatDateTime, urlToDataUri, readDraft, clearDraft, useDraftAutosave, completeOpenFollowUps } from "./lib";
 
 pdfMake.vfs = pdfFonts;
 
@@ -407,6 +407,7 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
       return;
     }
     if (!isEdit && draftKey) clearDraft(draftKey);
+    if (!isEdit) completeOpenFollowUps(supabase, customerId);
     onSaved(data, isEdit);
   }
 
