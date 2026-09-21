@@ -287,10 +287,11 @@ function ContactActionRow({ customer, context, contacted, onToggle, commApp }) {
         <div style={{ fontSize: 11, color: P.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{customer.phone || customer.email || "No contact info on file"}</div>
         <div style={{ fontSize: 10.5, color: P.textSecondary, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatContextLine(context)}</div>
         {customer.notes && <div style={{ fontSize: 10.5, color: P.textMuted, marginTop: 2, fontStyle: "italic", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>"{customer.notes}"</div>}
-        {customer.source === "facebook_lead_ads" && customer.lead_context && (
+        {(customer.source === "facebook_lead_ads" || customer.source === "facebook_messenger") && customer.lead_context && (
           <div style={{ fontSize: 10.5, color: "#4C8DFF", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            Facebook lead
+            {customer.source === "facebook_messenger" ? "Facebook Messenger" : "Facebook lead"}
             {customer.lead_context.submitted_at && ` · ${formatDateTime(new Date(customer.lead_context.submitted_at))}`}
+            {customer.lead_context.last_message && ` · "${customer.lead_context.last_message}"`}
             {leadAnswerEntries(customer.lead_context).map(({ label, value }) => ` · ${label}: ${value}`).join("")}
           </div>
         )}
@@ -380,10 +381,11 @@ function FollowUpRow({ f, customersById, contextById, onToggle, onEdit, onDelete
           {!multiple && linkedCustomers[0]?.notes && (
             <div style={{ fontSize: 10.5, color: P.textMuted, marginTop: 2, fontStyle: "italic" }}>"{linkedCustomers[0].notes}"</div>
           )}
-          {!multiple && linkedCustomers[0]?.source === "facebook_lead_ads" && linkedCustomers[0]?.lead_context && (
+          {!multiple && (linkedCustomers[0]?.source === "facebook_lead_ads" || linkedCustomers[0]?.source === "facebook_messenger") && linkedCustomers[0]?.lead_context && (
             <div style={{ fontSize: 10.5, color: "#4C8DFF", marginTop: 2 }}>
-              Facebook lead
+              {linkedCustomers[0].source === "facebook_messenger" ? "Facebook Messenger" : "Facebook lead"}
               {linkedCustomers[0].lead_context.submitted_at && ` · ${formatDateTime(new Date(linkedCustomers[0].lead_context.submitted_at))}`}
+              {linkedCustomers[0].lead_context.last_message && ` · "${linkedCustomers[0].lead_context.last_message}"`}
               {(linkedCustomers[0].lead_context.ad_name || linkedCustomers[0].lead_context.campaign_name) && (
                 <> · {[linkedCustomers[0].lead_context.ad_name, linkedCustomers[0].lead_context.campaign_name].filter(Boolean).join(" / ")}</>
               )}

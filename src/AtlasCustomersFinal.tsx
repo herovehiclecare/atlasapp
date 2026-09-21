@@ -459,12 +459,15 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, commApp,
             )}
           </div>
 
-          {customer.source === "facebook_lead_ads" && customer.lead_context && (
-            <div title="Automatically captured from the Facebook Lead Ads webhook" style={{ background: "rgba(24,119,242,0.1)", border: "1px solid rgba(24,119,242,0.35)", borderRadius: 10, padding: "10px 12px", fontSize: 11.5, color: P.textSecondary, display: "flex", flexDirection: "column", gap: 6 }}>
+          {(customer.source === "facebook_lead_ads" || customer.source === "facebook_messenger") && customer.lead_context && (
+            <div title={`Automatically captured from ${customer.source === "facebook_messenger" ? "Facebook Messenger" : "the Facebook Lead Ads webhook"}`} style={{ background: "rgba(24,119,242,0.1)", border: "1px solid rgba(24,119,242,0.35)", borderRadius: 10, padding: "10px 12px", fontSize: 11.5, color: P.textSecondary, display: "flex", flexDirection: "column", gap: 6 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#4C8DFF", textTransform: "uppercase", letterSpacing: "0.04em" }}>Facebook lead</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "#4C8DFF", textTransform: "uppercase", letterSpacing: "0.04em" }}>{customer.source === "facebook_messenger" ? "Facebook Messenger" : "Facebook lead"}</span>
                 {customer.lead_context.submitted_at && <span style={{ fontSize: 11, color: P.textMuted }}>{formatDateTime(new Date(customer.lead_context.submitted_at))}</span>}
               </div>
+              {customer.lead_context.last_message && (
+                <div style={{ fontStyle: "italic" }}>"{customer.lead_context.last_message}"</div>
+              )}
               {(customer.lead_context.ad_name || customer.lead_context.campaign_name) && (
                 <div>
                   {customer.lead_context.ad_name && <>Ad: <strong style={{ color: P.textPrimary }}>{customer.lead_context.ad_name}</strong></>}
