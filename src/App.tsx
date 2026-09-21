@@ -60,6 +60,11 @@ function LeadToast({ lead, onView, onDismiss }) {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: "#EDF6F1" }}>New Facebook lead</div>
         <div style={{ fontSize: 12.5, color: "#92AA9D", marginTop: 2 }}>{lead.name || "A new lead"} just came in — reach out fast.</div>
+        {lead.created_at && (
+          <div style={{ fontSize: 11, color: "#566B5E", marginTop: 2 }}>
+            {new Date(lead.created_at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+          </div>
+        )}
         <button
           onClick={onView}
           style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: "#18D97A", background: "none", border: "none", padding: 0, cursor: "pointer" }}

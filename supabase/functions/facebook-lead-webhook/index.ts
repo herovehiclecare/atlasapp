@@ -88,11 +88,16 @@ async function sendLeadAlertText(name: string, phone: string | null) {
   try {
     const who = name && name !== "Facebook lead" ? name : "Someone";
     const contact = phone ? ` (${phone})` : "";
+    // Hardcoded to Detail Hero's own timezone (Orlando, FL) rather than a
+    // stored setting, same single-business simplification as
+    // ATLAS_BUSINESS_ID above - the alert reads oddly without a local time,
+    // since "just now" isn't visible once a text sits unread for a while.
+    const time = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }).format(new Date());
     const res = await fetch("https://api.openphone.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: OPENPHONE_API_KEY },
       body: JSON.stringify({
-        content: `New Facebook lead: ${who}${contact}. Reach out ASAP! Check Atlas for details.`,
+        content: `New Facebook lead at ${time}: ${who}${contact}. Reach out ASAP! Check Atlas for details.`,
         from: OPENPHONE_FROM_NUMBER,
         to: [OWNER_ALERT_PHONE],
       }),
