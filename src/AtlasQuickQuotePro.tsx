@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import pdfMake from "pdfmake/build/pdfmake";
 import pdfFonts from "pdfmake/build/vfs_fonts";
+import html2canvas from "html2canvas";
 import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings, Sparkles,
   MoreHorizontal, Pencil, Camera, Check, ChevronLeft, ChevronRight,
@@ -229,6 +230,7 @@ function hydrateQuote(row, vehiclesById) {
     taxRate: Number(row.tax_rate) || 0,
     totals: row.totals && Object.keys(row.totals).length ? row.totals : { subtotal: 0, tax: 0, total: 0, isRange: false },
     description: row.description || "",
+    serviceOverrides: row.service_overrides || {},
   };
 }
 
@@ -431,7 +433,7 @@ function TierBuilder({ vehicle, services, addonsAll, tiers, taxRate, onAddTier, 
   );
 }
 
-function TiersPreview({ tiers, vehicle, services, addonsAll, taxRate, light }) {
+function TiersPreview({ tiers, vehicle, services, addonsAll, taxRate, light, editable, onEditService }) {
   const textPrimary = light ? "#111" : P.textPrimary;
   const textMuted = light ? "#555" : P.textMuted;
   const border = light ? "#ddd" : P.border;
@@ -440,17 +442,25 @@ function TiersPreview({ tiers, vehicle, services, addonsAll, taxRate, light }) {
       <style>{`@media (max-width: 640px) { .tiers-preview-grid { grid-template-columns: 1fr !important; } }`}</style>
       {tiers.map((tier) => {
         const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, taxRate);
-        const names = [
-          ...tier.packageIds.map((id) => findService(services, id)?.name).filter(Boolean),
-          ...tier.addonIds.map((id) => findAddon(addonsAll, id)?.name).filter(Boolean),
-        ];
+        const addonNames = tier.addonIds.map((id) => findAddon(addonsAll, id)?.name).filter(Boolean);
         return (
           <div key={tier.id} style={{ border: `1px solid ${border}`, borderRadius: 12, padding: "14px 12px", background: light ? "#fff" : P.surface }}>
             <div style={{ fontSize: 12.5, fontWeight: 700, color: textPrimary, marginBottom: 4, textAlign: "center" }}>{tier.name}</div>
             <div style={{ fontSize: 18, fontWeight: 800, color: light ? textPrimary : P.accent, textAlign: "center", marginBottom: 10 }}>{money(total)}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {names.map((n, i) => (
-                <div key={i} style={{ fontSize: 11, color: textMuted, textAlign: "center" }}>{n}</div>
+              {tier.packageIds.map((id) => {
+                const name = findService(services, id)?.name;
+                if (!name) return null;
+                return editable ? (
+                  <button key={id} onClick={() => onEditService(id)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, fontSize: 11, color: P.accent, textAlign: "center", background: "transparent", border: "none", padding: "2px 0", cursor: "pointer" }}>
+                    <Pencil size={9} /> {name}
+                  </button>
+                ) : (
+                  <div key={id} style={{ fontSize: 11, color: textMuted, textAlign: "center" }}>{name}</div>
+                );
+              })}
+              {addonNames.map((n, i) => (
+                <div key={`addon-${i}`} style={{ fontSize: 11, color: textMuted, textAlign: "center" }}>{n}</div>
               ))}
             </div>
           </div>
@@ -875,19 +885,73 @@ function StepPhotos({ photos, addPhoto, removePhoto, notes, setNotes }) {
 
 /* ---------------------------------- step 6: review ---------------------------------- */
 
+// Lets a service's description/what's-included be tweaked for this one
+// quote only, without touching the shared catalog entry in Settings — e.g.
+// calling out something specific to this customer's vehicle, or trimming a
+// bullet that doesn't apply this time.
+function ServiceOverrideEditor({ serviceId, services, overrides, onSave, onReset, onClose }) {
+  const info = effectiveServiceInfo(serviceId, services, overrides);
+  const hasOverride = !!overrides?.[serviceId];
+  const [description, setDescription] = useState(info.description);
+  const [includesText, setIncludesText] = useState(info.includes.join("\n"));
+
+  function save() {
+    onSave(serviceId, {
+      description: description.trim(),
+      includes: includesText.split("\n").map((l) => l.trim()).filter(Boolean),
+    });
+    onClose();
+  }
+  function reset() {
+    onReset(serviceId);
+    onClose();
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 55, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: P.bgTop, border: `1px solid ${P.border}`, borderRadius: 16, padding: 22, maxWidth: 440, width: "100%", maxHeight: "85vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: P.textPrimary, margin: 0 }}>Edit "{info.name}" for this quote</h3>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", display: "flex" }}><X size={18} /></button>
+        </div>
+        <p style={{ fontSize: 11.5, color: P.textMuted, margin: "0 0 16px" }}>Only affects this quote — the service in Settings stays the same.</p>
+
+        <label style={{ fontSize: 12, fontWeight: 600, color: P.textSecondary, display: "block", marginBottom: 6 }}>Description</label>
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} style={{ width: "100%", background: P.surface, border: `1px solid ${P.border}`, borderRadius: 9, padding: "9px 12px", color: P.textPrimary, fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit", lineHeight: 1.5, marginBottom: 16 }} />
+
+        <label style={{ fontSize: 12, fontWeight: 600, color: P.textSecondary, display: "block", marginBottom: 6 }}>What's included (one per line)</label>
+        <textarea value={includesText} onChange={(e) => setIncludesText(e.target.value)} rows={5} style={{ width: "100%", background: P.surface, border: `1px solid ${P.border}`, borderRadius: 9, padding: "9px 12px", color: P.textPrimary, fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }} />
+
+        <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+          {hasOverride && (
+            <button onClick={reset} style={{ background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "10px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              Reset to default
+            </button>
+          )}
+          <button onClick={save} style={{ flex: 1, background: `linear-gradient(120deg, ${P.accent}, ${P.secondary})`, color: P.bg, border: "none", borderRadius: 9, padding: "10px 16px", fontSize: 13.5, fontWeight: 700, cursor: "pointer" }}>
+            Save for this quote
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StepReview({
   customer, vehicles, services, addonsAll, lineItems, addons, discount, discountLabel, taxRate, totals,
   description, setDescription, generateDescription, generating,
   scriptDisplay, onScriptChange, onCopyScript, scriptCopied, depositLink,
   scriptEnabled, onToggleScript,
-  onSaveDraft, draftSaved, savingDraft, saveError, onDownloadPdf, onPreview,
+  onSaveDraft, draftSaved, savingDraft, saveError, onDownloadPdf, onSaveImage, savingImage, onPreview,
   proposalMode, tiers, quoteId,
   onTogglePackage, onToggleAddon, onEditServices,
+  serviceOverrides, onSaveServiceOverride, onResetServiceOverride,
 }) {
   // Last-chance edits without leaving Review: each line can be pulled off the
   // quote right here, and "Edit services" jumps back to the full picker for
   // anything bigger (adding a service, switching a vehicle's selections).
   const [editing, setEditing] = useState(false);
+  const [editingServiceId, setEditingServiceId] = useState(null);
   return (
     <div>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
@@ -904,6 +968,9 @@ function StepReview({
           </button>
           <button onClick={onDownloadPdf} style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 8, padding: "6px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
             <Download size={12} /> PDF
+          </button>
+          <button onClick={onSaveImage} disabled={savingImage} style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 8, padding: "6px 10px", fontSize: 11.5, fontWeight: 600, cursor: savingImage ? "default" : "pointer", whiteSpace: "nowrap" }}>
+            {savingImage ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12} />} Image
           </button>
         </div>
       </div>
@@ -938,10 +1005,15 @@ function StepReview({
 
         {proposalMode === "tiered" ? (
           <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${P.border}` }}>
-            <div style={{ fontSize: 11.5, fontWeight: 700, color: P.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
-              {tiers.length} options — {money(totals.rangeLow)}–{money(totals.rangeHigh)}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: P.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                {tiers.length} options — {money(totals.rangeLow)}–{money(totals.rangeHigh)}
+              </span>
+              <button onClick={() => setEditing((v) => !v)} style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "none", color: editing ? P.accent : P.textSecondary, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>
+                <Pencil size={11} /> {editing ? "Done" : "Edit descriptions"}
+              </button>
             </div>
-            <TiersPreview tiers={tiers} vehicle={vehicles[0]} services={services} addonsAll={addonsAll} taxRate={taxRate} />
+            <TiersPreview tiers={tiers} vehicle={vehicles[0]} services={services} addonsAll={addonsAll} taxRate={taxRate} editable={editing} onEditService={setEditingServiceId} />
           </div>
         ) : (
           <>
@@ -975,9 +1047,14 @@ function StepReview({
                             <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
                               <span style={{ color: P.textPrimary, fontWeight: 600 }}>${svcPrice(p, v)}</span>
                               {editing && (
-                                <button onClick={() => onTogglePackage(v.id, id)} title={`Remove ${p?.name || "this service"}`} style={{ display: "flex", background: "transparent", border: "none", color: P.danger, cursor: "pointer", padding: 0 }}>
-                                  <X size={13} />
-                                </button>
+                                <>
+                                  <button onClick={() => setEditingServiceId(id)} title={`Edit description for ${p?.name || "this service"}`} style={{ display: "flex", background: "transparent", border: "none", color: P.accent, cursor: "pointer", padding: 0 }}>
+                                    <Pencil size={12} />
+                                  </button>
+                                  <button onClick={() => onTogglePackage(v.id, id)} title={`Remove ${p?.name || "this service"}`} style={{ display: "flex", background: "transparent", border: "none", color: P.danger, cursor: "pointer", padding: 0 }}>
+                                    <X size={13} />
+                                  </button>
+                                </>
                               )}
                             </span>
                           </div>
@@ -1066,13 +1143,24 @@ function StepReview({
           <p style={{ fontSize: 11.5, color: P.textMuted, fontStyle: "italic", margin: 0 }}>Off for this quote — your text is still here, toggle back on to see it.</p>
         )}
       </Card>
+
+      {editingServiceId && (
+        <ServiceOverrideEditor
+          serviceId={editingServiceId}
+          services={services}
+          overrides={serviceOverrides}
+          onSave={onSaveServiceOverride}
+          onReset={onResetServiceOverride}
+          onClose={() => setEditingServiceId(null)}
+        />
+      )}
     </div>
   );
 }
 
 /* ---------------------------------- step 7: send ---------------------------------- */
 
-function StepSend({ channels, toggleChannel, sent, customer, depositLink, onAddToCalendar, onSaveContact, onDownloadPdf, onPreview, proposalMode, tierCount }) {
+function StepSend({ channels, toggleChannel, sent, customer, depositLink, onAddToCalendar, onSaveContact, onDownloadPdf, onSaveImage, savingImage, onPreview, proposalMode, tierCount }) {
   if (sent) {
     return (
       <div style={{ textAlign: "center", padding: "36px 0" }}>
@@ -1098,6 +1186,9 @@ function StepSend({ channels, toggleChannel, sent, customer, depositLink, onAddT
           </button>
           <button onClick={onDownloadPdf} style={{ display: "flex", alignItems: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "9px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
             <Download size={14} /> Download PDF
+          </button>
+          <button onClick={onSaveImage} disabled={savingImage} style={{ display: "flex", alignItems: "center", gap: 6, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 9, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, cursor: savingImage ? "default" : "pointer" }}>
+            {savingImage ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />} {savingImage ? "Saving…" : "Save as image"}
           </button>
         </div>
       </div>
@@ -1180,7 +1271,7 @@ function StageActions({ q, onSetStatus, onBookJob, onViewJob }) {
   return null;
 }
 
-function SavedQuotesList({ quotes, loading, error, onView, onDelete, onDownloadPdf, onExportCSV, onNew, onSetStatus, onBookJob, onViewJob }) {
+function SavedQuotesList({ quotes, loading, error, onView, onDelete, onDownloadPdf, onSaveImage, onExportCSV, onNew, onSetStatus, onBookJob, onViewJob }) {
   return (
     <div>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
@@ -1231,6 +1322,7 @@ function SavedQuotesList({ quotes, loading, error, onView, onDelete, onDownloadP
               <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                 <button onClick={() => onView(q)} title="View / edit" style={{ background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 7, padding: 6, cursor: "pointer", display: "flex" }}><Eye size={13} /></button>
                 <button onClick={() => onDownloadPdf(q)} title="Download PDF" style={{ background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 7, padding: 6, cursor: "pointer", display: "flex" }}><Download size={13} /></button>
+                <button onClick={() => onSaveImage(q)} title="Save as image" style={{ background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 7, padding: 6, cursor: "pointer", display: "flex" }}><ImageIcon size={13} /></button>
                 <button onClick={() => onDelete(q.id)} title="Delete" style={{ background: "transparent", border: `1px solid ${P.border}`, color: P.danger, borderRadius: 7, padding: 6, cursor: "pointer", display: "flex" }}><Trash2 size={13} /></button>
               </div>
             </Card>
@@ -1388,6 +1480,20 @@ function tierDescription(tier, services, addonsAll) {
   return names.length ? `Includes ${names.join(", ")}.` : "No items selected yet.";
 }
 
+// A service's description/includes as they should actually be shown on a
+// specific quote - a per-quote override (edited from Review) if one exists,
+// otherwise whatever's configured on the service in Settings. Overrides
+// never touch the shared catalog service itself, only this one quote.
+function effectiveServiceInfo(serviceId, services, overrides) {
+  const service = findService(services, serviceId);
+  const o = overrides?.[serviceId];
+  return {
+    name: service?.name || "Service",
+    description: o?.description ?? service?.description ?? "",
+    includes: o?.includes ?? service?.includes ?? [],
+  };
+}
+
 function closingNote(proposalMode) {
   return proposalMode === "tiered"
     ? "Let me know which option works best for you!"
@@ -1421,19 +1527,31 @@ function PrintableQuote({ q, services, addonsAll, business, id = "atlas-print-ro
         {tiered ? (
           q.tiers.map((tier, i) => {
             const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, q.taxRate);
-            const names = [
-              ...tier.packageIds.map((id) => findService(services, id)?.name),
-              ...tier.addonIds.map((id) => findAddon(addonsAll, id)?.name),
-            ].filter(Boolean);
+            const addonNames = tier.addonIds.map((id) => findAddon(addonsAll, id)?.name).filter(Boolean);
             return (
-              <div key={tier.id} style={{ marginBottom: i < q.tiers.length - 1 ? 14 : 0 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700 }}>
+              <div key={tier.id} style={{ marginBottom: i < q.tiers.length - 1 ? 16 : 0 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, marginBottom: 6 }}>
                   <span>{tier.name}</span><span>{money(total)}</span>
                 </div>
-                <p style={{ margin: "3px 0 6px", fontSize: 11.5, color: "#555" }}>{tierDescription(tier, services, addonsAll)}</p>
-                <ul style={{ margin: 0, paddingLeft: 16 }}>
-                  {names.map((n, j) => <li key={j} style={{ fontSize: 12, color: "#333" }}>{n}</li>)}
-                </ul>
+                {tier.packageIds.map((id) => {
+                  const info = effectiveServiceInfo(id, services, q.serviceOverrides);
+                  return (
+                    <div key={id} style={{ marginBottom: 8, paddingLeft: 4 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#222" }}>{info.name}</div>
+                      {info.description && <p style={{ margin: "2px 0 0", fontSize: 10.5, color: "#777", lineHeight: 1.5 }}>{info.description}</p>}
+                      {info.includes.length > 0 && (
+                        <ul style={{ margin: "4px 0 0", paddingLeft: 16 }}>
+                          {info.includes.map((line, k) => <li key={k} style={{ fontSize: 10.5, color: "#777", lineHeight: 1.5 }}>{line}</li>)}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
+                {addonNames.length > 0 && (
+                  <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
+                    {addonNames.map((n, j) => <li key={j} style={{ fontSize: 11.5, color: "#333" }}>{n}</li>)}
+                  </ul>
+                )}
               </div>
             );
           })
@@ -1447,17 +1565,18 @@ function PrintableQuote({ q, services, addonsAll, business, id = "atlas-print-ro
                   {q.vehicles.length > 1 && <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6 }}>{v.label}</div>}
                   {ids.map((id) => {
                     const p = findService(services, id);
+                    const info = effectiveServiceInfo(id, services, q.serviceOverrides);
                     return (
                       <div key={id} style={{ marginBottom: 8 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
-                          <span style={{ fontWeight: 600 }}>{p?.name}</span><span style={{ fontWeight: 600 }}>${svcPrice(p, v)}</span>
+                          <span style={{ fontWeight: 600 }}>{info.name}</span><span style={{ fontWeight: 600 }}>${svcPrice(p, v)}</span>
                         </div>
-                        {p?.description && (
-                          <p style={{ margin: "3px 0 0", fontSize: 10.5, color: "#777", lineHeight: 1.5 }}>{p.description}</p>
+                        {info.description && (
+                          <p style={{ margin: "3px 0 0", fontSize: 10.5, color: "#777", lineHeight: 1.5 }}>{info.description}</p>
                         )}
-                        {p?.includes?.length > 0 && (
+                        {info.includes.length > 0 && (
                           <ul style={{ margin: "4px 0 0", paddingLeft: 16 }}>
-                            {p.includes.map((line, k) => <li key={k} style={{ fontSize: 10.5, color: "#777", lineHeight: 1.5 }}>{line}</li>)}
+                            {info.includes.map((line, k) => <li key={k} style={{ fontSize: 10.5, color: "#777", lineHeight: 1.5 }}>{line}</li>)}
                           </ul>
                         )}
                       </div>
@@ -1484,16 +1603,11 @@ function PrintableQuote({ q, services, addonsAll, business, id = "atlas-print-ro
       </PrintSection>
 
       {tiered ? (
-        <PrintSection label="Choose One Of These Options">
-          {q.tiers.map((tier) => {
-            const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, q.taxRate);
-            return (
-              <div key={tier.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, padding: "4px 0" }}>
-                <span>{tier.name}</span><span style={{ fontWeight: 700 }}>{money(total)}</span>
-              </div>
-            );
-          })}
-        </PrintSection>
+        // Each tier's name and price is already shown at the top of its own
+        // block in "What's Included" above - repeating a summary of the same
+        // names/prices here was a straight duplicate, not a second real
+        // section, so there's nothing else to show for tiered mode here.
+        null
       ) : (
         <div style={{ marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6 }}>
@@ -1608,20 +1722,27 @@ async function buildQuotePdfDoc(q, services, addonsAll, business) {
 
     ...pdfSection("What's Included", pdfBox(
       tiered
-        ? q.tiers.map((tier, i) => {
+        ? q.tiers.flatMap((tier, i) => {
             const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, q.taxRate);
-            const names = [
-              ...tier.packageIds.map((id) => findService(services, id)?.name),
-              ...tier.addonIds.map((id) => findAddon(addonsAll, id)?.name),
-            ].filter(Boolean);
-            return {
+            const addonNames = tier.addonIds.map((id) => findAddon(addonsAll, id)?.name).filter(Boolean);
+            return [{
               stack: [
-                { columns: [{ text: tier.name, bold: true, fontSize: 12 }, { text: money(total), bold: true, fontSize: 12, alignment: "right" }] },
-                { text: tierDescription(tier, services, addonsAll), fontSize: 10, color: "#555555", margin: [0, 3, 0, 5] },
-                ...(names.length ? [{ ul: names, fontSize: 10.5, color: "#333333" }] : []),
+                { columns: [{ text: tier.name, bold: true, fontSize: 12 }, { text: money(total), bold: true, fontSize: 12, alignment: "right" }], margin: [0, 0, 0, 5] },
+                ...tier.packageIds.flatMap((id) => {
+                  const info = effectiveServiceInfo(id, services, q.serviceOverrides);
+                  return [{
+                    stack: [
+                      { text: info.name, bold: true, fontSize: 10.5 },
+                      ...(info.description ? [{ text: info.description, fontSize: 9.5, color: "#777777", margin: [0, 2, 0, 0] }] : []),
+                      ...(info.includes.length > 0 ? [{ ul: info.includes, fontSize: 9.5, color: "#777777", margin: [0, 2, 0, 0] }] : []),
+                    ],
+                    margin: [0, 0, 0, 6],
+                  }];
+                }),
+                ...(addonNames.length ? [{ ul: addonNames, fontSize: 10, color: "#333333", margin: [0, 0, 0, 0] }] : []),
               ],
               margin: [0, 0, 0, i < q.tiers.length - 1 ? 12 : 0],
-            };
+            }];
           })
         : q.vehicles.flatMap((v) => {
             const ids = q.lineItems[v.id] || [];
@@ -1630,11 +1751,12 @@ async function buildQuotePdfDoc(q, services, addonsAll, business) {
             if (q.vehicles.length > 1) rows.push({ text: v.label, bold: true, fontSize: 11, margin: [0, 0, 0, 5] });
             ids.forEach((id) => {
               const p = findService(services, id);
+              const info = effectiveServiceInfo(id, services, q.serviceOverrides);
               rows.push({
                 stack: [
-                  { columns: [{ text: p?.name || "Service", bold: true, fontSize: 11 }, { text: `$${svcPrice(p, v)}`, bold: true, fontSize: 11, alignment: "right" }] },
-                  ...(p?.description ? [{ text: p.description, fontSize: 9.5, color: "#777777", margin: [0, 3, 0, 0] }] : []),
-                  ...(p?.includes?.length > 0 ? [{ ul: p.includes, fontSize: 9.5, color: "#777777", margin: [0, 3, 0, 0] }] : []),
+                  { columns: [{ text: info.name, bold: true, fontSize: 11 }, { text: `$${svcPrice(p, v)}`, bold: true, fontSize: 11, alignment: "right" }] },
+                  ...(info.description ? [{ text: info.description, fontSize: 9.5, color: "#777777", margin: [0, 3, 0, 0] }] : []),
+                  ...(info.includes.length > 0 ? [{ ul: info.includes, fontSize: 9.5, color: "#777777", margin: [0, 3, 0, 0] }] : []),
                 ],
                 margin: [0, 0, 0, 8],
               });
@@ -1644,16 +1766,7 @@ async function buildQuotePdfDoc(q, services, addonsAll, business) {
     )),
 
     ...(tiered
-      ? pdfSection("Choose One Of These Options", pdfBox(
-          q.tiers.map((tier, i) => {
-            const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, q.taxRate);
-            return {
-              columns: [{ text: tier.name, fontSize: 11, color: "#ffffff" }, { text: money(total), bold: true, fontSize: 11, color: "#ffffff", alignment: "right" }],
-              margin: [0, 4, 0, i < q.tiers.length - 1 ? 4 : 0],
-            };
-          }),
-          "#1C1E24"
-        ))
+      ? []
       : [
           { columns: [{ text: "Subtotal", fontSize: 11 }, { text: `$${q.totals.subtotal.toFixed(2)}`, fontSize: 11, alignment: "right" }], margin: [0, 0, 0, 5] },
           ...(q.discount > 0 ? [{ columns: [{ text: "Discount", fontSize: 11 }, { text: `-$${q.discount}`, fontSize: 11, alignment: "right" }], margin: [0, 0, 0, 5] }] : []),
@@ -1687,13 +1800,20 @@ async function buildQuotePdfDoc(q, services, addonsAll, business) {
 // Shows the exact PrintableQuote document on-screen — what the customer
 // will actually see — instead of the app-themed Review card, so there's a
 // real preview before Send rather than just this app's own summary.
-function QuotePreviewModal({ onClose, children }) {
+function QuotePreviewModal({ onClose, onSaveImage, savingImage, children }) {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", color: "#111", borderRadius: 12, maxWidth: 640, width: "100%", maxHeight: "88vh", overflowY: "auto", padding: "32px 36px", position: "relative" }}>
-        <button onClick={onClose} style={{ position: "absolute", top: 14, right: 14, background: "rgba(0,0,0,0.06)", border: "none", borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#333" }}>
-          <X size={15} />
-        </button>
+        <div style={{ position: "absolute", top: 14, right: 14, display: "flex", gap: 8 }}>
+          {onSaveImage && (
+            <button onClick={onSaveImage} disabled={savingImage} title="Save this quote as a picture, ready to text or share" style={{ display: "flex", alignItems: "center", gap: 6, background: "rgba(24,217,122,0.12)", border: "1px solid rgba(24,217,122,0.4)", borderRadius: 20, padding: "6px 12px", cursor: savingImage ? "default" : "pointer", color: "#0F7A3E", fontSize: 12, fontWeight: 700 }}>
+              {savingImage ? <Loader2 size={13} className="animate-spin" /> : <ImageIcon size={13} />} {savingImage ? "Saving…" : "Save as image"}
+            </button>
+          )}
+          <button onClick={onClose} style={{ background: "rgba(0,0,0,0.06)", border: "none", borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#333", flexShrink: 0 }}>
+            <X size={15} />
+          </button>
+        </div>
         {children}
       </div>
     </div>
@@ -1723,6 +1843,20 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
   const [proposalMode, setProposalMode] = useState("single"); // "single" | "tiered"
   const [tiers, setTiers] = useState([]);
   const [addons, setAddons] = useState([]);
+  // Per-quote edits to a service's own description/what's-included text,
+  // keyed by service id - lets one quote read differently from another
+  // without touching the shared catalog service in Settings.
+  const [serviceOverrides, setServiceOverrides] = useState({});
+  function saveServiceOverride(serviceId, override) {
+    setServiceOverrides((prev) => ({ ...prev, [serviceId]: override }));
+  }
+  function resetServiceOverride(serviceId) {
+    setServiceOverrides((prev) => {
+      const next = { ...prev };
+      delete next[serviceId];
+      return next;
+    });
+  }
   const [discount, setDiscount] = useState(0);
   const [discountLabel, setDiscountLabel] = useState("");
   const [taxRate, setTaxRate] = useState(7);
@@ -1751,6 +1885,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
   // settings. Null means "just show the template filled in for this quote."
   const [scriptOverride, setScriptOverride] = useState(null);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [savingImage, setSavingImage] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
@@ -1935,6 +2070,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
       tax_rate: taxRate,
       totals,
       description: description || null,
+      service_overrides: serviceOverrides,
     };
   }
 
@@ -1993,6 +2129,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
     setDiscountLabel(q.discountLabel || "");
     setTaxRate(q.taxRate);
     setDescription(q.description);
+    setServiceOverrides(q.serviceOverrides || {});
     setScriptOverride(null);
     // Always reopen editable, even if it was already sent — `sent` only
     // means "just showed the post-send confirmation screen this session";
@@ -2048,6 +2185,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
     setStep(0); setCustomer(null); setVehicles([]); setProposalMode("single"); setLineItems({}); setTiers([]); setAddons([]);
     setDiscount(0); setDiscountLabel(""); setTaxRate(businessTaxEnabled ? businessDefaultTaxRate : 0); setPhotos([]); setNotes(""); setDescription("");
     setChannels(["email"]); setSent(false); setLastSent(null); setSaveError(""); setScriptOverride(null);
+    setServiceOverrides({});
   }
 
   async function downloadQuotePdf(snapshot) {
@@ -2060,6 +2198,53 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
     } finally {
       setDownloadingPdf(false);
     }
+  }
+
+  // Captures the exact on-screen preview (the same PrintableQuote markup the
+  // PDF is built from) as a PNG, so it can be texted straight to a customer
+  // instead of sent as a PDF attachment — only available while the preview
+  // modal is actually open, since that's the only time the printable markup
+  // is mounted in the DOM for html2canvas to capture.
+  async function saveQuoteAsImage() {
+    const node = document.getElementById("atlas-quote-preview-root");
+    if (!node || savingImage) return;
+    setSavingImage(true);
+    try {
+      const canvas = await html2canvas(node, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+      const link = document.createElement("a");
+      link.download = `quote-${(customer?.name || "quote").replace(/\s+/g, "-").toLowerCase()}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } finally {
+      setSavingImage(false);
+    }
+  }
+
+  // "Save as image" needs the preview mounted first (html2canvas has to
+  // capture a real DOM node) - if the preview isn't already open (e.g.
+  // clicked from the post-send screen, not from inside the preview itself),
+  // this opens it and captures on the next paint instead of failing quietly.
+  const [pendingImageSave, setPendingImageSave] = useState(false);
+  function requestSaveImage() {
+    if (previewOpen) { saveQuoteAsImage(); return; }
+    setPendingImageSave(true);
+    setPreviewOpen(true);
+  }
+  useEffect(() => {
+    if (previewOpen && pendingImageSave) {
+      setPendingImageSave(false);
+      requestAnimationFrame(() => saveQuoteAsImage());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previewOpen, pendingImageSave]);
+
+  // Same idea as requestSaveImage, but for a quote picked from the Saved
+  // list rather than the one currently being built - loads it into state
+  // first (same as clicking to view/edit it), then captures once mounted.
+  function saveImageForQuote(q) {
+    openQuote(q);
+    setPendingImageSave(true);
+    setPreviewOpen(true);
   }
 
   // A preview snapshot for the Review step's "PDF" button, built from
@@ -2187,6 +2372,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
               onView={openQuote}
               onDelete={deleteQuote}
               onDownloadPdf={(q) => downloadQuotePdf(q)}
+              onSaveImage={saveImageForQuote}
               onExportCSV={() => downloadText(`atlas-quotes-${Date.now()}.csv`, quotesToCSV(savedQuotes), "text/csv")}
               onNew={() => { resetQuote(); setView("new"); }}
               onSetStatus={setQuoteStatus}
@@ -2226,9 +2412,11 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
                   scriptDisplay={scriptDisplay} onScriptChange={setScriptOverride} onCopyScript={copyScript} scriptCopied={scriptCopied}
                   scriptEnabled={scriptEnabled} onToggleScript={() => setScriptEnabled((v) => !v)}
                   onTogglePackage={togglePackage} onToggleAddon={toggleAddon} onEditServices={() => setStep(2)}
+                  serviceOverrides={serviceOverrides} onSaveServiceOverride={saveServiceOverride} onResetServiceOverride={resetServiceOverride}
                   depositLink={depositLink}
                   onSaveDraft={saveDraft} draftSaved={draftSaved} savingDraft={savingDraft} saveError={saveError}
                   onDownloadPdf={() => downloadQuotePdf(buildLocalSnapshot())}
+                  onSaveImage={requestSaveImage} savingImage={savingImage}
                   onPreview={() => setPreviewOpen(true)}
                 />
               )}
@@ -2239,6 +2427,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
                   proposalMode={proposalMode} tierCount={tiers.length}
                   onAddToCalendar={addToCalendar} onSaveContact={saveContact}
                   onDownloadPdf={() => downloadQuotePdf(lastSent)}
+                  onSaveImage={requestSaveImage} savingImage={savingImage}
                   onPreview={() => setPreviewOpen(true)}
                 />
               )}
@@ -2275,7 +2464,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
 
       <BusinessPanel open={showBusinessPanel} onClose={() => setShowBusinessPanel(false)} depositLink={depositLink} setDepositLink={setDepositLink} script={script} setScript={setScript} />
       {previewOpen && (
-        <QuotePreviewModal onClose={() => setPreviewOpen(false)}>
+        <QuotePreviewModal onClose={() => setPreviewOpen(false)} onSaveImage={requestSaveImage} savingImage={savingImage}>
           <PrintableQuote
             id="atlas-quote-preview-root"
             q={sent ? lastSent : buildLocalSnapshot()}
