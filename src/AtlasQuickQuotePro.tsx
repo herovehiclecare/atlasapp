@@ -953,6 +953,7 @@ function StepReview({
   proposalMode, tiers, quoteId,
   onTogglePackage, onToggleAddon, onEditServices,
   serviceOverrides, onSaveServiceOverride, onResetServiceOverride,
+  quoteLink, onCopyLink, linkCopied,
 }) {
   // Last-chance edits without leaving Review: each line can be pulled off the
   // quote right here, and "Edit services" jumps back to the full picker for
@@ -961,12 +962,12 @@ function StepReview({
   const [editingServiceId, setEditingServiceId] = useState(null);
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
         <div>
           <h2 style={{ fontSize: 18, fontWeight: 700, color: P.textPrimary, margin: "0 0 4px" }}>Review quote</h2>
           <p style={{ fontSize: 13, color: P.textSecondary, margin: 0 }}>This is what {customer?.name?.split(" ")[0] || "the customer"} will see.</p>
         </div>
-        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", flexShrink: 0 }}>
           <button onClick={onPreview} style={{ display: "flex", alignItems: "center", gap: 5, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 8, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
             <Eye size={12} /> Preview
           </button>
@@ -983,6 +984,20 @@ function StepReview({
       </div>
 
       {saveError && <p style={{ fontSize: 12.5, color: P.danger, margin: "10px 0 0" }}>{saveError}</p>}
+
+      {quoteLink ? (
+        <div style={{ marginTop: 14, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "10px 12px" }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, color: P.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Interactive quote link — text or email this</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <input readOnly value={quoteLink} onFocus={(e) => e.target.select()} style={{ flex: "1 1 200px", minWidth: 0, background: P.bg, border: `1px solid ${P.border}`, borderRadius: 8, padding: "8px 10px", color: P.textSecondary, fontSize: 11.5, outline: "none" }} />
+            <button onClick={onCopyLink} style={{ display: "flex", alignItems: "center", gap: 5, background: linkCopied ? P.accentSoft : P.accent, color: linkCopied ? P.accent : P.bg, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+              {linkCopied ? <Check size={12} /> : <Copy size={12} />} {linkCopied ? "Copied" : "Copy"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p style={{ fontSize: 11.5, color: P.textMuted, marginTop: 14, fontStyle: "italic" }}>Save a draft first to get this quote's shareable interactive link.</p>
+      )}
 
       <Card style={{ padding: "18px 20px", marginTop: 14, marginBottom: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
@@ -2453,6 +2468,9 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
                   onSaveDraft={saveDraft} draftSaved={draftSaved} savingDraft={savingDraft} saveError={saveError}
                   onDownloadPdf={() => downloadQuotePdf(buildLocalSnapshot())}
                   onSaveImage={requestSaveImage} savingImage={savingImage}
+                  quoteLink={currentShareToken ? quotePortalUrl(currentShareToken) : null}
+                  onCopyLink={() => copyLink(currentShareToken)}
+                  linkCopied={linkCopied}
                   onPreview={() => setPreviewOpen(true)}
                 />
               )}

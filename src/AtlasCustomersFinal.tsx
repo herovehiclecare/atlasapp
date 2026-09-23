@@ -983,6 +983,7 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 24px", borderBottom: `1px solid ${P.border}`, position: "sticky", top: 0, background: P.bg, zIndex: 10, gap: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 16, minWidth: 0 }}>
             <BrandLockup size={30} businessId={businessId} realName={businessName} realLogoUrl={businessLogoUrl} />
+            <span className="flex lg:hidden" style={{ fontSize: 11, fontWeight: 700, color: P.textMuted, textTransform: "uppercase", letterSpacing: "0.04em" }}>Customers</span>
             <div className="hidden lg:flex" style={{ alignItems: "center", gap: 14 }}>
               <div style={{ width: 1, height: 20, background: P.border }} />
               <span style={{ fontSize: 13, color: P.textSecondary, whiteSpace: "nowrap" }}>Customers <span style={{ color: P.textMuted }}>· {customers.length} total · {formatDateTime(now)}</span></span>
