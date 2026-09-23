@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { UserPlus, X } from "lucide-react";
+import { UserPlus, X, PartyPopper } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
 import AtlasLogin, { SetNewPassword } from "./AtlasLoginFinal";
@@ -83,6 +83,46 @@ function LeadToast({ lead, onView, onDismiss }) {
   );
 }
 
+// Same idea as LeadToast, but for a customer approving their interactive
+// quote (quote-portal Edge Function) - lives here for the same reason: it
+// should show up no matter which page you're on when it happens.
+function QuoteApprovedToast({ approval, onView, onDismiss }) {
+  return (
+    <div
+      role="status"
+      style={{
+        position: "fixed", top: 18, right: 18, zIndex: 9999, maxWidth: 340,
+        background: "#0F1B15", border: "1px solid #1E2E25", borderRadius: 14,
+        boxShadow: "0 12px 32px rgba(0,0,0,0.45)", padding: 16,
+        display: "flex", gap: 12, alignItems: "flex-start",
+        animation: "atlas-lead-toast-in 0.25s ease-out",
+      }}
+    >
+      <style>{`@keyframes atlas-lead-toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+      <div style={{ width: 34, height: 34, borderRadius: 10, background: "rgba(24,217,122,0.14)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <PartyPopper size={18} color="#18D97A" />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#EDF6F1" }}>Quote approved!</div>
+        <div style={{ fontSize: 12.5, color: "#92AA9D", marginTop: 2 }}>{approval.customerName || "A customer"} approved their quote — get it booked.</div>
+        <button
+          onClick={onView}
+          style={{ marginTop: 8, fontSize: 12, fontWeight: 700, color: "#18D97A", background: "none", border: "none", padding: 0, cursor: "pointer" }}
+        >
+          View Pipeline →
+        </button>
+      </div>
+      <button
+        onClick={onDismiss}
+        aria-label="Dismiss"
+        style={{ background: "none", border: "none", color: "#566B5E", cursor: "pointer", padding: 2, flexShrink: 0 }}
+      >
+        <X size={16} />
+      </button>
+    </div>
+  );
+}
+
 export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -90,6 +130,7 @@ export default function App() {
   const [navParams, setNavParams] = useState(null);
   const [recovery, setRecovery] = useState(isRecoveryUrl);
   const [leadToast, setLeadToast] = useState(null);
+  const [quoteToast, setQuoteToast] = useState(null);
   const { businessId } = useBusinessId();
 
   // Lets a row on one page ("this quote", "this customer's job") jump
@@ -156,6 +197,38 @@ export default function App() {
     return () => clearTimeout(t);
   }, [leadToast]);
 
+  // Live popup when a customer approves their interactive quote
+  // (quote-portal Edge Function writes the status change) - same "wherever
+  // you're looking" reasoning as the lead toast above. Only fires on the
+  // actual transition into "approved", not every edit to an already-
+  // approved quote.
+  useEffect(() => {
+    if (!businessId) return;
+    const channel = supabase
+      .channel(`quote-approvals-${businessId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "quotes", filter: `business_id=eq.${businessId}` },
+        async (payload) => {
+          if (payload.new?.status !== "approved" || payload.old?.status === "approved") return;
+          let customerName = null;
+          if (payload.new.customer_id) {
+            const { data } = await supabase.from("customers").select("name").eq("id", payload.new.customer_id).maybeSingle();
+            customerName = data?.name || null;
+          }
+          setQuoteToast({ ...payload.new, customerName });
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [businessId]);
+
+  useEffect(() => {
+    if (!quoteToast) return;
+    const t = setTimeout(() => setQuoteToast(null), 12000);
+    return () => clearTimeout(t);
+  }, [quoteToast]);
+
   function handleSignOut() {
     supabase.auth.signOut();
     setPage("dashboard");
@@ -181,6 +254,13 @@ export default function App() {
           lead={leadToast}
           onDismiss={() => setLeadToast(null)}
           onView={() => { navigate("customers", { customerId: leadToast.id }); setLeadToast(null); }}
+        />
+      )}
+      {quoteToast && (
+        <QuoteApprovedToast
+          approval={quoteToast}
+          onDismiss={() => setQuoteToast(null)}
+          onView={() => { navigate("quote"); setQuoteToast(null); }}
         />
       )}
     </>

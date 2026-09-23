@@ -231,7 +231,14 @@ function hydrateQuote(row, vehiclesById) {
     totals: row.totals && Object.keys(row.totals).length ? row.totals : { subtotal: 0, tax: 0, total: 0, isRange: false },
     description: row.description || "",
     serviceOverrides: row.service_overrides || {},
+    shareToken: row.share_token || null,
   };
+}
+
+// The customer-facing interactive quote page, served directly by the
+// quote-portal Edge Function - no login, no Atlas UI, just this one link.
+function quotePortalUrl(shareToken) {
+  return `https://fqggnekepfzxrkuazpiy.supabase.co/functions/v1/quote-portal?token=${shareToken}`;
 }
 
 /* ---------------------------------- shared chrome ---------------------------------- */
@@ -1160,7 +1167,7 @@ function StepReview({
 
 /* ---------------------------------- step 7: send ---------------------------------- */
 
-function StepSend({ channels, toggleChannel, sent, customer, depositLink, onAddToCalendar, onSaveContact, onDownloadPdf, onSaveImage, savingImage, onPreview, proposalMode, tierCount }) {
+function StepSend({ channels, toggleChannel, sent, customer, depositLink, onAddToCalendar, onSaveContact, onDownloadPdf, onSaveImage, savingImage, onPreview, proposalMode, tierCount, quoteLink, onCopyLink, linkCopied }) {
   if (sent) {
     return (
       <div style={{ textAlign: "center", padding: "36px 0" }}>
@@ -1175,6 +1182,19 @@ function StepSend({ channels, toggleChannel, sent, customer, depositLink, onAddT
         </p>
         {depositLink && (
           <p style={{ fontSize: 12, color: P.accent, maxWidth: 340, margin: "10px auto 0" }}>A deposit link was included so they can lock in a time right away.</p>
+        )}
+
+        {quoteLink && (
+          <div style={{ marginTop: 20, maxWidth: 420, marginLeft: "auto", marginRight: "auto", textAlign: "left", background: P.surface, border: `1px solid ${P.border}`, borderRadius: 12, padding: "14px 16px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: P.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Interactive quote link</div>
+            <p style={{ fontSize: 11.5, color: P.textSecondary, margin: "0 0 10px", lineHeight: 1.5 }}>{customer?.name?.split(" ")[0] || "The customer"} can open this to pick an option and approve right from their phone — this is what to text or email them.</p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input readOnly value={quoteLink} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 0, background: P.bg, border: `1px solid ${P.border}`, borderRadius: 8, padding: "8px 10px", color: P.textPrimary, fontSize: 11.5, outline: "none" }} />
+              <button onClick={onCopyLink} style={{ display: "flex", alignItems: "center", gap: 5, background: linkCopied ? P.accentSoft : P.accent, color: linkCopied ? P.accent : P.bg, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+                {linkCopied ? <Check size={12} /> : <Copy size={12} />} {linkCopied ? "Copied" : "Copy"}
+              </button>
+            </div>
+          </div>
         )}
 
         <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginTop: 22 }}>
@@ -1227,6 +1247,14 @@ function StepSend({ channels, toggleChannel, sent, customer, depositLink, onAddT
       {depositLink && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: P.accent, marginTop: 12 }}>
           <Link2 size={12} /> Your deposit link will be attached automatically.
+        </div>
+      )}
+      {quoteLink && (
+        <div style={{ marginTop: 14, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "10px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+          <input readOnly value={quoteLink} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", color: P.textSecondary, fontSize: 11.5, outline: "none" }} />
+          <button onClick={onCopyLink} style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "none", color: linkCopied ? P.accent : P.textSecondary, fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+            {linkCopied ? <Check size={12} /> : <Copy size={12} />} {linkCopied ? "Copied" : "Copy link"}
+          </button>
         </div>
       )}
       <p style={{ fontSize: 12, color: P.textMuted, marginTop: 16 }}>
@@ -1886,6 +1914,13 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
   const [scriptOverride, setScriptOverride] = useState(null);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [savingImage, setSavingImage] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  function copyLink(token) {
+    if (!token) return;
+    navigator.clipboard?.writeText(quotePortalUrl(token)).catch(() => {});
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 1500);
+  }
   const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
@@ -2107,6 +2142,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
   // a quote already marked Sent/Approved must never get silently flipped
   // back to "draft" just because autosave fired after reopening it to view.
   const currentQuoteStatus = currentQuoteId ? savedQuotes.find((q) => q.id === currentQuoteId)?.status : null;
+  const currentShareToken = currentQuoteId ? savedQuotes.find((q) => q.id === currentQuoteId)?.shareToken : null;
   const canAutosave = !sent && (!currentQuoteId || currentQuoteStatus === "draft");
   useEffect(() => {
     if (!canAutosave) return;
@@ -2429,6 +2465,9 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
                   onDownloadPdf={() => downloadQuotePdf(lastSent)}
                   onSaveImage={requestSaveImage} savingImage={savingImage}
                   onPreview={() => setPreviewOpen(true)}
+                  quoteLink={(sent ? lastSent?.shareToken : currentShareToken) ? quotePortalUrl(sent ? lastSent.shareToken : currentShareToken) : null}
+                  onCopyLink={() => copyLink(sent ? lastSent?.shareToken : currentShareToken)}
+                  linkCopied={linkCopied}
                 />
               )}
 
