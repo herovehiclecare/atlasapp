@@ -986,10 +986,12 @@ function StepReview({
       {saveError && <p style={{ fontSize: 12.5, color: P.danger, margin: "10px 0 0" }}>{saveError}</p>}
 
       {quoteLink ? (
-        <div style={{ marginTop: 14, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "10px 12px" }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, color: P.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Interactive quote link — text or email this</div>
+        <div style={{ marginTop: 14, background: `linear-gradient(160deg, ${P.accentSoft}, transparent)`, border: `1px solid ${P.accent}`, borderRadius: 12, padding: "12px 14px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10.5, fontWeight: 700, color: P.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+            <Sparkles size={11} /> Interactive quote link — text or email this
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <input readOnly value={quoteLink} onFocus={(e) => e.target.select()} style={{ flex: "1 1 200px", minWidth: 0, background: P.bg, border: `1px solid ${P.border}`, borderRadius: 8, padding: "8px 10px", color: P.textSecondary, fontSize: 11.5, outline: "none" }} />
+            <input readOnly value={quoteLink} onFocus={(e) => e.target.select()} style={{ flex: "1 1 200px", minWidth: 0, background: P.bg, border: `1px solid ${P.border}`, borderRadius: 8, padding: "8px 10px", color: P.textPrimary, fontSize: 11.5, outline: "none" }} />
             <button onClick={onCopyLink} style={{ display: "flex", alignItems: "center", gap: 5, background: linkCopied ? P.accentSoft : P.accent, color: linkCopied ? P.accent : P.bg, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
               {linkCopied ? <Check size={12} /> : <Copy size={12} />} {linkCopied ? "Copied" : "Copy"}
             </button>
@@ -1200,30 +1202,34 @@ function StepSend({ channels, toggleChannel, sent, customer, depositLink, onAddT
         )}
 
         {quoteLink && (
-          <div style={{ marginTop: 20, maxWidth: 420, marginLeft: "auto", marginRight: "auto", textAlign: "left", background: P.surface, border: `1px solid ${P.border}`, borderRadius: 12, padding: "14px 16px" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: P.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Interactive quote link</div>
+          <div style={{ marginTop: 20, maxWidth: 420, marginLeft: "auto", marginRight: "auto", textAlign: "left", background: `linear-gradient(160deg, ${P.accentSoft}, transparent)`, border: `1px solid ${P.accent}`, borderRadius: 14, padding: "16px 16px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 700, color: P.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>
+              <Sparkles size={12} /> Interactive quote link
+            </div>
             <p style={{ fontSize: 11.5, color: P.textSecondary, margin: "0 0 10px", lineHeight: 1.5 }}>{customer?.name?.split(" ")[0] || "The customer"} can open this to pick an option and approve right from their phone — this is what to text or email them.</p>
             <div style={{ display: "flex", gap: 8 }}>
-              <input readOnly value={quoteLink} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 0, background: P.bg, border: `1px solid ${P.border}`, borderRadius: 8, padding: "8px 10px", color: P.textPrimary, fontSize: 11.5, outline: "none" }} />
-              <button onClick={onCopyLink} style={{ display: "flex", alignItems: "center", gap: 5, background: linkCopied ? P.accentSoft : P.accent, color: linkCopied ? P.accent : P.bg, border: "none", borderRadius: 8, padding: "8px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+              <input readOnly value={quoteLink} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 0, background: P.bg, border: `1px solid ${P.border}`, borderRadius: 8, padding: "9px 11px", color: P.textPrimary, fontSize: 11.5, outline: "none" }} />
+              <button onClick={onCopyLink} style={{ display: "flex", alignItems: "center", gap: 5, background: linkCopied ? P.accentSoft : P.accent, color: linkCopied ? P.accent : P.bg, border: "none", borderRadius: 8, padding: "9px 13px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
                 {linkCopied ? <Check size={12} /> : <Copy size={12} />} {linkCopied ? "Copied" : "Copy"}
               </button>
             </div>
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginTop: 22 }}>
+        <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginTop: 20 }}>
           <button onClick={onAddToCalendar} style={{ display: "flex", alignItems: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "9px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
             <CalendarPlus size={14} /> Add follow-up to calendar
           </button>
           <button onClick={onSaveContact} style={{ display: "flex", alignItems: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "9px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
             <UserPlus size={14} /> Save contact
           </button>
-          <button onClick={onDownloadPdf} style={{ display: "flex", alignItems: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "9px 14px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
-            <Download size={14} /> Download PDF
+        </div>
+        <div style={{ display: "flex", gap: 16, justifyContent: "center", marginTop: 14 }}>
+          <button onClick={onDownloadPdf} style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "none", color: P.textMuted, fontSize: 11.5, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+            <Download size={12} /> Download PDF instead
           </button>
-          <button onClick={onSaveImage} disabled={savingImage} style={{ display: "flex", alignItems: "center", gap: 6, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 9, padding: "9px 14px", fontSize: 12.5, fontWeight: 700, cursor: savingImage ? "default" : "pointer" }}>
-            {savingImage ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />} {savingImage ? "Saving…" : "Save as image"}
+          <button onClick={onSaveImage} disabled={savingImage} style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "none", color: P.textMuted, fontSize: 11.5, fontWeight: 600, cursor: savingImage ? "default" : "pointer", padding: 0 }}>
+            {savingImage ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12} />} {savingImage ? "Saving…" : "Save as image instead"}
           </button>
         </div>
       </div>
@@ -1234,46 +1240,68 @@ function StepSend({ channels, toggleChannel, sent, customer, depositLink, onAddT
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
         <div>
           <h2 style={{ fontSize: 18, fontWeight: 700, color: P.textPrimary, margin: "0 0 4px" }}>Send it</h2>
-          <p style={{ fontSize: 13, color: P.textSecondary, margin: 0 }}>Choose how {customer?.name || "the customer"} gets this quote — you'll deliver it through the channel(s) you pick below.</p>
+          <p style={{ fontSize: 13, color: P.textSecondary, margin: 0 }}>{customer?.name || "The customer"} opens this link, picks their option, and approves — no PDF needed.</p>
         </div>
-        <button onClick={onPreview} style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 5, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 8, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
-          <Eye size={12} /> Preview
-        </button>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
-        {[
-          { id: "email", label: "Email", Icon: Mail, sub: customer?.email },
-          { id: "sms", label: "Text message", Icon: MessageSquare, sub: customer?.phone },
-          { id: "pdf", label: "Download PDF", Icon: FileText, sub: "Print or share manually" },
-        ].map((c) => {
-          const active = channels.includes(c.id);
-          return (
-            <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 12, background: active ? P.accentSoft : P.surface, border: `1px solid ${active ? P.accent : P.border}`, borderRadius: 10, padding: "12px 14px", cursor: "pointer" }}>
-              <input type="checkbox" checked={active} onChange={() => toggleChannel(c.id)} style={{ accentColor: P.accent }} />
-              <c.Icon size={16} color={active ? P.accent : P.textMuted} />
-              <div>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>{c.label}</div>
-                <div style={{ fontSize: 11.5, color: P.textMuted }}>{c.sub}</div>
-              </div>
-            </label>
-          );
-        })}
+
+      {quoteLink ? (
+        <div style={{ marginTop: 16, background: `linear-gradient(160deg, ${P.accentSoft}, transparent)`, border: `1px solid ${P.accent}`, borderRadius: 14, padding: "16px 16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 700, color: P.accent, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10 }}>
+            <Sparkles size={12} /> Interactive quote link
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input readOnly value={quoteLink} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 0, background: P.bg, border: `1px solid ${P.border}`, borderRadius: 8, padding: "9px 11px", color: P.textPrimary, fontSize: 11.5, outline: "none" }} />
+            <button onClick={onCopyLink} style={{ display: "flex", alignItems: "center", gap: 5, background: linkCopied ? P.accentSoft : P.accent, color: linkCopied ? P.accent : P.bg, border: "none", borderRadius: 8, padding: "9px 13px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+              {linkCopied ? <Check size={12} /> : <Copy size={12} />} {linkCopied ? "Copied" : "Copy"}
+            </button>
+          </div>
+          <button onClick={onPreview} style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "none", color: P.textSecondary, fontSize: 11.5, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+            <Eye size={12} /> See what they'll see
+          </button>
+        </div>
+      ) : (
+        <p style={{ fontSize: 11.5, color: P.textMuted, marginTop: 14, fontStyle: "italic" }}>Save a draft first to get this quote's link.</p>
+      )}
+
+      <div style={{ marginTop: 18 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: P.textMuted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Send that link by</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {[
+            { id: "email", label: "Email", Icon: Mail, sub: customer?.email },
+            { id: "sms", label: "Text message", Icon: MessageSquare, sub: customer?.phone },
+          ].map((c) => {
+            const active = channels.includes(c.id);
+            return (
+              <label key={c.id} style={{ display: "flex", alignItems: "center", gap: 12, background: active ? P.accentSoft : P.surface, border: `1px solid ${active ? P.accent : P.border}`, borderRadius: 10, padding: "12px 14px", cursor: "pointer" }}>
+                <input type="checkbox" checked={active} onChange={() => toggleChannel(c.id)} style={{ accentColor: P.accent }} />
+                <c.Icon size={16} color={active ? P.accent : P.textMuted} />
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>{c.label}</div>
+                  <div style={{ fontSize: 11.5, color: P.textMuted }}>{c.sub}</div>
+                </div>
+              </label>
+            );
+          })}
+        </div>
       </div>
+
       {depositLink && (
         <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: P.accent, marginTop: 12 }}>
           <Link2 size={12} /> Your deposit link will be attached automatically.
         </div>
       )}
-      {quoteLink && (
-        <div style={{ marginTop: 14, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "10px 12px", display: "flex", alignItems: "center", gap: 8 }}>
-          <input readOnly value={quoteLink} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", color: P.textSecondary, fontSize: 11.5, outline: "none" }} />
-          <button onClick={onCopyLink} style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "none", color: linkCopied ? P.accent : P.textSecondary, fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
-            {linkCopied ? <Check size={12} /> : <Copy size={12} />} {linkCopied ? "Copied" : "Copy link"}
-          </button>
-        </div>
-      )}
+
+      <div style={{ display: "flex", gap: 14, marginTop: 16 }}>
+        <button onClick={onDownloadPdf} style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "none", color: P.textMuted, fontSize: 11.5, fontWeight: 600, cursor: "pointer", padding: 0 }}>
+          <FileText size={12} /> Download PDF instead
+        </button>
+        <button onClick={onSaveImage} disabled={savingImage} style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "none", color: P.textMuted, fontSize: 11.5, fontWeight: 600, cursor: savingImage ? "default" : "pointer", padding: 0 }}>
+          {savingImage ? <Loader2 size={12} className="animate-spin" /> : <ImageIcon size={12} />} Save as image instead
+        </button>
+      </div>
+
       <p style={{ fontSize: 12, color: P.textMuted, marginTop: 16 }}>
-        This marks the quote Sent and saves it to Saved quotes — actually delivering it through the channel(s) above is on you for now.
+        This marks the quote Sent and saves it to Saved quotes — actually sending it through the channel(s) above is on you for now.
       </p>
     </div>
   );
