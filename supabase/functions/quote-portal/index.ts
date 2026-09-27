@@ -70,9 +70,9 @@ function svcPrice(service: any, vehicle: any): number {
 
 function renderPage(opts: {
   quote: any; business: any; customer: any; vehicle: any;
-  services: any[]; addonsAll: any[]; alreadyApproved: boolean;
+  services: any[]; addonsAll: any[]; extraAddonServices: any[]; alreadyApproved: boolean;
 }) {
-  const { quote, business, customer, vehicle, services, addonsAll, alreadyApproved } = opts;
+  const { quote, business, customer, vehicle, services, addonsAll, extraAddonServices, alreadyApproved } = opts;
   const overrides = quote.service_overrides || {};
   const tiered = quote.proposal_mode === "tiered";
   const taxRate = Number(quote.tax_rate) || 0;
@@ -146,6 +146,19 @@ function renderPage(opts: {
 
   const defaultTierId = tierData[0]?.id || null;
 
+  // Optional extras from the business's own "Add-Ons" catalog category
+  // (Wheel/Glass/Interior Coating, etc.) that aren't already on this quote -
+  // unchecked by default, since these are things to discover and add, not
+  // things already agreed to.
+  const extrasHtml = extraAddonServices.map((s: any) => {
+    const price = svcPrice(s, vehicle);
+    return `
+      <label class="addon">
+        <input type="checkbox" data-extra="${esc(s.id)}" data-price="${price}" onchange="updateTotal()">
+        <span>${esc(s.name)}${s.description ? `<br><small>${esc(s.description)}</small>` : ""}</span><b>${money(price)}</b>
+      </label>`;
+  }).join("");
+
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(business.name || "Service")} — Quote for ${esc(customer.name)}</title>
 <style>
@@ -175,6 +188,10 @@ function renderPage(opts: {
   .addon { display: flex; align-items: center; gap: 8px; font-size: 13px; }
   .addon input { accent-color: #18D97A; width: 16px; height: 16px; }
   .addon span { flex: 1; }
+  .addon small { color: #566B5E; font-weight: 400; }
+  .extras { margin-top: 16px; background: #0F1B15; border: 1px solid #1E2E25; border-radius: 14px; padding: 16px 18px; }
+  .extras .kicker { margin-bottom: 10px; display: block; }
+  .extras-list { display: flex; flex-direction: column; gap: 10px; }
   .total { margin-top: 20px; display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; background: #0F1B15; border: 1px solid #1E2E25; border-radius: 14px; }
   .total span { font-size: 12px; color: #92AA9D; text-transform: uppercase; letter-spacing: 0.06em; }
   .total b { font-size: 24px; color: #EDF6F1; }
@@ -194,6 +211,12 @@ function renderPage(opts: {
 
   ${tiered ? `<div class="tabs">${tabsHtml}</div>` : ""}
   <div id="cards">${tiersHtml}</div>
+
+  ${extraAddonServices.length ? `
+  <div class="extras">
+    <span class="kicker">Want to add anything?</span>
+    <div class="extras-list">${extrasHtml}</div>
+  </div>` : ""}
 
   <div class="total"><span>Total</span><b id="total">$0</b></div>
 
@@ -223,12 +246,16 @@ function renderPage(opts: {
       const card = document.getElementById('card-' + selectedTier);
       if (card) {
         card.querySelectorAll('.item-price').forEach(el => { subtotal += parseFloat(el.textContent.replace(/[^0-9.]/g, '')) || 0; });
-        card.querySelectorAll('input[type=checkbox]').forEach(cb => { if (!cb.checked) subtotal -= parseFloat(cb.dataset.price) || 0; });
+        card.querySelectorAll('input[data-addon]').forEach(cb => { if (!cb.checked) subtotal -= parseFloat(cb.dataset.price) || 0; });
       }
     } else {
       document.querySelectorAll('.item-price').forEach(el => { subtotal += parseFloat(el.textContent.replace(/[^0-9.]/g, '')) || 0; });
-      document.querySelectorAll('input[type=checkbox]').forEach(cb => { if (!cb.checked) subtotal -= parseFloat(cb.dataset.price) || 0; });
+      document.querySelectorAll('input[data-addon]').forEach(cb => { if (!cb.checked) subtotal -= parseFloat(cb.dataset.price) || 0; });
     }
+    // Optional extras live outside any tier card and default unchecked -
+    // they add to the total when picked, the opposite of the already-
+    // included add-ons above which subtract when removed.
+    document.querySelectorAll('input[data-extra]').forEach(cb => { if (cb.checked) subtotal += parseFloat(cb.dataset.price) || 0; });
     const total = subtotal * (1 + TAX_RATE / 100);
     document.getElementById('total').textContent = '$' + total.toLocaleString(undefined, { maximumFractionDigits: 0 });
   }
@@ -238,14 +265,16 @@ function renderPage(opts: {
     btn.disabled = true;
     btn.textContent = 'Submitting…';
     const chosenAddonIds = [];
-    document.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    document.querySelectorAll('input[data-addon]').forEach(cb => {
       if (cb.checked && (!TIERED || cb.dataset.tier === selectedTier)) chosenAddonIds.push(cb.dataset.addon);
     });
+    const extraServiceIds = [];
+    document.querySelectorAll('input[data-extra]').forEach(cb => { if (cb.checked) extraServiceIds.push(cb.dataset.extra); });
     try {
       const res = await fetch(window.location.pathname + window.location.search, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: TOKEN, chosenTierId: TIERED ? selectedTier : null, chosenAddonIds }),
+        body: JSON.stringify({ token: TOKEN, chosenTierId: TIERED ? selectedTier : null, chosenAddonIds, extraServiceIds }),
       });
       if (!res.ok) throw new Error('failed');
       btn.outerHTML = '<div class="approved-banner">✓ Approved — we\\'ll be in touch to get this scheduled.</div>';
@@ -299,10 +328,15 @@ Deno.serve(async (req) => {
     for (const id of quote.line_items?.addonIds || []) addonIds.add(id);
   }
 
-  const [{ data: services }, { data: addonsAll }] = await Promise.all([
+  const [{ data: services }, { data: addonsAll }, { data: addOnCategoryServices }] = await Promise.all([
     serviceIds.size ? supabase.from("services").select("id, name, description, includes, price_car_low, price_suv_low").in("id", [...serviceIds]) : Promise.resolve({ data: [] }),
     addonIds.size ? supabase.from("addons").select("id, name, price").in("id", [...addonIds]) : Promise.resolve({ data: [] }),
+    supabase.from("services").select("id, name, description, price_car_low, price_suv_low").eq("business_id", quote.business_id).eq("category", "Add-Ons"),
   ]);
+
+  // Optional extras offered on the page itself - anything in the business's
+  // Add-Ons catalog category that isn't already part of this quote.
+  const extraAddonServices = (addOnCategoryServices || []).filter((s: any) => !serviceIds.has(s.id));
 
   if (req.method === "GET") {
     const html = renderPage({
@@ -312,6 +346,7 @@ Deno.serve(async (req) => {
       vehicle,
       services: services || [],
       addonsAll: addonsAll || [],
+      extraAddonServices,
       alreadyApproved: ["approved", "booked"].includes(quote.status),
     });
     return new Response(html, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
@@ -327,10 +362,16 @@ Deno.serve(async (req) => {
 
     const chosenTierId = body.chosenTierId || null;
     const chosenAddonIds = Array.isArray(body.chosenAddonIds) ? body.chosenAddonIds : [];
+    // Re-validated against this business's actual Add-Ons catalog (not just
+    // trusted from the client) - a submitted id that isn't really one of
+    // this business's Add-Ons services is silently dropped.
+    const validExtraIds = new Set(extraAddonServices.map((s: any) => s.id));
+    const extraServiceIds = (Array.isArray(body.extraServiceIds) ? body.extraServiceIds : []).filter((id: string) => validExtraIds.has(id));
 
     let total = 0;
     const servicesById = Object.fromEntries((services || []).map((s: any) => [s.id, s]));
     const addonsById = Object.fromEntries((addonsAll || []).map((a: any) => [a.id, a]));
+    const extrasById = Object.fromEntries(extraAddonServices.map((s: any) => [s.id, s]));
     let chosenLabel = "";
     if (quote.proposal_mode === "tiered") {
       const tier = (quote.tiers || []).find((t: any) => t.id === chosenTierId);
@@ -345,7 +386,11 @@ Deno.serve(async (req) => {
       }
       total += chosenAddonIds.reduce((s: number, id: string) => s + (Number(addonsById[id]?.price) || 0), 0);
     }
+    total += extraServiceIds.reduce((s: number, id: string) => s + svcPrice(extrasById[id], vehicle), 0);
     total *= 1 + (Number(quote.tax_rate) || 0) / 100;
+
+    const extraNames = extraServiceIds.map((id: string) => extrasById[id]?.name).filter(Boolean);
+    if (extraNames.length) chosenLabel = [chosenLabel, `+ ${extraNames.join(", ")}`].filter(Boolean).join(" ");
 
     const { error: updateError } = await supabase
       .from("quotes")
@@ -353,6 +398,7 @@ Deno.serve(async (req) => {
         status: "approved",
         chosen_tier_id: chosenTierId,
         chosen_addon_ids: chosenAddonIds,
+        extra_service_ids: extraServiceIds,
         approved_at: new Date().toISOString(),
       })
       .eq("id", quote.id);
