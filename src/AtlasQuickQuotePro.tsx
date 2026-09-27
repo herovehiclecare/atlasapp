@@ -1896,7 +1896,7 @@ function QuotePreviewModal({ onClose, onSaveImage, savingImage, children }) {
 
 /* ---------------------------------- page ---------------------------------- */
 
-export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }) {
+export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote", navParams }) {
   const { businessId, businessName, businessLogoUrl, businessTagline, businessQuoteLabel, businessPhone, businessEmail, businessAddress, businessDefaultTaxRate, businessTaxEnabled, loading: bizLoading, error: bizError } = useBusinessId();
   const [customersAll, setCustomersAll] = useState([]);
   const [vehiclesAll, setVehiclesAll] = useState([]);
@@ -2014,6 +2014,22 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote" }
     setProposalMode("single");
     setTiers([]);
   }
+
+  // Lets "New quote" on a customer's own profile land here with that
+  // customer already picked, instead of back at "who's this for?" - same
+  // consumed-ref pattern Schedule uses for addJobForCustomerId, so this
+  // only fires once per actual navigation, not on every re-render.
+  const consumedQuoteNavRef = useRef(null);
+  useEffect(() => {
+    if (!navParams?.newQuoteForCustomerId || consumedQuoteNavRef.current === navParams || loadingData) return;
+    const match = customersAll.find((c) => c.id === navParams.newQuoteForCustomerId);
+    if (match) {
+      setView("new");
+      selectCustomer(match);
+      setStep(1);
+      consumedQuoteNavRef.current = navParams;
+    }
+  }, [navParams, customersAll, loadingData]);
   function toggleVehicle(v) {
     setVehicles((prev) => {
       const exists = prev.some((x) => x.id === v.id);

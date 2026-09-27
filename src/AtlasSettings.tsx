@@ -1431,11 +1431,13 @@ function CustomizePanel() {
   const { businessId, businessUiPrefs } = useBusinessId();
   const [dash, setDash] = useState({ profitBanner: true, insights: true, aiFab: true });
   const [sched, setSched] = useState({ stats: true, ai: true, holidays: true });
+  const [cust, setCust] = useState({ aiScript: true });
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (businessUiPrefs?.dashboard) setDash((d) => ({ ...d, ...businessUiPrefs.dashboard }));
     if (businessUiPrefs?.schedule) setSched((s) => ({ ...s, ...businessUiPrefs.schedule }));
+    if (businessUiPrefs?.customers) setCust((c) => ({ ...c, ...businessUiPrefs.customers }));
   }, [businessUiPrefs]);
 
   // Dashboard and Schedule each persist a bigger sub-object (they have their
@@ -1456,6 +1458,7 @@ function CustomizePanel() {
   }
   const toggleDash = (k) => togglePageKey("dashboard", setDash, dash, k);
   const toggleSched = (k) => togglePageKey("schedule", setSched, sched, k);
+  const toggleCust = (k) => togglePageKey("customers", setCust, cust, k);
 
   return (
     <Panel title="Customize" sub="Set what shows by default on each page — this replaces the per-page Customize toggle.">
@@ -1484,6 +1487,18 @@ function CustomizePanel() {
           <div key={row.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", borderBottom: i < arr.length - 1 ? `1px solid ${P.border}` : "none" }}>
             <div><div style={{ fontSize: 13, fontWeight: 600, color: P.textPrimary }}>{row.label}</div><div style={{ fontSize: 11.5, color: P.textMuted, marginTop: 2 }}>{row.sub}</div></div>
             <Toggle on={sched[row.key]} onClick={() => toggleSched(row.key)} />
+          </div>
+        ))}
+      </Card>
+
+      <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, marginBottom: 8, marginTop: 18 }}>Customers</div>
+      <Card>
+        {[
+          { key: "aiScript", label: "Suggested welcome/follow-up text", sub: "AI-drafted text on a customer's profile, ready to copy or send" },
+        ].map((row, i, arr) => (
+          <div key={row.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", borderBottom: i < arr.length - 1 ? `1px solid ${P.border}` : "none" }}>
+            <div><div style={{ fontSize: 13, fontWeight: 600, color: P.textPrimary }}>{row.label}</div><div style={{ fontSize: 11.5, color: P.textMuted, marginTop: 2 }}>{row.sub}</div></div>
+            <Toggle on={cust[row.key]} onClick={() => toggleCust(row.key)} />
           </div>
         ))}
       </Card>

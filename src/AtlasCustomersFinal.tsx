@@ -275,7 +275,7 @@ function VehicleRow({ vehicle, onUpdated, onDeleted }) {
   );
 }
 
-function CustomerDetail({ customer, vehicles, businessId, businessName, commApp, onClose, onUpdated, onDeleted, onVehicleAdded, onVehicleUpdated, onVehicleDeleted, onNavigate }) {
+function CustomerDetail({ customer, vehicles, businessId, businessName, commApp, showAiScript = true, onClose, onUpdated, onDeleted, onVehicleAdded, onVehicleUpdated, onVehicleDeleted, onNavigate }) {
   const [addingVehicle, setAddingVehicle] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newType, setNewType] = useState("Car");
@@ -507,7 +507,7 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, commApp,
             </div>
           </div>
 
-          {script && customer.phone && (
+          {showAiScript && script && customer.phone && (
             <div style={{ background: P.secondarySoft, border: `1px solid ${P.secondary}55`, borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.secondary }}>
@@ -689,7 +689,15 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, commApp,
           </div>
 
           <div>
-            <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, marginBottom: 8 }}>Quotes</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted }}>Quotes</div>
+              {onNavigate && (
+                <button
+                  onClick={() => onNavigate("quote", { newQuoteForCustomerId: customer.id })}
+                  style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "none", color: P.accent, fontSize: 11, fontWeight: 600, cursor: "pointer" }}
+                ><Plus size={11} /> New quote</button>
+              )}
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {loadingHistory && <p style={{ fontSize: 12, color: P.textMuted, fontStyle: "italic", margin: 0 }}>Loading…</p>}
               {!loadingHistory && quotes.length === 0 && (
@@ -838,7 +846,7 @@ function AddCustomerModal({ businessId, onClose, onAdded, onVehicleAdded }) {
 /* ---------------------------------- page ---------------------------------- */
 
 export default function AtlasCustomers({ onNavigate, navParams, currentPage = "customers" }) {
-  const { businessId, businessName, businessLogoUrl, businessPreferredCommApp, loading: bizLoading, error: bizError } = useBusinessId();
+  const { businessId, businessName, businessLogoUrl, businessPreferredCommApp, businessUiPrefs, loading: bizLoading, error: bizError } = useBusinessId();
   const now = useLiveClock();
   const [customers, setCustomers] = useState([]);
   const [vehicles, setVehicles] = useState([]);
@@ -1071,6 +1079,7 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
           businessId={businessId}
           businessName={businessName}
           commApp={businessPreferredCommApp}
+          showAiScript={businessUiPrefs?.customers?.aiScript !== false}
           onClose={() => setDetailCustomer(null)}
           onUpdated={handleCustomerUpdated}
           onDeleted={handleCustomerDeleted}
