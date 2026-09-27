@@ -338,6 +338,26 @@ Deno.serve(async (req) => {
   // Add-Ons catalog category that isn't already part of this quote.
   const extraAddonServices = (addOnCategoryServices || []).filter((s: any) => !serviceIds.has(s.id));
 
+  if (req.method === "GET" && url.searchParams.get("format") === "json") {
+    // Supabase's Edge Function gateway forces every response's Content-Type
+    // to text/plain (plus a sandboxed CSP) regardless of what's set here -
+    // it will never render as a webpage in a real browser. The actual
+    // customer-facing page is now rendered by a Vercel serverless function
+    // (api/quote-portal.js) that calls this endpoint server-to-server for
+    // the raw data, then builds and serves the HTML itself from a domain
+    // that doesn't have that restriction.
+    return new Response(JSON.stringify({
+      quote,
+      business: quote.businesses || {},
+      customer: quote.customers || { name: "Customer" },
+      vehicle,
+      services: services || [],
+      addonsAll: addonsAll || [],
+      extraAddonServices,
+      alreadyApproved: ["approved", "booked"].includes(quote.status),
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  }
+
   if (req.method === "GET") {
     const html = renderPage({
       quote,

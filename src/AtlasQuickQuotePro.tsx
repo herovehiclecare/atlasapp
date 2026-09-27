@@ -235,10 +235,13 @@ function hydrateQuote(row, vehiclesById) {
   };
 }
 
-// The customer-facing interactive quote page, served directly by the
-// quote-portal Edge Function - no login, no Atlas UI, just this one link.
+// The customer-facing interactive quote page - no login, no Atlas UI, just
+// this one link. Rendered by a Vercel serverless function (api/quote-portal.js)
+// so it actually displays as a webpage; the raw Supabase Edge Function URL
+// can't be used directly here since Supabase's gateway forces every Edge
+// Function response to text/plain and it shows as unrendered source text.
 function quotePortalUrl(shareToken) {
-  return `https://fqggnekepfzxrkuazpiy.supabase.co/functions/v1/quote-portal?token=${shareToken}`;
+  return `https://atlasapp-two.vercel.app/quote/${shareToken}`;
 }
 
 /* ---------------------------------- shared chrome ---------------------------------- */
