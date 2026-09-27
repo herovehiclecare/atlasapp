@@ -53,7 +53,6 @@ function renderPage(opts) {
     : "";
 
   let tiersHtml = "";
-  let tabsHtml = "";
   const tierData = [];
 
   if (tiered) {
@@ -68,9 +67,8 @@ function renderPage(opts) {
         return { id, name: a?.name || "Add-on", price: Number(a?.price) || 0 };
       });
       const subtotal = pkgRows.reduce((s, r) => s + r.price, 0) + addonRows.reduce((s, r) => s + r.price, 0);
+      const isFirst = tierData.length === 0;
       tierData.push({ id: tier.id, name: tier.name, subtotal, addonIds: addonRows.map((r) => r.id) });
-
-      tabsHtml += `<button class="tab" data-tier="${esc(tier.id)}" onclick="selectTier('${esc(tier.id)}')">${esc(tier.name)} — ${money(subtotal)}</button>`;
 
       const pkgHtml = pkgRows.map((r) => `
         <div class="item">
@@ -86,10 +84,18 @@ function renderPage(opts) {
         </label>`).join("");
 
       tiersHtml += `
-        <div class="card" id="card-${esc(tier.id)}" data-tier="${esc(tier.id)}" style="display:none">
-          <div class="card-head"><h2>${esc(tier.name)}</h2><span class="price">${money(subtotal)}</span></div>
-          ${pkgHtml}
-          ${addonRows.length ? `<div class="addons">${addonHtml}</div>` : ""}
+        <div class="tier${isFirst ? " active" : ""}" id="tier-${esc(tier.id)}" data-tier="${esc(tier.id)}">
+          <div class="tier-head" onclick="selectTier('${esc(tier.id)}')">
+            <span class="tier-name">${esc(tier.name)}</span>
+            <div class="tier-head-right">
+              <span class="tier-price">${money(subtotal)}</span>
+              <svg class="tier-chevron" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7l5 5 5-5"/></svg>
+            </div>
+          </div>
+          <div class="tier-body">
+            ${pkgHtml}
+            ${addonRows.length ? `<div class="addons">${addonHtml}</div>` : ""}
+          </div>
         </div>`;
     }
   } else {
@@ -124,16 +130,18 @@ function renderPage(opts) {
       </label>`;
   }).join("");
 
+  const businessName = business.name || "your detailer";
   const pageTitle = `${business.name || "Service"} — Quote for ${customer.name}`;
-  const ogDescription = `Tap to view your interactive quote from ${business.name || "your detailer"}${vehicle ? ` for your ${vehicle.label}` : ""}.`;
+  const ogDescription = "Click to view details.";
 
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(pageTitle)}</title>
 <meta name="description" content="${esc(ogDescription)}">
-<meta property="og:title" content="${esc(`You have a proposal from ${business.name || "your detailer"}`)}">
+<meta property="og:title" content="${esc(`You have a new quote from ${businessName}`)}">
 <meta property="og:description" content="${esc(ogDescription)}">
 <meta property="og:type" content="website">
-${business.logo_url ? `<meta property="og:image" content="${esc(business.logo_url)}">` : ""}
+<meta property="og:site_name" content="${esc(businessName)}">
+${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasapp-two.vercel.app/api/quote-logo?token=${quote.share_token}`)}">` : ""}
 <meta name="theme-color" content="#06100C">
 <style>
   * { box-sizing: border-box; }
@@ -146,9 +154,17 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(business.logo_ur
   .customer { margin-top: 20px; padding: 14px 16px; background: #0F1B15; border: 1px solid #1E2E25; border-radius: 12px; font-size: 13px; }
   .customer strong { font-size: 15px; }
   .customer .veh { color: #92AA9D; margin-top: 2px; }
-  .tabs { display: flex; gap: 8px; margin-top: 20px; flex-wrap: wrap; }
-  .tab { flex: 1; min-width: 120px; background: #0F1B15; border: 1px solid #1E2E25; color: #92AA9D; border-radius: 9px; padding: 10px 12px; font-size: 12.5px; font-weight: 700; cursor: pointer; }
-  .tab.active { background: rgba(24,217,122,0.14); border-color: #18D97A; color: #18D97A; }
+  .tiers { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+  .tier { background: #0F1B15; border: 1px solid #1E2E25; border-radius: 14px; overflow: hidden; }
+  .tier.active { border-color: #18D97A; }
+  .tier-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 16px 18px; cursor: pointer; }
+  .tier-name { font-size: 15px; font-weight: 700; }
+  .tier-head-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .tier-price { font-size: 15px; font-weight: 800; color: #18D97A; }
+  .tier-chevron { width: 18px; height: 18px; color: #566B5E; transition: transform 0.2s ease; }
+  .tier.active .tier-chevron { transform: rotate(180deg); color: #18D97A; }
+  .tier-body { display: none; padding: 0 18px 18px; }
+  .tier.active .tier-body { display: block; padding-top: 2px; border-top: 1px solid #1E2E25; margin-top: 2px; padding-top: 14px; }
   .card { margin-top: 16px; background: #0F1B15; border: 1px solid #1E2E25; border-radius: 14px; padding: 18px; }
   .card-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
   .card-head h2 { font-size: 16px; margin: 0; }
@@ -183,8 +199,7 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(business.logo_ur
     ${vehicle ? `<div class="veh">${esc(vehicle.label)}</div>` : ""}
   </div>
 
-  ${tiered ? `<div class="tabs">${tabsHtml}</div>` : ""}
-  <div id="cards">${tiersHtml}</div>
+  <div id="cards" class="${tiered ? "tiers" : ""}">${tiersHtml}</div>
 
   ${extraAddonServices.length ? `
   <div class="extras">
@@ -209,15 +224,14 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(business.logo_ur
 
   function selectTier(id) {
     selectedTier = id;
-    document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tier === id));
-    document.querySelectorAll('.card[data-tier]').forEach(c => c.style.display = c.dataset.tier === id ? 'block' : 'none');
+    document.querySelectorAll('.tier').forEach(t => t.classList.toggle('active', t.dataset.tier === id));
     updateTotal();
   }
 
   function updateTotal() {
     let subtotal = 0;
     if (TIERED) {
-      const card = document.getElementById('card-' + selectedTier);
+      const card = document.getElementById('tier-' + selectedTier);
       if (card) {
         card.querySelectorAll('.item-price').forEach(el => { subtotal += parseFloat(el.textContent.replace(/[^0-9.]/g, '')) || 0; });
         card.querySelectorAll('input[data-addon]').forEach(cb => { if (!cb.checked) subtotal -= parseFloat(cb.dataset.price) || 0; });
