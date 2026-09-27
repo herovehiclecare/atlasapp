@@ -188,7 +188,7 @@ function Card({ children, style }) {
 /* ---------------------------------- Business Profile ---------------------------------- */
 
 function ProfilePanel() {
-  const { businessId, businessName, businessLogoUrl, businessTagline, businessQuoteLabel, businessInvoiceLabel, businessPhone, businessEmail, businessAddress, businessPreferredCommApp, loading: bizLoading } = useBusinessId();
+  const { businessId, businessName, businessLogoUrl, businessTagline, businessQuoteLabel, businessInvoiceLabel, businessPhone, businessEmail, businessAddress, businessWebsite, businessSocialLinks, businessPreferredCommApp, loading: bizLoading } = useBusinessId();
   const [logo, setLogo] = useState(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [name, setName] = useState("");
@@ -212,6 +212,12 @@ function ProfilePanel() {
   const [address, setAddress] = useState("");
   const [savingAddress, setSavingAddress] = useState(false);
   const [addressSaved, setAddressSaved] = useState(false);
+  const [website, setWebsite] = useState("");
+  const [savingWebsite, setSavingWebsite] = useState(false);
+  const [websiteSaved, setWebsiteSaved] = useState(false);
+  const [socialLinks, setSocialLinks] = useState({ instagram: "", facebook: "", tiktok: "", google: "" });
+  const [savingSocial, setSavingSocial] = useState(false);
+  const [socialSaved, setSocialSaved] = useState(false);
   const [commApp, setCommApp] = useState("native");
   const [savingCommApp, setSavingCommApp] = useState(false);
   const [error, setError] = useState("");
@@ -225,6 +231,8 @@ function ProfilePanel() {
   useEffect(() => { setPhone(businessPhone); }, [businessPhone]);
   useEffect(() => { setEmail(businessEmail); }, [businessEmail]);
   useEffect(() => { setAddress(businessAddress); }, [businessAddress]);
+  useEffect(() => { setWebsite(businessWebsite); }, [businessWebsite]);
+  useEffect(() => { setSocialLinks({ instagram: "", facebook: "", tiktok: "", google: "", ...businessSocialLinks }); }, [businessSocialLinks]);
   useEffect(() => { setCommApp(businessPreferredCommApp || "native"); }, [businessPreferredCommApp]);
 
   async function onPick(e) {
@@ -319,6 +327,30 @@ function ProfilePanel() {
     if (updateError) { setError(updateError.message); return; }
     setAddressSaved(true);
     setTimeout(() => setAddressSaved(false), 1600);
+  }
+
+  async function saveWebsite() {
+    if (!businessId) return;
+    setSavingWebsite(true);
+    setError("");
+    const { error: updateError } = await supabase.from("businesses").update({ website: website.trim() || null }).eq("id", businessId).select().single();
+    setSavingWebsite(false);
+    if (updateError) { setError(updateError.message); return; }
+    setWebsiteSaved(true);
+    setTimeout(() => setWebsiteSaved(false), 1600);
+  }
+
+  async function saveSocialLinks() {
+    if (!businessId) return;
+    setSavingSocial(true);
+    setError("");
+    const cleaned = Object.fromEntries(Object.entries(socialLinks).map(([k, v]) => [k, (v || "").trim()]).filter(([, v]) => v));
+    const { error: updateError } = await supabase.from("businesses").update({ social_links: cleaned }).eq("id", businessId).select().single();
+    setSavingSocial(false);
+    if (updateError) { setError(updateError.message); return; }
+    setSocialLinks({ instagram: "", facebook: "", tiktok: "", google: "", ...cleaned });
+    setSocialSaved(true);
+    setTimeout(() => setSocialSaved(false), 1600);
   }
 
   async function saveCommApp(value) {
@@ -423,6 +455,18 @@ function ProfilePanel() {
             </button>
           </div>
         </Field>
+        <Field label="Website">
+          <div style={{ display: "flex", gap: 8 }}>
+            <input value={website} onChange={(e) => setWebsite(e.target.value)} disabled={bizLoading} placeholder="detailhero.com" style={{ ...inputStyle, flex: 1 }} />
+            <button
+              onClick={saveWebsite}
+              disabled={savingWebsite || bizLoading || website === businessWebsite}
+              style={{ display: "flex", alignItems: "center", gap: 5, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 9, padding: "0 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", flexShrink: 0, opacity: (savingWebsite || bizLoading || website === businessWebsite) ? 0.5 : 1 }}
+            >
+              {savingWebsite ? <Loader2 size={13} className="animate-spin" /> : websiteSaved ? <CheckIcon size={13} /> : "Save"}
+            </button>
+          </div>
+        </Field>
         <div style={{ gridColumn: "1 / -1" }}>
           <Field label="Address">
             <div style={{ display: "flex", gap: 8 }}>
@@ -438,6 +482,32 @@ function ProfilePanel() {
           </Field>
         </div>
       </div>
+
+      <Card style={{ padding: 16, marginTop: 18 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: P.textPrimary, marginBottom: 4 }}>Social links</div>
+        <p style={{ fontSize: 11.5, color: P.textMuted, margin: "0 0 12px" }}>Shown at the bottom of the interactive quote page, along with your logo, phone, and website.</p>
+        <div className="settings-profile-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Field label="Instagram">
+            <input value={socialLinks.instagram} onChange={(e) => setSocialLinks((s) => ({ ...s, instagram: e.target.value }))} disabled={bizLoading} placeholder="instagram.com/detailhero" style={inputStyle} />
+          </Field>
+          <Field label="Facebook">
+            <input value={socialLinks.facebook} onChange={(e) => setSocialLinks((s) => ({ ...s, facebook: e.target.value }))} disabled={bizLoading} placeholder="facebook.com/detailhero" style={inputStyle} />
+          </Field>
+          <Field label="TikTok">
+            <input value={socialLinks.tiktok} onChange={(e) => setSocialLinks((s) => ({ ...s, tiktok: e.target.value }))} disabled={bizLoading} placeholder="tiktok.com/@detailhero" style={inputStyle} />
+          </Field>
+          <Field label="Google Reviews">
+            <input value={socialLinks.google} onChange={(e) => setSocialLinks((s) => ({ ...s, google: e.target.value }))} disabled={bizLoading} placeholder="g.page/r/..." style={inputStyle} />
+          </Field>
+        </div>
+        <button
+          onClick={saveSocialLinks}
+          disabled={savingSocial || bizLoading}
+          style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 12, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 9, padding: "8px 14px", fontSize: 12.5, fontWeight: 700, cursor: "pointer", opacity: (savingSocial || bizLoading) ? 0.5 : 1 }}
+        >
+          {savingSocial ? <Loader2 size={13} className="animate-spin" /> : socialSaved ? <CheckIcon size={13} /> : "Save social links"}
+        </button>
+      </Card>
 
       <div style={{ marginTop: 18 }}>
         <Field label="Open calls/texts in">

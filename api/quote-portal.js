@@ -25,6 +25,17 @@ function money(n) {
   return `$${(Number(n) || 0).toLocaleString()}`;
 }
 
+function normalizeUrl(u) {
+  if (!u) return "";
+  return /^https?:\/\//i.test(u) ? u : `https://${u}`;
+}
+
+function displayUrl(u) {
+  return String(u || "").replace(/^https?:\/\//i, "").replace(/\/$/, "");
+}
+
+const SOCIAL_LABELS = { instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", google: "Google Reviews", yelp: "Yelp" };
+
 function effectiveInfo(service, overrides, id) {
   const o = overrides?.[id];
   return {
@@ -53,7 +64,6 @@ function renderPage(opts) {
     : "";
 
   let tiersHtml = "";
-  const tierData = [];
 
   if (tiered) {
     for (const tier of quote.tiers || []) {
@@ -67,8 +77,6 @@ function renderPage(opts) {
         return { id, name: a?.name || "Add-on", price: Number(a?.price) || 0 };
       });
       const subtotal = pkgRows.reduce((s, r) => s + r.price, 0) + addonRows.reduce((s, r) => s + r.price, 0);
-      const isFirst = tierData.length === 0;
-      tierData.push({ id: tier.id, name: tier.name, subtotal, addonIds: addonRows.map((r) => r.id) });
 
       const pkgHtml = pkgRows.map((r) => `
         <div class="item">
@@ -84,8 +92,8 @@ function renderPage(opts) {
         </label>`).join("");
 
       tiersHtml += `
-        <div class="tier${isFirst ? " active" : ""}" id="tier-${esc(tier.id)}" data-tier="${esc(tier.id)}">
-          <div class="tier-head" onclick="selectTier('${esc(tier.id)}')">
+        <div class="tier" id="tier-${esc(tier.id)}" data-tier="${esc(tier.id)}">
+          <div class="tier-head" onclick="toggleExpand('${esc(tier.id)}')">
             <span class="tier-name">${esc(tier.name)}</span>
             <div class="tier-head-right">
               <span class="tier-price">${money(subtotal)}</span>
@@ -95,6 +103,7 @@ function renderPage(opts) {
           <div class="tier-body">
             ${pkgHtml}
             ${addonRows.length ? `<div class="addons">${addonHtml}</div>` : ""}
+            <button class="choose-btn" data-tier="${esc(tier.id)}" data-label="Choose ${esc(tier.name)}" onclick="chooseTier('${esc(tier.id)}')">Choose ${esc(tier.name)}</button>
           </div>
         </div>`;
     }
@@ -119,8 +128,6 @@ function renderPage(opts) {
     tiersHtml = `<div class="card" data-tier="single">${pkgHtml}${quote.line_items?.addonIds?.length ? `<div class="addons">${addonHtml}</div>` : ""}</div>`;
   }
 
-  const defaultTierId = tierData[0]?.id || null;
-
   const extrasHtml = extraAddonServices.map((s) => {
     const price = svcPrice(s, vehicle);
     return `
@@ -133,6 +140,16 @@ function renderPage(opts) {
   const businessName = business.name || "your detailer";
   const pageTitle = `${business.name || "Service"} — Quote for ${customer.name}`;
   const ogDescription = "Click to view details.";
+
+  const footerLogoImg = business.logo_url
+    ? `<img src="${esc(business.logo_url)}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover">`
+    : "";
+  const social = business.social_links || {};
+  const socialLinksHtml = Object.entries(social)
+    .filter(([, url]) => url)
+    .map(([key, url]) => `<a href="${esc(normalizeUrl(url))}" target="_blank" rel="noopener">${esc(SOCIAL_LABELS[key] || key)}</a>`)
+    .join("");
+  const footerHasContent = business.website || business.phone || socialLinksHtml || footerLogoImg;
 
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(pageTitle)}</title>
@@ -156,15 +173,17 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
   .customer .veh { color: #92AA9D; margin-top: 2px; }
   .tiers { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
   .tier { background: #0F1B15; border: 1px solid #1E2E25; border-radius: 14px; overflow: hidden; }
-  .tier.active { border-color: #18D97A; }
+  .tier.chosen { border-color: #18D97A; }
   .tier-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 16px 18px; cursor: pointer; }
   .tier-name { font-size: 15px; font-weight: 700; }
   .tier-head-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
   .tier-price { font-size: 15px; font-weight: 800; color: #18D97A; }
   .tier-chevron { width: 18px; height: 18px; color: #566B5E; transition: transform 0.2s ease; }
-  .tier.active .tier-chevron { transform: rotate(180deg); color: #18D97A; }
+  .tier.expanded .tier-chevron { transform: rotate(180deg); color: #18D97A; }
   .tier-body { display: none; padding: 0 18px 18px; }
-  .tier.active .tier-body { display: block; padding-top: 2px; border-top: 1px solid #1E2E25; margin-top: 2px; padding-top: 14px; }
+  .tier.expanded .tier-body { display: block; border-top: 1px solid #1E2E25; margin-top: 2px; padding-top: 14px; }
+  .choose-btn { width: 100%; margin-top: 14px; background: rgba(24,217,122,0.12); border: 1px solid #18D97A; color: #18D97A; border-radius: 10px; padding: 12px; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+  .choose-btn.chosen { background: #18D97A; color: #06100C; }
   .card { margin-top: 16px; background: #0F1B15; border: 1px solid #1E2E25; border-radius: 14px; padding: 18px; }
   .card-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
   .card-head h2 { font-size: 16px; margin: 0; }
@@ -189,6 +208,14 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
   .approve:disabled { opacity: 0.6; cursor: default; }
   .note { margin-top: 14px; font-size: 11px; color: #566B5E; text-align: center; line-height: 1.6; }
   .approved-banner { margin-top: 16px; padding: 14px 16px; background: rgba(24,217,122,0.14); border: 1px solid #18D97A; border-radius: 12px; color: #18D97A; font-size: 13.5px; font-weight: 700; text-align: center; }
+  .footer { margin-top: 28px; padding-top: 20px; border-top: 1px solid #1E2E25; text-align: center; }
+  .footer img { margin-bottom: 8px; }
+  .footer-name { font-size: 13px; font-weight: 700; color: #EDF6F1; }
+  .footer-tagline { font-size: 11px; color: #566B5E; margin-top: 2px; }
+  .footer-links { margin-top: 10px; display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
+  .footer-links a { color: #92AA9D; font-size: 12px; text-decoration: none; }
+  .footer-social { margin-top: 10px; display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+  .footer-social a { background: #0F1B15; border: 1px solid #1E2E25; color: #92AA9D; border-radius: 999px; padding: 6px 12px; font-size: 11.5px; font-weight: 600; text-decoration: none; }
 </style></head>
 <body>
 <div class="wrap">
@@ -211,21 +238,53 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
 
   ${alreadyApproved
     ? `<div class="approved-banner">✓ Approved — we'll be in touch to get this scheduled.</div>`
-    : `<button class="approve" id="approveBtn" onclick="approve()">Approve Selected Package</button>`}
+    : `<button class="approve" id="approveBtn" onclick="approve()"${tiered ? " disabled" : ""}>${tiered ? "Select a package above" : "Approve Selected Package"}</button>`}
 
   <div class="note">Quote prepared ${esc(new Date(quote.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }))} · Valid 14 days${business.phone ? ` · Questions? ${esc(business.phone)}` : ""}</div>
+
+  ${footerHasContent ? `
+  <div class="footer">
+    ${footerLogoImg}
+    <div class="footer-name">${esc(business.name || "")}</div>
+    ${business.tagline ? `<div class="footer-tagline">${esc(business.tagline)}</div>` : ""}
+    <div class="footer-links">
+      ${business.website ? `<a href="${esc(normalizeUrl(business.website))}" target="_blank" rel="noopener">${esc(displayUrl(business.website))}</a>` : ""}
+      ${business.phone ? `<a href="tel:${esc(business.phone.replace(/[^\d+]/g, ""))}">${esc(business.phone)}</a>` : ""}
+    </div>
+    ${socialLinksHtml ? `<div class="footer-social">${socialLinksHtml}</div>` : ""}
+  </div>` : ""}
 </div>
 
 <script>
   const TIERED = ${tiered};
   const TAX_RATE = ${taxRate};
   const TOKEN = ${JSON.stringify(quote.share_token)};
-  let selectedTier = ${JSON.stringify(defaultTierId)};
+  let selectedTier = null;
+  const expandedTiers = new Set();
 
-  function selectTier(id) {
+  function toggleExpand(id) {
+    if (expandedTiers.has(id)) expandedTiers.delete(id); else expandedTiers.add(id);
+    const tier = document.getElementById('tier-' + id);
+    if (tier) tier.classList.toggle('expanded', expandedTiers.has(id));
+  }
+
+  function chooseTier(id) {
     selectedTier = id;
-    document.querySelectorAll('.tier').forEach(t => t.classList.toggle('active', t.dataset.tier === id));
+    document.querySelectorAll('.tier').forEach(t => t.classList.toggle('chosen', t.dataset.tier === id));
+    document.querySelectorAll('.choose-btn').forEach(b => {
+      const isChosen = b.dataset.tier === id;
+      b.classList.toggle('chosen', isChosen);
+      b.textContent = isChosen ? '✓ Selected' : b.dataset.label;
+    });
     updateTotal();
+    updateApproveState();
+  }
+
+  function updateApproveState() {
+    const btn = document.getElementById('approveBtn');
+    if (!btn || !TIERED) return;
+    btn.disabled = !selectedTier;
+    btn.textContent = selectedTier ? 'Approve Selected Package' : 'Select a package above';
   }
 
   function updateTotal() {
@@ -246,6 +305,7 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
   }
 
   async function approve() {
+    if (TIERED && !selectedTier) return;
     const btn = document.getElementById('approveBtn');
     btn.disabled = true;
     btn.textContent = 'Submitting…';
@@ -270,8 +330,8 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
     }
   }
 
-  if (TIERED && selectedTier) selectTier(selectedTier);
-  else updateTotal();
+  updateTotal();
+  updateApproveState();
 </script>
 </body></html>`;
 }
