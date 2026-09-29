@@ -4,12 +4,14 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // ============================================================================
 // FACEBOOK LEAD + MESSENGER WEBHOOK
 //
-//   * Lead Ads form submitted   -> Atlas customer + same-day follow-up + Quo text
-//   * Someone messages the Page -> Atlas customer (first time only) + follow-up
-//                                  + Quo text alert to the owner
+//   * Lead Ads form submitted   -> Atlas customer + Quo contact + Quo task +
+//                                  same-day follow-up + Quo text alert
+//   * Someone messages the Page -> Atlas customer + Quo contact + Quo task
+//                                  (first time only) + follow-up + Quo text alert
 //
 // Secrets: FB_VERIFY_TOKEN, FB_APP_SECRET, FB_PAGE_ACCESS_TOKEN,
-// ATLAS_BUSINESS_ID, QUO_API_KEY, QUO_FROM_NUMBER, OWNER_ALERT_PHONE.
+// ATLAS_BUSINESS_ID, QUO_API_KEY, QUO_FROM_NUMBER, OWNER_ALERT_PHONE,
+// QUO_PHONE_NUMBER_ID (optional - skips Quo task creation if unset).
 // Optional: MESSENGER_ALERT_ALL="true" -> text the owner on EVERY inbound message
 // (default: only when a NEW person messages).
 // ============================================================================
@@ -21,6 +23,7 @@ const BUSINESS_ID = Deno.env.get("ATLAS_BUSINESS_ID") || "";
 const OPENPHONE_API_KEY = Deno.env.get("QUO_API_KEY") || "";
 const OPENPHONE_FROM_NUMBER = Deno.env.get("QUO_FROM_NUMBER") || "";
 const OWNER_ALERT_PHONE = Deno.env.get("OWNER_ALERT_PHONE") || "";
+const QUO_PHONE_NUMBER_ID = Deno.env.get("QUO_PHONE_NUMBER_ID") || "";
 const MESSENGER_ALERT_ALL = (Deno.env.get("MESSENGER_ALERT_ALL") || "").toLowerCase() === "true";
 
 const supabase = createClient(
@@ -58,7 +61,7 @@ function nowLocalTime(): string {
 
 // Meta's leadgen `created_time` field comes back as an ISO 8601 string
 // (e.g. "2026-09-29T21:23:00+0000"), not a Unix timestamp - treating it as
-// one (the previous `* 1000` conversion) produced an Invalid Date and threw
+// one (a previous `* 1000` conversion) produced an Invalid Date and threw
 // on every real lead, crashing the whole webhook with a 500 before the
 // customer/follow-up/alert ever ran. This never throws either way, and
 // falls back to null (this field is metadata only, not worth losing an
@@ -145,8 +148,29 @@ async function syncContactToQuo(opts: { customerId: string; name: string; email:
   }
 }
 
+// A visible reminder inside Quo itself to reach out, on top of the contact
+// record and the owner's alert text - closes the "I didn't get a task to
+// message them" gap. QUO_PHONE_NUMBER_ID identifies which Quo number/inbox
+// the task belongs to (tasks are scoped to a number in OpenPhone's API,
+// unlike contacts, which are workspace-wide) - optional, so a business that
+// hasn't set it just skips this one feature instead of failing the whole
+// lead. Never throws, same reasoning as syncContactToQuo.
+async function createQuoTask(title: string, description: string) {
+  if (!OPENPHONE_API_KEY || !QUO_PHONE_NUMBER_ID) return;
+  try {
+    const res = await fetch("https://api.openphone.com/v1/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: OPENPHONE_API_KEY },
+      body: JSON.stringify({ phoneNumberId: QUO_PHONE_NUMBER_ID, title, description }),
+    });
+    if (!res.ok) console.error("Quo task creation failed", res.status, await res.text());
+  } catch (err) {
+    console.error("Quo task creation threw", err);
+  }
+}
+
 // ---------------------------------------------------------------------------
-// Lead Ads forms (unchanged from v10)
+// Lead Ads forms
 // ---------------------------------------------------------------------------
 async function processLead(leadgenId: string) {
   if (!BUSINESS_ID || !PAGE_ACCESS_TOKEN) {
@@ -230,12 +254,16 @@ async function processLead(leadgenId: string) {
 
   const role = Object.values(otherAnswers).filter(Boolean).join(" · ") || null;
   await syncContactToQuo({ customerId: newCustomer.id, name, email, phone, role });
+  await createQuoTask(
+    `New Facebook lead: ${name} — reach out`,
+    `${role ? `${role}. ` : ""}${phone ? `Phone: ${phone}. ` : ""}${email ? `Email: ${email}.` : ""}`.trim()
+  );
 
   await sendLeadAlertText(name, phone);
 }
 
 // ---------------------------------------------------------------------------
-// MESSENGER (new)
+// MESSENGER
 // ---------------------------------------------------------------------------
 
 // Meta only sends the sender's page-scoped id (PSID). Ask the Graph API for a
@@ -315,7 +343,7 @@ async function processMessengerEvent(event: any, pageId: string) {
     }
   }
 
-  // 3) Genuinely new person -> customer + follow-up + alert.
+  // 3) Genuinely new person -> customer + follow-up + Quo contact/task + alert.
   const { data: newCustomer, error } = await supabase
     .from("customers")
     .insert({
@@ -343,6 +371,10 @@ async function processMessengerEvent(event: any, pageId: string) {
   if (followUpError) console.error("Failed to create Messenger follow-up", psid, followUpError.message);
 
   await syncContactToQuo({ customerId: newCustomer.id, name, email: null, phone: null, role: snippet ? `Facebook Messenger: "${snippet}"` : "Facebook Messenger contact" });
+  await createQuoTask(
+    `New Messenger message: ${name} — reply`,
+    snippet ? `"${snippet}" — reply in Meta Business Suite, then ask for their vehicle, the service they want, and a phone number.` : "Reply in Meta Business Suite, then ask for their vehicle, the service they want, and a phone number."
+  );
 
   await sendOwnerText(`New Messenger message at ${nowLocalTime()} from ${name}${snippet ? `: "${snippet}"` : ""}. Reply in Meta Business Suite; details in Atlas.`);
 }
@@ -380,13 +412,13 @@ Deno.serve(async (req) => {
     const messengerEvents: { event: any; pageId: string }[] = [];
 
     for (const entry of payload.entry || []) {
-      // Lead Ads (unchanged)
+      // Lead Ads
       for (const change of entry.changes || []) {
         if (change.field === "leadgen" && change.value?.leadgen_id) {
           leadIds.push(String(change.value.leadgen_id));
         }
       }
-      // Messenger (new): Page webhooks put messages under entry.messaging
+      // Messenger: Page webhooks put messages under entry.messaging
       for (const event of entry.messaging || []) {
         messengerEvents.push({ event, pageId: String(entry.id || "") });
       }
