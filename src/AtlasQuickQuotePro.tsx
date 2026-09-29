@@ -1033,17 +1033,14 @@ function StepReview({
         </div>
 
         <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${P.border}` }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: P.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>AI-written description</span>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: P.textMuted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Note to customer</span>
             <button onClick={generateDescription} disabled={generating} style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: "none", color: P.accent, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>
-              {generating ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />} {description ? "Regenerate" : "Generate"}
+              {generating ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />} {description ? "Regenerate" : "Generate with Atlas"}
             </button>
           </div>
-          {description ? (
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} style={{ width: "100%", background: P.surface, border: `1px solid ${P.border}`, borderRadius: 8, padding: "8px 10px", color: P.textSecondary, fontSize: 12.5, outline: "none", resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }} />
-          ) : (
-            <p style={{ fontSize: 12.5, color: P.textMuted, fontStyle: "italic", margin: 0 }}>Not generated yet — click Generate for a ready-to-send summary.</p>
-          )}
+          <p style={{ fontSize: 11, color: P.textMuted, margin: "0 0 6px" }}>Shows at the top of the interactive quote link, right under the customer's name. Write it yourself, use Atlas to draft one, or leave it blank to skip it entirely.</p>
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} placeholder="e.g. Great catching up today — here's what we talked about..." style={{ width: "100%", background: P.surface, border: `1px solid ${P.border}`, borderRadius: 8, padding: "8px 10px", color: P.textSecondary, fontSize: 12.5, outline: "none", resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }} />
         </div>
 
         {proposalMode === "tiered" ? (

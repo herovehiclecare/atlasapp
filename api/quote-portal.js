@@ -186,6 +186,7 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
   .customer { margin-top: 20px; padding: 14px 16px; background: #0F1B15; border: 1px solid #1E2E25; border-radius: 12px; font-size: 13px; }
   .customer strong { font-size: 15px; }
   .customer .veh { color: #92AA9D; margin-top: 2px; }
+  .quote-note { margin-top: 10px; padding: 12px 16px; background: rgba(24,217,122,0.06); border: 1px solid #1E2E25; border-left: 3px solid #18D97A; border-radius: 10px; font-size: 12.5px; color: #C7D6CD; line-height: 1.6; white-space: pre-wrap; }
   .tiers { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
   .tier { background: #0F1B15; border: 1px solid #1E2E25; border-radius: 14px; overflow: hidden; }
   .tier.chosen { border-color: #18D97A; }
@@ -240,6 +241,8 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
     <strong>${esc(customer.name)}</strong>
     ${vehicle ? `<div class="veh">${esc(vehicle.label)}</div>` : ""}
   </div>
+
+  ${quote.description ? `<div class="quote-note">${esc(quote.description)}</div>` : ""}
 
   <div id="cards" class="${tiered ? "tiers" : ""}">${tiersHtml}</div>
 
