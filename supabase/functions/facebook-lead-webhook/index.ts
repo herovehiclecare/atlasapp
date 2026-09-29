@@ -56,6 +56,19 @@ function nowLocalTime(): string {
   }).format(new Date());
 }
 
+// Meta's leadgen `created_time` field comes back as an ISO 8601 string
+// (e.g. "2026-09-29T21:23:00+0000"), not a Unix timestamp - treating it as
+// one (the previous `* 1000` conversion) produced an Invalid Date and threw
+// on every real lead, crashing the whole webhook with a 500 before the
+// customer/follow-up/alert ever ran. This never throws either way, and
+// falls back to null (this field is metadata only, not worth losing an
+// entire lead over) if the value turns out to be something unparseable.
+function safeIsoDate(value: unknown): string | null {
+  if (!value) return null;
+  const d = new Date(value as any);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 // One place that sends the owner a text through Quo. Never throws.
 async function sendOwnerText(content: string) {
   if (!OPENPHONE_API_KEY || !OPENPHONE_FROM_NUMBER || !OWNER_ALERT_PHONE) return;
@@ -126,7 +139,7 @@ async function processLead(leadgenId: string) {
     campaign_name: lead.campaign_name || null,
     form_id: lead.form_id || null,
     platform: lead.platform || null,
-    submitted_at: lead.created_time ? new Date(lead.created_time * 1000).toISOString() : null,
+    submitted_at: safeIsoDate(lead.created_time),
     answers: otherAnswers,
   };
 
@@ -315,7 +328,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    await Promise.all(leadIds.map(processLead));
+    // Each lead's own try/catch, same pattern as the Messenger loop below -
+    // Promise.all alone would let one bad lead's uncaught error 500 the
+    // whole response (and Meta then retries the entire batch, repeatedly,
+    // instead of just the one that actually failed) and block every other
+    // lead in the same delivery from ever being saved.
+    await Promise.all(leadIds.map(async (id) => {
+      try {
+        await processLead(id);
+      } catch (err) {
+        console.error("Lead processing failed", id, err);
+      }
+    }));
     // Sequential on purpose: two quick messages from the same new person must
     // not both pass the "already known?" check and create duplicate customers.
     for (const { event, pageId } of messengerEvents) {
