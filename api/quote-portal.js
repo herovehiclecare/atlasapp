@@ -36,6 +36,18 @@ function displayUrl(u) {
 
 const SOCIAL_LABELS = { instagram: "Instagram", facebook: "Facebook", tiktok: "TikTok", google: "Google Reviews", yelp: "Yelp" };
 
+// Small hand-drawn glyphs (not the real brand logomarks) so the footer can
+// show recognizable icons for each platform without pulling in an icon
+// font or CDN - this page has to stay a single self-contained response.
+const SOCIAL_ICONS = {
+  instagram: '<rect x="3" y="3" width="18" height="18" rx="6" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="12" cy="12" r="4.2" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="17.2" cy="6.8" r="1.1" fill="currentColor"/>',
+  facebook: '<path d="M14 8.5h2V5.2h-2.2C11.5 5.2 10 6.7 10 9v2H8v3.3h2V19h3.3v-4.7h2.3l.4-3.3h-2.7V9c0-.4.3-.5.5-.5Z" fill="currentColor"/>',
+  tiktok: '<path d="M13.2 3.5c.4 1.8 1.6 2.9 3.5 3.1v2.6a6.6 6.6 0 0 1-3.5-1v6.1a4.7 4.7 0 1 1-4-4.6v2.7a2 2 0 1 0 1.5 1.9V3.5h2.5Z" fill="currentColor"/>',
+  google: '<path d="M12 2.6l2.3 5 5.5.6-4.1 3.7 1.2 5.5L12 14.7l-4.9 2.7 1.2-5.5-4.1-3.7 5.5-.6L12 2.6Z" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linejoin="round"/>',
+  yelp: '<path d="M12 2.6l2.3 5 5.5.6-4.1 3.7 1.2 5.5L12 14.7l-4.9 2.7 1.2-5.5-4.1-3.7 5.5-.6L12 2.6Z" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linejoin="round"/>',
+};
+const SOCIAL_ICON_FALLBACK = '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M8 12h8M12 8v8" stroke="currentColor" stroke-width="1.6"/>';
+
 function effectiveInfo(service, overrides, id) {
   const o = overrides?.[id];
   return {
@@ -145,11 +157,14 @@ function renderPage(opts) {
     ? `<img src="${esc(business.logo_url)}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover">`
     : "";
   const social = business.social_links || {};
-  const socialLinksHtml = Object.entries(social)
+  const socialIconsHtml = Object.entries(social)
     .filter(([, url]) => url)
-    .map(([key, url]) => `<a href="${esc(normalizeUrl(url))}" target="_blank" rel="noopener">${esc(SOCIAL_LABELS[key] || key)}</a>`)
+    .map(([key, url]) => `
+      <a href="${esc(normalizeUrl(url))}" target="_blank" rel="noopener" aria-label="${esc(SOCIAL_LABELS[key] || key)}" title="${esc(SOCIAL_LABELS[key] || key)}">
+        <svg viewBox="0 0 24 24" width="18" height="18">${SOCIAL_ICONS[key] || SOCIAL_ICON_FALLBACK}</svg>
+      </a>`)
     .join("");
-  const footerHasContent = business.website || business.phone || socialLinksHtml || footerLogoImg;
+  const footerHasContent = business.website || business.phone || business.email || socialIconsHtml || footerLogoImg;
 
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(pageTitle)}</title>
@@ -208,14 +223,14 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
   .approve:disabled { opacity: 0.6; cursor: default; }
   .note { margin-top: 14px; font-size: 11px; color: #566B5E; text-align: center; line-height: 1.6; }
   .approved-banner { margin-top: 16px; padding: 14px 16px; background: rgba(24,217,122,0.14); border: 1px solid #18D97A; border-radius: 12px; color: #18D97A; font-size: 13.5px; font-weight: 700; text-align: center; }
-  .footer { margin-top: 28px; padding-top: 20px; border-top: 1px solid #1E2E25; text-align: center; }
-  .footer img { margin-bottom: 8px; }
-  .footer-name { font-size: 13px; font-weight: 700; color: #EDF6F1; }
-  .footer-tagline { font-size: 11px; color: #566B5E; margin-top: 2px; }
-  .footer-links { margin-top: 10px; display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; }
+  .footer { margin-top: 28px; padding-top: 22px; border-top: 1px solid #1E2E25; text-align: center; display: flex; flex-direction: column; align-items: center; }
+  .footer img { margin-bottom: 10px; }
+  .footer-name { font-size: 13.5px; font-weight: 700; color: #EDF6F1; }
+  .footer-tagline { font-size: 10.5px; font-weight: 600; color: #566B5E; letter-spacing: 0.06em; margin-top: 4px; }
+  .footer-links { margin-top: 14px; display: flex; flex-direction: column; align-items: center; gap: 5px; }
   .footer-links a { color: #92AA9D; font-size: 12px; text-decoration: none; }
-  .footer-social { margin-top: 10px; display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
-  .footer-social a { background: #0F1B15; border: 1px solid #1E2E25; color: #92AA9D; border-radius: 999px; padding: 6px 12px; font-size: 11.5px; font-weight: 600; text-decoration: none; }
+  .footer-social { margin-top: 16px; display: flex; justify-content: center; align-items: center; gap: 10px; }
+  .footer-social a { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: #0F1B15; border: 1px solid #1E2E25; color: #92AA9D; border-radius: 999px; text-decoration: none; }
 </style></head>
 <body>
 <div class="wrap">
@@ -248,10 +263,11 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
     <div class="footer-name">${esc(business.name || "")}</div>
     ${business.tagline ? `<div class="footer-tagline">${esc(business.tagline)}</div>` : ""}
     <div class="footer-links">
-      ${business.website ? `<a href="${esc(normalizeUrl(business.website))}" target="_blank" rel="noopener">${esc(displayUrl(business.website))}</a>` : ""}
       ${business.phone ? `<a href="tel:${esc(business.phone.replace(/[^\d+]/g, ""))}">${esc(business.phone)}</a>` : ""}
+      ${business.email ? `<a href="mailto:${esc(business.email)}">${esc(business.email)}</a>` : ""}
+      ${business.website ? `<a href="${esc(normalizeUrl(business.website))}" target="_blank" rel="noopener">${esc(displayUrl(business.website)).toUpperCase()}</a>` : ""}
     </div>
-    ${socialLinksHtml ? `<div class="footer-social">${socialLinksHtml}</div>` : ""}
+    ${socialIconsHtml ? `<div class="footer-social">${socialIconsHtml}</div>` : ""}
   </div>` : ""}
 </div>
 
