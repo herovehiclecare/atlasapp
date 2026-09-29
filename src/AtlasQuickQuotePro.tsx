@@ -74,6 +74,22 @@ function hue(i) { return HUES[i % HUES.length]; }
 function initials(name) { return name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase(); }
 function money(n) { return `$${(Number(n) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
 
+// Short relative time for "last viewed" - e.g. "2h ago", "just now" - falls
+// back to a plain date once it's more than a week old, since "9d ago" reads
+// worse than the actual date at that point.
+function timeAgo(iso) {
+  if (!iso) return "";
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 function findAddon(addonsAll, id) { return addonsAll.find((a) => a.id === id); }
 
 // A service's price as it should actually be charged on a specific quote -
@@ -243,6 +259,9 @@ function hydrateQuote(row, vehiclesById) {
     serviceOverrides: row.service_overrides || {},
     shareToken: row.share_token || null,
     hideAddonsUpsell: !!row.hide_addons_upsell,
+    firstViewedAt: row.first_viewed_at || null,
+    lastViewedAt: row.last_viewed_at || null,
+    viewCount: row.view_count || 0,
   };
 }
 
@@ -1221,7 +1240,7 @@ function StepReview({
 
 /* ---------------------------------- step 7: send ---------------------------------- */
 
-function StepSend({ channels, toggleChannel, sent, customer, depositLink, onAddToCalendar, onSaveContact, onDownloadPdf, onSaveImage, savingImage, onPreview, proposalMode, tierCount, quoteLink, onCopyLink, linkCopied }) {
+function StepSend({ channels, toggleChannel, sent, customer, depositLink, onAddToCalendar, onSaveContact, onDownloadPdf, onSaveImage, savingImage, onPreview, proposalMode, tierCount, quoteLink, onCopyLink, linkCopied, smsSendResult }) {
   if (sent) {
     return (
       <div style={{ textAlign: "center", padding: "36px 0" }}>
@@ -1236,6 +1255,14 @@ function StepSend({ channels, toggleChannel, sent, customer, depositLink, onAddT
         </p>
         {depositLink && (
           <p style={{ fontSize: 12, color: P.accent, maxWidth: 340, margin: "10px auto 0" }}>A deposit link was included so they can lock in a time right away.</p>
+        )}
+
+        {smsSendResult && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, maxWidth: 340, margin: "12px auto 0", fontSize: 12.5, fontWeight: 600, color: smsSendResult.status === "error" ? P.danger : P.accent }}>
+            {smsSendResult.status === "sending" && <><Loader2 size={13} className="animate-spin" /> Texting {customer?.name?.split(" ")[0]}…</>}
+            {smsSendResult.status === "sent" && <><Check size={13} /> Texted to {smsSendResult.to}</>}
+            {smsSendResult.status === "error" && <>Text didn't send: {smsSendResult.message}</>}
+          </div>
         )}
 
         {quoteLink && (
@@ -1422,6 +1449,11 @@ function SavedQuotesList({ quotes, loading, error, onView, onDelete, onDownloadP
                   <Layers size={10} /> {q.tiers.length} options
                 </span>
               )}
+              {q.lastViewedAt && (
+                <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 700, color: P.accent, flexShrink: 0 }} title={`First opened ${formatDate(q.firstViewedAt)} · viewed ${q.viewCount}x`}>
+                  <Eye size={11} /> {timeAgo(q.lastViewedAt)}
+                </span>
+              )}
               <StatusBadge status={q.status} />
               <div style={{ fontSize: 14, fontWeight: 700, color: P.textPrimary, flexShrink: 0, minWidth: 64, textAlign: "right" }}>
                 {q.totals.isRange ? `${money(q.totals.rangeLow)}–${money(q.totals.rangeHigh)}` : money(q.totals.total)}
@@ -1459,6 +1491,11 @@ function PipelineCard({ q, onView, onSetStatus, onBookJob, onViewJob, i }) {
         </span>
         <span style={{ fontSize: 10.5, color: P.textMuted }}>{q.createdAt}</span>
       </div>
+      {q.lastViewedAt && (
+        <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, color: P.accent }} title={`First opened ${formatDate(q.firstViewedAt)} · viewed ${q.viewCount}x`}>
+          <Eye size={11} /> Viewed {timeAgo(q.lastViewedAt)}
+        </div>
+      )}
       <StageActions q={q} onSetStatus={onSetStatus} onBookJob={onBookJob} onViewJob={onViewJob} />
     </Card>
   );
@@ -1985,6 +2022,10 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote", 
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [lastSent, setLastSent] = useState(null);
+  // Result of the real text-message send triggered by handleSend() when
+  // "Text message" is checked - separate from `sent` (which just means the
+  // quote itself was saved/marked Sent) since the SMS can fail on its own.
+  const [smsSendResult, setSmsSendResult] = useState(null);
   const [saveError, setSaveError] = useState("");
 
   const [draftSaved, setDraftSaved] = useState(false);
@@ -2327,6 +2368,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote", 
     setChannels(["email"]); setSent(false); setLastSent(null); setSaveError(""); setScriptOverride(null);
     setServiceOverrides({});
     setHideAddonsUpsell(false);
+    setSmsSendResult(null);
   }
 
   async function downloadQuotePdf(snapshot) {
@@ -2427,6 +2469,12 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote", 
     setSent(true);
     setLastSent({ ...data, photos, notes });
     completeOpenFollowUps(supabase, customer?.id);
+    if (channels.includes("sms") && customer?.phone) {
+      setSmsSendResult({ status: "sending" });
+      const { data: smsData, error: smsError } = await supabase.functions.invoke("send-quote-sms", { body: { quoteId: data.id } });
+      if (smsError || smsData?.error) setSmsSendResult({ status: "error", message: smsData?.error || smsError.message });
+      else setSmsSendResult({ status: "sent", to: smsData.sentTo });
+    }
   }
 
   const allVehiclesHaveService = vehicles.length > 0 && vehicles.every((v) => (lineItems[v.id] || []).length > 0);
@@ -2578,6 +2626,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote", 
                   quoteLink={(sent ? lastSent?.shareToken : currentShareToken) ? quotePortalUrl(sent ? lastSent.shareToken : currentShareToken) : null}
                   onCopyLink={() => copyLink(sent ? lastSent?.shareToken : currentShareToken)}
                   linkCopied={linkCopied}
+                  smsSendResult={smsSendResult}
                 />
               )}
 

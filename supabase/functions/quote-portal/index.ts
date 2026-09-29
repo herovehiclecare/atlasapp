@@ -116,6 +116,21 @@ Deno.serve(async (req) => {
   const extraAddonServices = (addOnCategoryServices || []).filter((s: any) => !serviceIds.has(s.id));
 
   if (req.method === "GET" && url.searchParams.get("format") === "json") {
+    // This branch only ever runs when the Vercel renderer fetches data for
+    // an actual page load, so it doubles as the "customer opened the link"
+    // signal - a simple read-then-write, not atomic, but the odds of two
+    // opens landing in the same instant are low enough that an occasional
+    // undercount by one is an acceptable trade for not needing a DB function.
+    const now = new Date().toISOString();
+    quote.view_count = (quote.view_count || 0) + 1;
+    quote.last_viewed_at = now;
+    quote.first_viewed_at = quote.first_viewed_at || now;
+    await supabase.from("quotes").update({
+      view_count: quote.view_count,
+      last_viewed_at: quote.last_viewed_at,
+      first_viewed_at: quote.first_viewed_at,
+    }).eq("id", quote.id);
+
     return new Response(JSON.stringify({
       quote,
       business: quote.businesses || {},
