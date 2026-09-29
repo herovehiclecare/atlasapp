@@ -13,12 +13,14 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // Vercel function calls this one server-to-server with ?format=json for
 // the data, and proxies the customer's Approve POST back to it.
 //
-// Optional secrets (same ones facebook-lead-webhook already uses, reused
-// here for the "customer approved" alert):
-//   OPENPHONE_API_KEY / OPENPHONE_FROM_NUMBER / OWNER_ALERT_PHONE
+// Optional secrets for the "customer approved" alert text. Named QUO_* to
+// match the OpenPhone/Quo secrets already configured for this project - the
+// API itself is still hosted at api.openphone.com regardless of the
+// product's current name.
+//   QUO_API_KEY / QUO_FROM_NUMBER / OWNER_ALERT_PHONE
 
-const OPENPHONE_API_KEY = Deno.env.get("OPENPHONE_API_KEY") || "";
-const OPENPHONE_FROM_NUMBER = Deno.env.get("OPENPHONE_FROM_NUMBER") || "";
+const OPENPHONE_API_KEY = Deno.env.get("QUO_API_KEY") || "";
+const OPENPHONE_FROM_NUMBER = Deno.env.get("QUO_FROM_NUMBER") || "";
 const OWNER_ALERT_PHONE = Deno.env.get("OWNER_ALERT_PHONE") || "";
 
 const supabase = createClient(

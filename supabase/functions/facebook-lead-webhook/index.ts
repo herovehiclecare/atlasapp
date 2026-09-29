@@ -4,52 +4,22 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // ============================================================================
 // FACEBOOK LEAD + MESSENGER WEBHOOK
 //
-// Handles both:
 //   * Lead Ads form submitted   -> Atlas customer + same-day follow-up + Quo text
 //   * Someone messages the Page -> Atlas customer (first time only) + follow-up
 //                                  + Quo text alert to the owner
 //
-// v11: added Messenger handling, replacing the earlier plan to poll for it
-// on a timer (facebook-messenger-poll, now decommissioned - real-time beats
-// a delayed poll once both need the same pages_messaging permission anyway).
-//
-// Secrets (Project Settings -> Edge Functions -> Secrets):
-//   FB_VERIFY_TOKEN       - a string you invent; matches the Meta webhook's
-//                           verify token.
-//   FB_APP_SECRET         - from the Meta App's Settings -> Basic. Verifies
-//                           the X-Hub-Signature-256 header.
-//   FB_PAGE_ACCESS_TOKEN  - a Page Access Token with leads_retrieval AND
-//                           pages_messaging (the Messenger half silently
-//                           fails Graph API calls without the latter).
-//   ATLAS_BUSINESS_ID     - which Atlas business new leads/messages file
-//                           under (Detail Hero's id:
-//                           ac96b595-8468-42a6-8336-0fb0e7c07d2d).
-//   OPENPHONE_API_KEY / OPENPHONE_FROM_NUMBER / OWNER_ALERT_PHONE - optional,
-//                           for the same-second SMS alert via Quo/OpenPhone.
-//                           Leaving any unset just skips the text.
-//   MESSENGER_ALERT_ALL   - optional, "true" texts the owner on every inbound
-//                           Messenger message, not just from new people.
-//
-// Meta-side setup needed for the Messenger half (not done by this code):
-//   1. In the Meta App dashboard's Webhooks -> Page screen, subscribe to the
-//      "messages" field (same screen used for "leadgen" earlier), pointing
-//      at this same function URL.
-//   2. The Page Access Token must include pages_messaging.
-//   3. Meta may restrict real (non-admin) senders' messages from being
-//      delivered until the app passes App Review for pages_messaging at
-//      Advanced Access - unlike leads_retrieval, this is a real platform
-//      gate that can't be clicked through, and is outside anyone's control
-//      but Meta's review team.
-//
-// SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are provided automatically by
-// the Edge Functions runtime and don't need to be set.
+// Secrets: FB_VERIFY_TOKEN, FB_APP_SECRET, FB_PAGE_ACCESS_TOKEN,
+// ATLAS_BUSINESS_ID, QUO_API_KEY, QUO_FROM_NUMBER, OWNER_ALERT_PHONE.
+// Optional: MESSENGER_ALERT_ALL="true" -> text the owner on EVERY inbound message
+// (default: only when a NEW person messages).
+// ============================================================================
 
 const VERIFY_TOKEN = Deno.env.get("FB_VERIFY_TOKEN") || "";
 const APP_SECRET = Deno.env.get("FB_APP_SECRET") || "";
 const PAGE_ACCESS_TOKEN = Deno.env.get("FB_PAGE_ACCESS_TOKEN") || "";
 const BUSINESS_ID = Deno.env.get("ATLAS_BUSINESS_ID") || "";
-const OPENPHONE_API_KEY = Deno.env.get("OPENPHONE_API_KEY") || "";
-const OPENPHONE_FROM_NUMBER = Deno.env.get("OPENPHONE_FROM_NUMBER") || "";
+const OPENPHONE_API_KEY = Deno.env.get("QUO_API_KEY") || "";
+const OPENPHONE_FROM_NUMBER = Deno.env.get("QUO_FROM_NUMBER") || "";
 const OWNER_ALERT_PHONE = Deno.env.get("OWNER_ALERT_PHONE") || "";
 const MESSENGER_ALERT_ALL = (Deno.env.get("MESSENGER_ALERT_ALL") || "").toLowerCase() === "true";
 
@@ -75,16 +45,10 @@ async function isValidSignature(req: Request, rawBody: string): Promise<boolean>
     ["sign"]
   );
   const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody));
-  const expected = expectedPrefix + toHex(mac);
-  // Lengths are fixed/equal here (both hex SHA-256), so a simple compare
-  // doesn't leak useful timing information the way a raw string diff over
-  // variable-length secret data would.
-  return expected === header;
+  return expectedPrefix + toHex(mac) === header;
 }
 
 function nowLocalTime(): string {
-  // Hardcoded to Detail Hero's own timezone (Orlando, FL) rather than a
-  // stored setting - single-business simplification, same as ATLAS_BUSINESS_ID.
   return new Intl.DateTimeFormat("en-US", {
     hour: "numeric",
     minute: "2-digit",
@@ -92,8 +56,7 @@ function nowLocalTime(): string {
   }).format(new Date());
 }
 
-// One place that sends the owner a text through Quo. Never throws - errors
-// are logged, not allowed to fail the lead/message processing around it.
+// One place that sends the owner a text through Quo. Never throws.
 async function sendOwnerText(content: string) {
   if (!OPENPHONE_API_KEY || !OPENPHONE_FROM_NUMBER || !OWNER_ALERT_PHONE) return;
   try {
@@ -115,7 +78,7 @@ async function sendLeadAlertText(name: string, phone: string | null) {
 }
 
 // ---------------------------------------------------------------------------
-// Lead Ads forms
+// Lead Ads forms (unchanged from v10)
 // ---------------------------------------------------------------------------
 async function processLead(leadgenId: string) {
   if (!BUSINESS_ID || !PAGE_ACCESS_TOKEN) {
@@ -123,8 +86,6 @@ async function processLead(leadgenId: string) {
     return;
   }
 
-  // Meta retries webhook deliveries, so guard against filing the same lead
-  // twice using the leadgen_id stashed in customers.source_ref.
   const { data: existing } = await supabase
     .from("customers")
     .select("id")
@@ -133,8 +94,6 @@ async function processLead(leadgenId: string) {
     .maybeSingle();
   if (existing) return;
 
-  // Requesting these fields explicitly is what actually returns the human-
-  // readable ad/campaign names - they aren't included by default.
   const leadFields = "field_data,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,form_id,platform,created_time";
   const res = await fetch(`https://graph.facebook.com/v21.0/${leadgenId}?fields=${leadFields}&access_token=${PAGE_ACCESS_TOKEN}`);
   if (!res.ok) {
@@ -152,21 +111,12 @@ async function processLead(leadgenId: string) {
   const email = fields.email || null;
   const phone = fields.phone_number || null;
 
-  // Everything on the form beyond name/email/phone (interest, vehicle info,
-  // preferred contact method, or whatever custom questions a given form
-  // asks) has no fixed field names - Meta returns whatever the form's own
-  // questions are keyed as. Rather than hardcode question names this app
-  // doesn't control, every other answer is kept as-is so it can still be
-  // shown on the lead, whatever the form happens to ask.
   const KNOWN_FIELDS = new Set(["full_name", "first_name", "last_name", "email", "phone_number"]);
   const otherAnswers: Record<string, string> = {};
   for (const [key, value] of Object.entries(fields)) {
     if (!KNOWN_FIELDS.has(key)) otherAnswers[key] = value;
   }
 
-  // Kept separate from the flat name/email/phone columns since this is
-  // attribution metadata, not contact info - shown on the customer's
-  // profile as "came from" context, not something anyone edits.
   const leadContext = {
     ad_id: lead.ad_id || null,
     ad_name: lead.ad_name || null,
@@ -198,10 +148,6 @@ async function processLead(leadgenId: string) {
     return;
   }
 
-  // A fresh lead is easy to forget about once it's just another row in
-  // Customers, so this drops a same-day Follow-up automatically. method:
-  // "text" means opening it in Atlas surfaces the existing AI-suggested-text
-  // card (drafted, not auto-sent) rather than a bare reminder.
   const { error: followUpError } = await supabase.from("follow_ups").insert({
     business_id: BUSINESS_ID,
     note: `New Facebook lead${name && name !== "Facebook lead" ? `: ${name}` : ""} — reach out and get them scheduled.`,
@@ -215,12 +161,12 @@ async function processLead(leadgenId: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Messenger
+// MESSENGER (new)
 // ---------------------------------------------------------------------------
 
-// Meta only sends the sender's page-scoped id (PSID) - ask the Graph API for
-// a display name; if that's not permitted (or returns nothing), fall back to
-// a generic label so the customer/follow-up still get created either way.
+// Meta only sends the sender's page-scoped id (PSID). Ask the Graph API for a
+// display name; if that is not permitted, fall back to a generic label so the
+// customer/follow-up still get created.
 async function fetchMessengerName(psid: string): Promise<string> {
   if (!PAGE_ACCESS_TOKEN) return "Messenger contact";
   try {
@@ -244,8 +190,8 @@ async function processMessengerEvent(event: any, pageId: string) {
   }
 
   const psid: string | undefined = event?.sender?.id;
-  // Ignore anything that isn't a real inbound message: the Page's own
-  // replies (echoes), delivery/read receipts, and messages from the Page.
+  // Ignore anything that is not a real inbound message: the Page's own replies
+  // (echoes), delivery/read receipts, and messages sent by the Page itself.
   if (!psid || psid === pageId) return;
   if (event.message?.is_echo) return;
   if (!event.message && !event.postback) return;
@@ -275,10 +221,9 @@ async function processMessengerEvent(event: any, pageId: string) {
 
   const name = await fetchMessengerName(psid);
 
-  // 2) Someone already imported by hand/bulk (source_ref empty) with the
-  //    same name: adopt that row by stamping the Messenger id on it,
-  //    instead of creating a duplicate customer. Only when exactly one
-  //    match exists, to avoid guessing wrong between two same-named people.
+  // 2) Someone already imported by hand/bulk (source_ref empty) with the same
+  //    name: adopt that row by stamping the Messenger id on it, instead of
+  //    creating a duplicate customer. Only do this when there is exactly one match.
   if (name !== "Messenger contact") {
     const { data: sameName } = await supabase
       .from("customers")
@@ -358,21 +303,21 @@ Deno.serve(async (req) => {
     const messengerEvents: { event: any; pageId: string }[] = [];
 
     for (const entry of payload.entry || []) {
-      // Lead Ads
+      // Lead Ads (unchanged)
       for (const change of entry.changes || []) {
         if (change.field === "leadgen" && change.value?.leadgen_id) {
           leadIds.push(String(change.value.leadgen_id));
         }
       }
-      // Messenger: Page webhooks put messages under entry.messaging
+      // Messenger (new): Page webhooks put messages under entry.messaging
       for (const event of entry.messaging || []) {
         messengerEvents.push({ event, pageId: String(entry.id || "") });
       }
     }
 
     await Promise.all(leadIds.map(processLead));
-    // Sequential on purpose: two quick messages from the same new person
-    // must not both pass the "already known?" check and create duplicates.
+    // Sequential on purpose: two quick messages from the same new person must
+    // not both pass the "already known?" check and create duplicate customers.
     for (const { event, pageId } of messengerEvents) {
       try {
         await processMessengerEvent(event, pageId);
@@ -381,9 +326,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Meta expects a fast 200 regardless of downstream outcome - errors are
-    // logged above rather than surfaced here, since a non-200 makes Meta
-    // retry the whole delivery repeatedly.
+    // Always a fast 200 so Meta does not retry the whole delivery.
     return new Response("EVENT_RECEIVED", { status: 200 });
   }
 
