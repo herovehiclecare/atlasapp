@@ -112,6 +112,39 @@ async function recordAndAlertFailure(source: string, rawPayload: unknown, errorM
   await sendOwnerText(`⚠️ Atlas couldn't save a ${source === "facebook_lead_ads" ? "Facebook lead" : "Messenger message"} automatically at ${nowLocalTime()} (${errorMessage}). Check Meta's Lead Center / Messenger and add them by hand - we're looking into the bug.`);
 }
 
+// Mirrors a new Atlas customer into Quo as a contact, through the same
+// api.openphone.com REST API (not the Quo MCP connector, which only exists
+// inside a Claude session - this has to be a plain HTTP call so it runs on
+// every real lead, not just while someone happens to be chatting with
+// Claude). `externalId` is set to the Atlas customer's own id, so a contact
+// is never created twice for the same customer even if this is ever called
+// again for them. Never throws - a Quo sync hiccup shouldn't undo an
+// already-successful Atlas save, so this only ever logs on failure.
+async function syncContactToQuo(opts: { customerId: string; name: string; email: string | null; phone: string | null; role: string | null }) {
+  if (!OPENPHONE_API_KEY) return;
+  const [firstName, ...rest] = (opts.name || "Contact").trim().split(/\s+/);
+  try {
+    const res = await fetch("https://api.openphone.com/v1/contacts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: OPENPHONE_API_KEY },
+      body: JSON.stringify({
+        externalId: opts.customerId,
+        source: "atlas",
+        defaultFields: {
+          firstName,
+          lastName: rest.join(" ") || "",
+          role: opts.role || undefined,
+          emails: opts.email ? [{ name: "Email", value: opts.email }] : [],
+          phoneNumbers: opts.phone ? [{ name: "Mobile", value: opts.phone }] : [],
+        },
+      }),
+    });
+    if (!res.ok) console.error("Quo contact sync failed", opts.customerId, res.status, await res.text());
+  } catch (err) {
+    console.error("Quo contact sync threw", opts.customerId, err);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Lead Ads forms (unchanged from v10)
 // ---------------------------------------------------------------------------
@@ -194,6 +227,9 @@ async function processLead(leadgenId: string) {
     customer_ids: [newCustomer.id],
   });
   if (followUpError) console.error("Failed to create lead follow-up", leadgenId, followUpError.message);
+
+  const role = Object.values(otherAnswers).filter(Boolean).join(" · ") || null;
+  await syncContactToQuo({ customerId: newCustomer.id, name, email, phone, role });
 
   await sendLeadAlertText(name, phone);
 }
@@ -305,6 +341,8 @@ async function processMessengerEvent(event: any, pageId: string) {
     customer_ids: [newCustomer.id],
   });
   if (followUpError) console.error("Failed to create Messenger follow-up", psid, followUpError.message);
+
+  await syncContactToQuo({ customerId: newCustomer.id, name, email: null, phone: null, role: snippet ? `Facebook Messenger: "${snippet}"` : "Facebook Messenger contact" });
 
   await sendOwnerText(`New Messenger message at ${nowLocalTime()} from ${name}${snippet ? `: "${snippet}"` : ""}. Reply in Meta Business Suite; details in Atlas.`);
 }
