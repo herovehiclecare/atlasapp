@@ -538,6 +538,7 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
   const [vehiclesById, setVehiclesById] = useState({});
   const [followUps, setFollowUps] = useState([]);
   const [customersList, setCustomersList] = useState([]);
+  const [failedWebhookEvents, setFailedWebhookEvents] = useState([]);
 
   useEffect(() => {
     if (!businessId) return;
@@ -549,7 +550,7 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
       monthStart.setDate(1);
       monthStart.setHours(0, 0, 0, 0);
       try {
-        const [customersRes, newCustomersRes, jobsRes, quotesRes, invoicesRes, servicesRes, vehiclesRes, followUpsRes, customersListRes] = await Promise.all([
+        const [customersRes, newCustomersRes, jobsRes, quotesRes, invoicesRes, servicesRes, vehiclesRes, followUpsRes, customersListRes, failedWebhookRes] = await Promise.all([
           supabase.from("customers").select("id", { count: "exact", head: true }).eq("business_id", businessId),
           supabase.from("customers").select("id", { count: "exact", head: true }).eq("business_id", businessId).gte("created_at", monthStart.toISOString()),
           supabase.from("jobs").select("id, customer_id, vehicle_id, service_ids, scheduled_at, status, customers(name), vehicles(label, size_class)").eq("business_id", businessId),
@@ -559,8 +560,9 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
           supabase.from("vehicles").select("id, label").eq("business_id", businessId),
           supabase.from("follow_ups").select("*").eq("business_id", businessId).eq("status", "pending").order("due_date", { ascending: true, nullsFirst: false }),
           supabase.from("customers").select("id, name").eq("business_id", businessId).order("name", { ascending: true }),
+          supabase.from("failed_webhook_events").select("id, source, error_message, created_at").eq("business_id", businessId).eq("resolved", false).order("created_at", { ascending: false }),
         ]);
-        for (const res of [customersRes, newCustomersRes, jobsRes, quotesRes, invoicesRes, servicesRes, vehiclesRes, followUpsRes, customersListRes]) {
+        for (const res of [customersRes, newCustomersRes, jobsRes, quotesRes, invoicesRes, servicesRes, vehiclesRes, followUpsRes, customersListRes, failedWebhookRes]) {
           if (res.error) throw res.error;
         }
         if (cancelled) return;
@@ -573,6 +575,7 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
         setVehiclesById(Object.fromEntries((vehiclesRes.data || []).map((v) => [v.id, v])));
         setFollowUps(followUpsRes.data || []);
         setCustomersList(customersListRes.data || []);
+        setFailedWebhookEvents(failedWebhookRes.data || []);
       } catch (err) {
         if (!cancelled) setDataError(err.message || "Couldn't load dashboard data.");
       } finally {
@@ -645,6 +648,16 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
   };
 
   const insights = [];
+  if (failedWebhookEvents.length > 0) {
+    const single = failedWebhookEvents.length === 1 ? failedWebhookEvents[0] : null;
+    insights.push({
+      text: single
+        ? `A ${single.source === "facebook_lead_ads" ? "Facebook lead" : "Messenger message"} couldn't be saved automatically — check Meta's Lead Center and add them by hand.`
+        : `${failedWebhookEvents.length} leads/messages couldn't be saved automatically — check Meta's Lead Center for anything missing from Customers.`,
+      action: "Go to Customers",
+      nav: "customers",
+    });
+  }
   if (approvedQuotes.length > 0) {
     const single = approvedQuotes.length === 1 ? approvedQuotes[0] : null;
     insights.push({ text: single ? `${single.customers?.name || "A customer"} approved their quote — ready to book!` : `${approvedQuotes.length} quotes approved by customers, ready to book.`, action: "Review & book", nav: "quote" });

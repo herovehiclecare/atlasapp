@@ -90,6 +90,28 @@ async function sendLeadAlertText(name: string, phone: string | null) {
   await sendOwnerText(`New Facebook lead at ${nowLocalTime()}: ${who}${contact}. Reach out ASAP! Check Atlas for details.`);
 }
 
+// The safety net for the exact class of bug that let Rob Adamek's lead get
+// silently dropped: whenever a lead or Messenger message can't be saved for
+// ANY reason (a bug like that one, a Graph API hiccup, whatever), this
+// records the raw data so nothing is truly lost even if Atlas never turns
+// it into a real customer, and - just as important - texts the owner
+// immediately so a failure is never just a silent gap discovered by chance
+// days or weeks later. Never throws itself, on purpose: a failure in the
+// failure-handler must not also go silent.
+async function recordAndAlertFailure(source: string, rawPayload: unknown, errorMessage: string) {
+  try {
+    await supabase.from("failed_webhook_events").insert({
+      business_id: BUSINESS_ID || null,
+      source,
+      raw_payload: rawPayload,
+      error_message: errorMessage,
+    });
+  } catch (err) {
+    console.error("Failed to record failed_webhook_event", err);
+  }
+  await sendOwnerText(`⚠️ Atlas couldn't save a ${source === "facebook_lead_ads" ? "Facebook lead" : "Messenger message"} automatically at ${nowLocalTime()} (${errorMessage}). Check Meta's Lead Center / Messenger and add them by hand - we're looking into the bug.`);
+}
+
 // ---------------------------------------------------------------------------
 // Lead Ads forms (unchanged from v10)
 // ---------------------------------------------------------------------------
@@ -110,7 +132,9 @@ async function processLead(leadgenId: string) {
   const leadFields = "field_data,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,form_id,platform,created_time";
   const res = await fetch(`https://graph.facebook.com/v21.0/${leadgenId}?fields=${leadFields}&access_token=${PAGE_ACCESS_TOKEN}`);
   if (!res.ok) {
-    console.error("Graph API lead fetch failed", leadgenId, res.status, await res.text());
+    const errText = await res.text();
+    console.error("Graph API lead fetch failed", leadgenId, res.status, errText);
+    await recordAndAlertFailure("facebook_lead_ads", { leadgenId }, `Graph API fetch failed (${res.status}): ${errText.slice(0, 200)}`);
     return;
   }
   const lead = await res.json();
@@ -158,6 +182,7 @@ async function processLead(leadgenId: string) {
     .single();
   if (error) {
     console.error("Failed to insert lead customer", leadgenId, error.message);
+    await recordAndAlertFailure("facebook_lead_ads", { leadgenId, name, email, phone, leadContext }, `Couldn't save customer: ${error.message}`);
     return;
   }
 
@@ -268,6 +293,7 @@ async function processMessengerEvent(event: any, pageId: string) {
     .single();
   if (error) {
     console.error("Failed to insert Messenger customer", psid, error.message);
+    await recordAndAlertFailure("facebook_messenger", { psid, name, snippet }, `Couldn't save customer: ${error.message}`);
     return;
   }
 
@@ -338,6 +364,7 @@ Deno.serve(async (req) => {
         await processLead(id);
       } catch (err) {
         console.error("Lead processing failed", id, err);
+        await recordAndAlertFailure("facebook_lead_ads", { leadgenId: id }, `Unexpected error: ${err instanceof Error ? err.message : String(err)}`);
       }
     }));
     // Sequential on purpose: two quick messages from the same new person must
@@ -347,6 +374,7 @@ Deno.serve(async (req) => {
         await processMessengerEvent(event, pageId);
       } catch (err) {
         console.error("Messenger event failed", err);
+        await recordAndAlertFailure("facebook_messenger", { event }, `Unexpected error: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 
