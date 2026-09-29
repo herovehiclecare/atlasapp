@@ -55,6 +55,17 @@ function svcPrice(service: any, vehicle: any): number {
   return Number(isSuv ? service.price_suv_low : service.price_car_low) || 0;
 }
 
+// A service's price as actually charged on this quote - a per-quote price
+// override (set on Review in Atlas) if one exists, otherwise the catalog
+// price. The approved total below must read this too, or a customer could
+// approve at a discounted price shown on the page while Atlas records the
+// full catalog price.
+function effectivePrice(serviceId: string, service: any, vehicle: any, overrides: Record<string, any>): number {
+  const o = overrides?.[serviceId];
+  if (o && o.price != null && o.price !== "") return Number(o.price) || 0;
+  return svcPrice(service, vehicle);
+}
+
 Deno.serve(async (req) => {
   const url = new URL(req.url);
   const token = url.searchParams.get("token");
@@ -145,17 +156,18 @@ Deno.serve(async (req) => {
     const servicesById = Object.fromEntries((services || []).map((s: any) => [s.id, s]));
     const addonsById = Object.fromEntries((addonsAll || []).map((a: any) => [a.id, a]));
     const extrasById = Object.fromEntries(extraAddonServices.map((s: any) => [s.id, s]));
+    const overrides = quote.service_overrides || {};
     let chosenLabel = "";
     if (quote.proposal_mode === "tiered") {
       const tier = (quote.tiers || []).find((t: any) => t.id === chosenTierId);
       if (tier) {
         chosenLabel = tier.name;
-        total += (tier.packageIds || []).reduce((s: number, id: string) => s + svcPrice(servicesById[id], vehicle), 0);
+        total += (tier.packageIds || []).reduce((s: number, id: string) => s + effectivePrice(id, servicesById[id], vehicle, overrides), 0);
         total += (tier.addonIds || []).filter((id: string) => chosenAddonIds.includes(id)).reduce((s: number, id: string) => s + (Number(addonsById[id]?.price) || 0), 0);
       }
     } else {
       for (const v of quote.line_items?.vehicleIds || []) {
-        for (const id of quote.line_items?.byVehicle?.[v] || []) total += svcPrice(servicesById[id], vehicle);
+        for (const id of quote.line_items?.byVehicle?.[v] || []) total += effectivePrice(id, servicesById[id], vehicle, overrides);
       }
       total += chosenAddonIds.reduce((s: number, id: string) => s + (Number(addonsById[id]?.price) || 0), 0);
     }

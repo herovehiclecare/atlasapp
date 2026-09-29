@@ -48,13 +48,24 @@ const SOCIAL_ICONS = {
 };
 const SOCIAL_ICON_FALLBACK = '<circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M8 12h8M12 8v8" stroke="currentColor" stroke-width="1.6"/>';
 
-function effectiveInfo(service, overrides, id) {
+function effectiveInfo(service, overrides, id, vehicle) {
   const o = overrides?.[id];
   return {
     name: service?.name || "Service",
     description: o?.description ?? service?.description ?? "",
     includes: o?.includes ?? service?.includes ?? [],
+    price: effectivePrice(service, overrides, id, vehicle),
   };
+}
+
+// A service's price as actually charged on this quote - a per-quote price
+// override (set on Review in Atlas) if one exists, otherwise the catalog
+// price. Same override an approval's total (below) must also read, so
+// what the customer approves always matches what they were shown.
+function effectivePrice(service, overrides, id, vehicle) {
+  const o = overrides?.[id];
+  if (o && o.price != null && o.price !== "") return Number(o.price) || 0;
+  return svcPrice(service, vehicle);
 }
 
 function svcPrice(service, vehicle) {
@@ -80,9 +91,8 @@ function renderPage(opts) {
   if (tiered) {
     for (const tier of quote.tiers || []) {
       const pkgRows = (tier.packageIds || []).map((id) => {
-        const info = effectiveInfo(servicesById[id], overrides, id);
-        const price = svcPrice(servicesById[id], vehicle);
-        return { id, price, ...info };
+        const info = effectiveInfo(servicesById[id], overrides, id, vehicle);
+        return { id, price: info.price, ...info };
       });
       const addonRows = (tier.addonIds || []).map((id) => {
         const a = addonsById[id];
@@ -123,8 +133,8 @@ function renderPage(opts) {
     const rows = [];
     for (const v of quote.line_items?.vehicleIds || []) {
       for (const id of quote.line_items?.byVehicle?.[v] || []) {
-        const info = effectiveInfo(servicesById[id], overrides, id);
-        rows.push({ id, price: svcPrice(servicesById[id], vehicle), ...info });
+        const info = effectiveInfo(servicesById[id], overrides, id, vehicle);
+        rows.push({ id, price: info.price, ...info });
       }
     }
     const pkgHtml = rows.map((r) => `

@@ -76,14 +76,24 @@ function money(n) { return `$${(Number(n) || 0).toLocaleString(undefined, { mini
 
 function findAddon(addonsAll, id) { return addonsAll.find((a) => a.id === id); }
 
-function tierBase(tier, vehicle, services, addonsAll) {
-  const pkgTotal = (tier.packageIds || []).reduce((s, id) => s + svcPrice(findService(services, id), vehicle), 0);
+// A service's price as it should actually be charged on a specific quote -
+// a per-quote override (edited from Review) if one exists, otherwise
+// whatever's configured on the service in Settings. Same "snapshot, not a
+// formula" model as effectiveServiceInfo's description/includes override.
+function effectivePrice(serviceId, vehicle, services, overrides) {
+  const o = overrides?.[serviceId];
+  if (o && o.price != null && o.price !== "") return Number(o.price) || 0;
+  return svcPrice(findService(services, serviceId), vehicle);
+}
+
+function tierBase(tier, vehicle, services, addonsAll, overrides) {
+  const pkgTotal = (tier.packageIds || []).reduce((s, id) => s + effectivePrice(id, vehicle, services, overrides), 0);
   const addonTotal = (tier.addonIds || []).reduce((s, id) => s + (Number(findAddon(addonsAll, id)?.price) || 0), 0);
   return pkgTotal + addonTotal;
 }
 
-function tierTotalWithTax(tier, vehicle, services, addonsAll, taxRate) {
-  const base = tierBase(tier, vehicle, services, addonsAll);
+function tierTotalWithTax(tier, vehicle, services, addonsAll, taxRate, overrides) {
+  const base = tierBase(tier, vehicle, services, addonsAll, overrides);
   const tax = base * (taxRate / 100);
   return { base, tax, total: base + tax };
 }
@@ -444,7 +454,7 @@ function TierBuilder({ vehicle, services, addonsAll, tiers, taxRate, onAddTier, 
   );
 }
 
-function TiersPreview({ tiers, vehicle, services, addonsAll, taxRate, light, editable, onEditService }) {
+function TiersPreview({ tiers, vehicle, services, addonsAll, taxRate, overrides, light, editable, onEditService }) {
   const textPrimary = light ? "#111" : P.textPrimary;
   const textMuted = light ? "#555" : P.textMuted;
   const border = light ? "#ddd" : P.border;
@@ -452,7 +462,7 @@ function TiersPreview({ tiers, vehicle, services, addonsAll, taxRate, light, edi
     <div className="tiers-preview-grid" style={{ display: "grid", gridTemplateColumns: `repeat(${Math.max(tiers.length, 1)}, minmax(0,1fr))`, gap: 10 }}>
       <style>{`@media (max-width: 640px) { .tiers-preview-grid { grid-template-columns: 1fr !important; } }`}</style>
       {tiers.map((tier) => {
-        const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, taxRate);
+        const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, taxRate, overrides);
         const addonNames = tier.addonIds.map((id) => findAddon(addonsAll, id)?.name).filter(Boolean);
         return (
           <div key={tier.id} style={{ border: `1px solid ${border}`, borderRadius: 12, padding: "14px 12px", background: light ? "#fff" : P.surface }}>
@@ -462,12 +472,13 @@ function TiersPreview({ tiers, vehicle, services, addonsAll, taxRate, light, edi
               {tier.packageIds.map((id) => {
                 const name = findService(services, id)?.name;
                 if (!name) return null;
+                const price = effectivePrice(id, vehicle, services, overrides);
                 return editable ? (
                   <button key={id} onClick={() => onEditService(id)} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 4, fontSize: 11, color: P.accent, textAlign: "center", background: "transparent", border: "none", padding: "2px 0", cursor: "pointer" }}>
-                    <Pencil size={9} /> {name}
+                    <Pencil size={9} /> {name} · {money(price)}
                   </button>
                 ) : (
-                  <div key={id} style={{ fontSize: 11, color: textMuted, textAlign: "center" }}>{name}</div>
+                  <div key={id} style={{ fontSize: 11, color: textMuted, textAlign: "center" }}>{name} · {money(price)}</div>
                 );
               })}
               {addonNames.map((n, i) => (
@@ -896,18 +907,20 @@ function StepPhotos({ photos, addPhoto, removePhoto, notes, setNotes }) {
 
 /* ---------------------------------- step 6: review ---------------------------------- */
 
-// Lets a service's description/what's-included be tweaked for this one
-// quote only, without touching the shared catalog entry in Settings — e.g.
-// calling out something specific to this customer's vehicle, or trimming a
-// bullet that doesn't apply this time.
-function ServiceOverrideEditor({ serviceId, services, overrides, onSave, onReset, onClose }) {
-  const info = effectiveServiceInfo(serviceId, services, overrides);
+// Lets a service's price/description/what's-included be tweaked for this
+// one quote only, without touching the shared catalog entry in Settings —
+// e.g. a one-off discount, or calling out something specific to this
+// customer's vehicle.
+function ServiceOverrideEditor({ serviceId, services, overrides, vehicle, onSave, onReset, onClose }) {
+  const info = effectiveServiceInfo(serviceId, services, overrides, vehicle);
   const hasOverride = !!overrides?.[serviceId];
+  const [price, setPrice] = useState(String(info.price));
   const [description, setDescription] = useState(info.description);
   const [includesText, setIncludesText] = useState(info.includes.join("\n"));
 
   function save() {
     onSave(serviceId, {
+      price: price.trim() === "" ? null : Number(price),
       description: description.trim(),
       includes: includesText.split("\n").map((l) => l.trim()).filter(Boolean),
     });
@@ -926,6 +939,12 @@ function ServiceOverrideEditor({ serviceId, services, overrides, onSave, onReset
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", display: "flex" }}><X size={18} /></button>
         </div>
         <p style={{ fontSize: 11.5, color: P.textMuted, margin: "0 0 16px" }}>Only affects this quote — the service in Settings stays the same.</p>
+
+        <label style={{ fontSize: 12, fontWeight: 600, color: P.textSecondary, display: "block", marginBottom: 6 }}>Price for this quote</label>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+          <span style={{ color: P.textMuted, fontSize: 14 }}>$</span>
+          <input type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} style={{ flex: 1, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 9, padding: "9px 12px", color: P.textPrimary, fontSize: 13, outline: "none" }} />
+        </div>
 
         <label style={{ fontSize: 12, fontWeight: 600, color: P.textSecondary, display: "block", marginBottom: 6 }}>Description</label>
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} style={{ width: "100%", background: P.surface, border: `1px solid ${P.border}`, borderRadius: 9, padding: "9px 12px", color: P.textPrimary, fontSize: 13, outline: "none", resize: "vertical", fontFamily: "inherit", lineHeight: 1.5, marginBottom: 16 }} />
@@ -1053,7 +1072,7 @@ function StepReview({
                 <Pencil size={11} /> {editing ? "Done" : "Edit descriptions"}
               </button>
             </div>
-            <TiersPreview tiers={tiers} vehicle={vehicles[0]} services={services} addonsAll={addonsAll} taxRate={taxRate} editable={editing} onEditService={setEditingServiceId} />
+            <TiersPreview tiers={tiers} vehicle={vehicles[0]} services={services} addonsAll={addonsAll} taxRate={taxRate} overrides={serviceOverrides} editable={editing} onEditService={setEditingServiceId} />
           </div>
         ) : (
           <>
@@ -1081,14 +1100,15 @@ function StepReview({
                       </div>
                       {ids.map((id) => {
                         const p = findService(services, id);
+                        const price = effectivePrice(id, v, services, serviceOverrides);
                         return (
                           <div key={id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 13, marginBottom: 5, paddingLeft: 21 }}>
                             <span style={{ color: P.textSecondary, minWidth: 0 }}>{p?.name}</span>
                             <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                              <span style={{ color: P.textPrimary, fontWeight: 600 }}>${svcPrice(p, v)}</span>
+                              <span style={{ color: P.textPrimary, fontWeight: 600 }}>{money(price)}</span>
                               {editing && (
                                 <>
-                                  <button onClick={() => setEditingServiceId(id)} title={`Edit description for ${p?.name || "this service"}`} style={{ display: "flex", background: "transparent", border: "none", color: P.accent, cursor: "pointer", padding: 0 }}>
+                                  <button onClick={() => setEditingServiceId(id)} title={`Edit price/description for ${p?.name || "this service"}`} style={{ display: "flex", background: "transparent", border: "none", color: P.accent, cursor: "pointer", padding: 0 }}>
                                     <Pencil size={12} />
                                   </button>
                                   <button onClick={() => onTogglePackage(v.id, id)} title={`Remove ${p?.name || "this service"}`} style={{ display: "flex", background: "transparent", border: "none", color: P.danger, cursor: "pointer", padding: 0 }}>
@@ -1189,6 +1209,7 @@ function StepReview({
           serviceId={editingServiceId}
           services={services}
           overrides={serviceOverrides}
+          vehicle={vehicles[0]}
           onSave={onSaveServiceOverride}
           onReset={onResetServiceOverride}
           onClose={() => setEditingServiceId(null)}
@@ -1571,13 +1592,14 @@ function tierDescription(tier, services, addonsAll) {
 // specific quote - a per-quote override (edited from Review) if one exists,
 // otherwise whatever's configured on the service in Settings. Overrides
 // never touch the shared catalog service itself, only this one quote.
-function effectiveServiceInfo(serviceId, services, overrides) {
+function effectiveServiceInfo(serviceId, services, overrides, vehicle) {
   const service = findService(services, serviceId);
   const o = overrides?.[serviceId];
   return {
     name: service?.name || "Service",
     description: o?.description ?? service?.description ?? "",
     includes: o?.includes ?? service?.includes ?? [],
+    price: effectivePrice(serviceId, vehicle, services, overrides),
   };
 }
 
@@ -1613,7 +1635,7 @@ function PrintableQuote({ q, services, addonsAll, business, id = "atlas-print-ro
       <PrintSection label="What's Included">
         {tiered ? (
           q.tiers.map((tier, i) => {
-            const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, q.taxRate);
+            const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, q.taxRate, q.serviceOverrides);
             const addonNames = tier.addonIds.map((id) => findAddon(addonsAll, id)?.name).filter(Boolean);
             return (
               <div key={tier.id} style={{ marginBottom: i < q.tiers.length - 1 ? 16 : 0 }}>
@@ -1621,10 +1643,12 @@ function PrintableQuote({ q, services, addonsAll, business, id = "atlas-print-ro
                   <span>{tier.name}</span><span>{money(total)}</span>
                 </div>
                 {tier.packageIds.map((id) => {
-                  const info = effectiveServiceInfo(id, services, q.serviceOverrides);
+                  const info = effectiveServiceInfo(id, services, q.serviceOverrides, vehicle);
                   return (
                     <div key={id} style={{ marginBottom: 8, paddingLeft: 4 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "#222" }}>{info.name}</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600, color: "#222" }}>
+                        <span>{info.name}</span><span>{money(info.price)}</span>
+                      </div>
                       {info.description && <p style={{ margin: "2px 0 0", fontSize: 10.5, color: "#777", lineHeight: 1.5 }}>{info.description}</p>}
                       {info.includes.length > 0 && (
                         <ul style={{ margin: "4px 0 0", paddingLeft: 16 }}>
@@ -1651,12 +1675,11 @@ function PrintableQuote({ q, services, addonsAll, business, id = "atlas-print-ro
                 <div key={v.id} style={{ marginBottom: 12 }}>
                   {q.vehicles.length > 1 && <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6 }}>{v.label}</div>}
                   {ids.map((id) => {
-                    const p = findService(services, id);
-                    const info = effectiveServiceInfo(id, services, q.serviceOverrides);
+                    const info = effectiveServiceInfo(id, services, q.serviceOverrides, v);
                     return (
                       <div key={id} style={{ marginBottom: 8 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
-                          <span style={{ fontWeight: 600 }}>{info.name}</span><span style={{ fontWeight: 600 }}>${svcPrice(p, v)}</span>
+                          <span style={{ fontWeight: 600 }}>{info.name}</span><span style={{ fontWeight: 600 }}>{money(info.price)}</span>
                         </div>
                         {info.description && (
                           <p style={{ margin: "3px 0 0", fontSize: 10.5, color: "#777", lineHeight: 1.5 }}>{info.description}</p>
@@ -1810,16 +1833,16 @@ async function buildQuotePdfDoc(q, services, addonsAll, business) {
     ...pdfSection("What's Included", pdfBox(
       tiered
         ? q.tiers.flatMap((tier, i) => {
-            const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, q.taxRate);
+            const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, q.taxRate, q.serviceOverrides);
             const addonNames = tier.addonIds.map((id) => findAddon(addonsAll, id)?.name).filter(Boolean);
             return [{
               stack: [
                 { columns: [{ text: tier.name, bold: true, fontSize: 12 }, { text: money(total), bold: true, fontSize: 12, alignment: "right" }], margin: [0, 0, 0, 5] },
                 ...tier.packageIds.flatMap((id) => {
-                  const info = effectiveServiceInfo(id, services, q.serviceOverrides);
+                  const info = effectiveServiceInfo(id, services, q.serviceOverrides, vehicle);
                   return [{
                     stack: [
-                      { text: info.name, bold: true, fontSize: 10.5 },
+                      { columns: [{ text: info.name, bold: true, fontSize: 10.5 }, { text: money(info.price), bold: true, fontSize: 10.5, alignment: "right" }] },
                       ...(info.description ? [{ text: info.description, fontSize: 9.5, color: "#777777", margin: [0, 2, 0, 0] }] : []),
                       ...(info.includes.length > 0 ? [{ ul: info.includes, fontSize: 9.5, color: "#777777", margin: [0, 2, 0, 0] }] : []),
                     ],
@@ -1837,11 +1860,10 @@ async function buildQuotePdfDoc(q, services, addonsAll, business) {
             const rows = [];
             if (q.vehicles.length > 1) rows.push({ text: v.label, bold: true, fontSize: 11, margin: [0, 0, 0, 5] });
             ids.forEach((id) => {
-              const p = findService(services, id);
-              const info = effectiveServiceInfo(id, services, q.serviceOverrides);
+              const info = effectiveServiceInfo(id, services, q.serviceOverrides, v);
               rows.push({
                 stack: [
-                  { columns: [{ text: info.name, bold: true, fontSize: 11 }, { text: `$${svcPrice(p, v)}`, bold: true, fontSize: 11, alignment: "right" }] },
+                  { columns: [{ text: info.name, bold: true, fontSize: 11 }, { text: money(info.price), bold: true, fontSize: 11, alignment: "right" }] },
                   ...(info.description ? [{ text: info.description, fontSize: 9.5, color: "#777777", margin: [0, 3, 0, 0] }] : []),
                   ...(info.includes.length > 0 ? [{ ul: info.includes, fontSize: 9.5, color: "#777777", margin: [0, 3, 0, 0] }] : []),
                 ],
@@ -2103,7 +2125,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote", 
   const totals = useMemo(() => {
     if (proposalMode === "tiered") {
       const vehicle = vehicles[0];
-      const computed = tiers.map((t) => ({ ...t, ...tierTotalWithTax(t, vehicle, services, addonsAll, taxRate) }));
+      const computed = tiers.map((t) => ({ ...t, ...tierTotalWithTax(t, vehicle, services, addonsAll, taxRate, serviceOverrides) }));
       const values = computed.map((t) => t.total);
       const rangeLow = values.length ? Math.min(...values) : 0;
       const rangeHigh = values.length ? Math.max(...values) : 0;
@@ -2111,13 +2133,13 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote", 
     }
     const servicesTotal = Object.entries(lineItems).reduce((s, [vehicleId, ids]) => {
       const v = vehiclesById[vehicleId] || vehicles.find((x) => x.id === vehicleId);
-      return s + ids.reduce((s2, id) => s2 + svcPrice(findService(services, id), v), 0);
+      return s + ids.reduce((s2, id) => s2 + effectivePrice(id, v, services, serviceOverrides), 0);
     }, 0);
     const addonTotal = addons.reduce((s, id) => s + (Number(findAddon(addonsAll, id)?.price) || 0), 0);
     const subtotal = servicesTotal + addonTotal - discount;
     const tax = Math.max(0, subtotal) * (taxRate / 100);
     return { subtotal, tax, total: Math.max(0, subtotal) + tax, isRange: false };
-  }, [lineItems, addons, discount, taxRate, proposalMode, tiers, vehicles, services, addonsAll, vehiclesById]);
+  }, [lineItems, addons, discount, taxRate, proposalMode, tiers, vehicles, services, addonsAll, vehiclesById, serviceOverrides]);
 
   function generateDescription() {
     setGenerating(true);
