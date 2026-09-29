@@ -675,6 +675,14 @@ function ServicesPanel() {
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // Category sections (Ceramic Coatings, Maintenance, Paint Correction, ...)
+  // start closed - this is a long list once a business has real services,
+  // and opening one at a time to work on it beats scrolling past every
+  // other category to get there.
+  const [openCategories, setOpenCategories] = useState({});
+  function toggleCategory(cat) {
+    setOpenCategories((prev) => ({ ...prev, [cat]: !prev[cat] }));
+  }
 
   useEffect(() => {
     if (!businessId) return;
@@ -777,29 +785,40 @@ function ServicesPanel() {
         <p style={{ fontSize: 13, color: P.textMuted }}>Loading…</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-          {groupServices(services).map((group) => (
-            <div key={group.category}>
-              <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, marginBottom: 10 }}>
-                {group.category} <span style={{ color: P.border, fontWeight: 600 }}>({group.items.length})</span>
+          {groupServices(services).map((group) => {
+            const open = !!openCategories[group.category];
+            return (
+              <div key={group.category}>
+                <button
+                  onClick={() => toggleCategory(group.category)}
+                  style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", background: "transparent", border: "none", padding: 0, marginBottom: open ? 10 : 0, cursor: "pointer", textAlign: "left" }}
+                >
+                  <ChevronDown size={14} color={P.textMuted} style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s ease", flexShrink: 0 }} />
+                  <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted }}>
+                    {group.category} <span style={{ color: P.border, fontWeight: 600 }}>({group.items.length})</span>
+                  </span>
+                </button>
+                {open && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {group.items.map((s, i) => (
+                      <ServiceCard
+                        key={s.id}
+                        service={s}
+                        onUpdateLocal={(next) => updateLocal(s.id, next)}
+                        onPersist={persist}
+                        onDelete={() => deleteService(s.id)}
+                        onDuplicate={() => duplicateService(s)}
+                        onMoveUp={() => moveService(s.id, -1)}
+                        onMoveDown={() => moveService(s.id, 1)}
+                        canMoveUp={i > 0}
+                        canMoveDown={i < group.items.length - 1}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {group.items.map((s, i) => (
-                  <ServiceCard
-                    key={s.id}
-                    service={s}
-                    onUpdateLocal={(next) => updateLocal(s.id, next)}
-                    onPersist={persist}
-                    onDelete={() => deleteService(s.id)}
-                    onDuplicate={() => duplicateService(s)}
-                    onMoveUp={() => moveService(s.id, -1)}
-                    onMoveDown={() => moveService(s.id, 1)}
-                    canMoveUp={i > 0}
-                    canMoveDown={i < group.items.length - 1}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
+            );
+          })}
           <button onClick={addService} disabled={!businessId} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: "transparent", border: `1px dashed ${P.border}`, color: P.textMuted, borderRadius: 12, padding: "12px", fontSize: 13, fontWeight: 600, cursor: businessId ? "pointer" : "default", opacity: businessId ? 1 : 0.6 }}>
             <Plus size={14} /> Add service
           </button>

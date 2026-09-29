@@ -228,7 +228,7 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
 
   <div id="cards" class="${tiered ? "tiers" : ""}">${tiersHtml}</div>
 
-  ${extraAddonServices.length ? `
+  ${!quote.hide_addons_upsell && extraAddonServices.length ? `
   <div class="extras">
     <span class="kicker">Want to add anything?</span>
     <div class="extras-list">${extrasHtml}</div>

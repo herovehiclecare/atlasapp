@@ -232,6 +232,7 @@ function hydrateQuote(row, vehiclesById) {
     description: row.description || "",
     serviceOverrides: row.service_overrides || {},
     shareToken: row.share_token || null,
+    hideAddonsUpsell: !!row.hide_addons_upsell,
   };
 }
 
@@ -957,6 +958,7 @@ function StepReview({
   onTogglePackage, onToggleAddon, onEditServices,
   serviceOverrides, onSaveServiceOverride, onResetServiceOverride,
   quoteLink, onCopyLink, linkCopied,
+  hideAddonsUpsell, onToggleAddonsUpsell,
 }) {
   // Last-chance edits without leaving Review: each line can be pulled off the
   // quote right here, and "Edit services" jumps back to the full picker for
@@ -1003,6 +1005,20 @@ function StepReview({
       ) : (
         <p style={{ fontSize: 11.5, color: P.textMuted, marginTop: 14, fontStyle: "italic" }}>Save a draft first to get this quote's shareable interactive link.</p>
       )}
+
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 12, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "10px 14px" }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: P.textPrimary }}>"Want to add anything?" upsell</div>
+          <div style={{ fontSize: 11, color: P.textMuted, marginTop: 1 }}>Shows optional add-ons at the bottom of the interactive link. Off hides that section for this quote.</div>
+        </div>
+        <button
+          onClick={onToggleAddonsUpsell}
+          title={hideAddonsUpsell ? "Turn back on" : "Turn off for this quote"}
+          style={{ width: 32, height: 19, borderRadius: 20, border: "none", background: hideAddonsUpsell ? P.border : P.accent, position: "relative", cursor: "pointer", flexShrink: 0, padding: 0 }}
+        >
+          <div style={{ width: 15, height: 15, borderRadius: "50%", background: P.bg, position: "absolute", top: 2, left: hideAddonsUpsell ? 2 : 15, transition: "left 0.15s ease" }} />
+        </button>
+      </div>
 
       <Card style={{ padding: "18px 20px", marginTop: 14, marginBottom: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
@@ -1921,6 +1937,11 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote", 
   // keyed by service id - lets one quote read differently from another
   // without touching the shared catalog service in Settings.
   const [serviceOverrides, setServiceOverrides] = useState({});
+  // Per-quote choice, not a global setting - some quotes are fine offering
+  // the "want to add anything?" upsell on the interactive link, others
+  // (e.g. a customer who already asked for exactly this, nothing more)
+  // aren't the right fit for it.
+  const [hideAddonsUpsell, setHideAddonsUpsell] = useState(false);
   function saveServiceOverride(serviceId, override) {
     setServiceOverrides((prev) => ({ ...prev, [serviceId]: override }));
   }
@@ -2168,6 +2189,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote", 
       totals,
       description: description || null,
       service_overrides: serviceOverrides,
+      hide_addons_upsell: hideAddonsUpsell,
     };
   }
 
@@ -2228,6 +2250,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote", 
     setTaxRate(q.taxRate);
     setDescription(q.description);
     setServiceOverrides(q.serviceOverrides || {});
+    setHideAddonsUpsell(!!q.hideAddonsUpsell);
     setScriptOverride(null);
     // Always reopen editable, even if it was already sent — `sent` only
     // means "just showed the post-send confirmation screen this session";
@@ -2284,6 +2307,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote", 
     setDiscount(0); setDiscountLabel(""); setTaxRate(businessTaxEnabled ? businessDefaultTaxRate : 0); setPhotos([]); setNotes(""); setDescription("");
     setChannels(["email"]); setSent(false); setLastSent(null); setSaveError(""); setScriptOverride(null);
     setServiceOverrides({});
+    setHideAddonsUpsell(false);
   }
 
   async function downloadQuotePdf(snapshot) {
@@ -2519,6 +2543,8 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote", 
                   onCopyLink={() => copyLink(currentShareToken)}
                   linkCopied={linkCopied}
                   onPreview={() => setPreviewOpen(true)}
+                  hideAddonsUpsell={hideAddonsUpsell}
+                  onToggleAddonsUpsell={() => setHideAddonsUpsell((v) => !v)}
                 />
               )}
               {step === 6 && (
