@@ -553,7 +553,7 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
           supabase.from("customers").select("id", { count: "exact", head: true }).eq("business_id", businessId),
           supabase.from("customers").select("id", { count: "exact", head: true }).eq("business_id", businessId).gte("created_at", monthStart.toISOString()),
           supabase.from("jobs").select("id, customer_id, vehicle_id, service_ids, scheduled_at, status, customers(name), vehicles(label, size_class)").eq("business_id", businessId),
-          supabase.from("quotes").select("id, customer_id, status, line_items, totals, created_at, customers(name)").eq("business_id", businessId).order("created_at", { ascending: false }),
+          supabase.from("quotes").select("id, customer_id, status, job_id, line_items, totals, created_at, customers(name)").eq("business_id", businessId).order("created_at", { ascending: false }),
           supabase.from("invoices").select("id, customer_id, amount, status, due_date, created_at, customers(name)").eq("business_id", businessId).order("created_at", { ascending: false }),
           supabase.from("services").select("id, price_car_low, price_suv_low").eq("business_id", businessId),
           supabase.from("vehicles").select("id, label").eq("business_id", businessId),
@@ -623,6 +623,11 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
 
   const pipelineQuotes = quotes.filter((q) => q.status === "sent");
   const pipelineValue = pipelineQuotes.reduce((sum, q) => sum + quoteExpectedValue(q), 0);
+  // The only reliable way to learn a customer approved their interactive
+  // quote link - the in-app toast only fires while Atlas happens to be open
+  // at that exact moment, and there's no SMS/email alert configured. This
+  // shows every time the dashboard loads, until the quote's actually booked.
+  const approvedQuotes = quotes.filter((q) => q.status === "approved" && !q.job_id);
   const recentQuotes = quotes.slice(0, 3);
 
   const outstandingInvoices = invoices.filter((i) => i.status === "unpaid" || i.status === "overdue");
@@ -640,6 +645,10 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
   };
 
   const insights = [];
+  if (approvedQuotes.length > 0) {
+    const single = approvedQuotes.length === 1 ? approvedQuotes[0] : null;
+    insights.push({ text: single ? `${single.customers?.name || "A customer"} approved their quote — ready to book!` : `${approvedQuotes.length} quotes approved by customers, ready to book.`, action: "Review & book", nav: "quote" });
+  }
   if (outstandingInvoices.length > 0) {
     insights.push({ text: `${outstandingInvoices.length} invoice${outstandingInvoices.length === 1 ? "" : "s"} unpaid, totaling ${money(outstandingTotal)}.`, action: "Send reminders", nav: "invoices" });
   }

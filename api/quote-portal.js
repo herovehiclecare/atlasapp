@@ -288,7 +288,10 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
   const TIERED = ${tiered};
   const TAX_RATE = ${taxRate};
   const TOKEN = ${JSON.stringify(quote.share_token)};
-  let selectedTier = null;
+  // Any number of packages can be chosen at once - not mutually exclusive
+  // options, so a customer can combine e.g. both a coating package and a
+  // paint correction package onto one approval.
+  const selectedTiers = new Set();
   const expandedTiers = new Set();
 
   function toggleExpand(id) {
@@ -298,13 +301,15 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
   }
 
   function chooseTier(id) {
-    selectedTier = id;
-    document.querySelectorAll('.tier').forEach(t => t.classList.toggle('chosen', t.dataset.tier === id));
-    document.querySelectorAll('.choose-btn').forEach(b => {
-      const isChosen = b.dataset.tier === id;
-      b.classList.toggle('chosen', isChosen);
-      b.textContent = isChosen ? '✓ Selected' : b.dataset.label;
-    });
+    if (selectedTiers.has(id)) selectedTiers.delete(id); else selectedTiers.add(id);
+    const isChosen = selectedTiers.has(id);
+    const tier = document.getElementById('tier-' + id);
+    if (tier) tier.classList.toggle('chosen', isChosen);
+    const btn = document.querySelector('.choose-btn[data-tier="' + id + '"]');
+    if (btn) {
+      btn.classList.toggle('chosen', isChosen);
+      btn.textContent = isChosen ? '✓ Selected' : btn.dataset.label;
+    }
     updateTotal();
     updateApproveState();
   }
@@ -312,18 +317,19 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
   function updateApproveState() {
     const btn = document.getElementById('approveBtn');
     if (!btn || !TIERED) return;
-    btn.disabled = !selectedTier;
-    btn.textContent = selectedTier ? 'Approve Selected Package' : 'Select a package above';
+    btn.disabled = selectedTiers.size === 0;
+    btn.textContent = selectedTiers.size > 0 ? 'Approve Selected Package' + (selectedTiers.size > 1 ? 's' : '') : 'Select a package above';
   }
 
   function updateTotal() {
     let subtotal = 0;
     if (TIERED) {
-      const card = document.getElementById('tier-' + selectedTier);
-      if (card) {
+      selectedTiers.forEach(id => {
+        const card = document.getElementById('tier-' + id);
+        if (!card) return;
         card.querySelectorAll('.item-price').forEach(el => { subtotal += parseFloat(el.textContent.replace(/[^0-9.]/g, '')) || 0; });
         card.querySelectorAll('input[data-addon]').forEach(cb => { if (!cb.checked) subtotal -= parseFloat(cb.dataset.price) || 0; });
-      }
+      });
     } else {
       document.querySelectorAll('.item-price').forEach(el => { subtotal += parseFloat(el.textContent.replace(/[^0-9.]/g, '')) || 0; });
       document.querySelectorAll('input[data-addon]').forEach(cb => { if (!cb.checked) subtotal -= parseFloat(cb.dataset.price) || 0; });
@@ -334,13 +340,13 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
   }
 
   async function approve() {
-    if (TIERED && !selectedTier) return;
+    if (TIERED && selectedTiers.size === 0) return;
     const btn = document.getElementById('approveBtn');
     btn.disabled = true;
     btn.textContent = 'Submitting…';
     const chosenAddonIds = [];
     document.querySelectorAll('input[data-addon]').forEach(cb => {
-      if (cb.checked && (!TIERED || cb.dataset.tier === selectedTier)) chosenAddonIds.push(cb.dataset.addon);
+      if (cb.checked && (!TIERED || selectedTiers.has(cb.dataset.tier))) chosenAddonIds.push(cb.dataset.addon);
     });
     const extraServiceIds = [];
     document.querySelectorAll('input[data-extra]').forEach(cb => { if (cb.checked) extraServiceIds.push(cb.dataset.extra); });
@@ -348,7 +354,7 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
       const res = await fetch(window.location.pathname + window.location.search, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: TOKEN, chosenTierId: TIERED ? selectedTier : null, chosenAddonIds, extraServiceIds }),
+        body: JSON.stringify({ token: TOKEN, chosenTierIds: TIERED ? Array.from(selectedTiers) : [], chosenAddonIds, extraServiceIds }),
       });
       if (!res.ok) throw new Error('failed');
       btn.outerHTML = '<div class="approved-banner">✓ Approved — we\\'ll be in touch to get this scheduled.</div>';

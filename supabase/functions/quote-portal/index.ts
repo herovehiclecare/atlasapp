@@ -144,7 +144,12 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Bad request" }), { status: 400, headers: { "Content-Type": "application/json" } });
     }
 
-    const chosenTierId = body.chosenTierId || null;
+    // chosenTierIds (plural) is the current shape - any number of tiers can
+    // be chosen at once. chosenTierId (singular) is accepted too, for any
+    // link still running the previous single-select page.
+    const chosenTierIds: string[] = Array.isArray(body.chosenTierIds)
+      ? body.chosenTierIds
+      : body.chosenTierId ? [body.chosenTierId] : [];
     const chosenAddonIds = Array.isArray(body.chosenAddonIds) ? body.chosenAddonIds : [];
     // Re-validated against this business's actual Add-Ons catalog (not just
     // trusted from the client) - a submitted id that isn't really one of
@@ -159,11 +164,13 @@ Deno.serve(async (req) => {
     const overrides = quote.service_overrides || {};
     let chosenLabel = "";
     if (quote.proposal_mode === "tiered") {
-      const tier = (quote.tiers || []).find((t: any) => t.id === chosenTierId);
-      if (tier) {
-        chosenLabel = tier.name;
-        total += (tier.packageIds || []).reduce((s: number, id: string) => s + effectivePrice(id, servicesById[id], vehicle, overrides), 0);
-        total += (tier.addonIds || []).filter((id: string) => chosenAddonIds.includes(id)).reduce((s: number, id: string) => s + (Number(addonsById[id]?.price) || 0), 0);
+      const chosenTiers = (quote.tiers || []).filter((t: any) => chosenTierIds.includes(t.id));
+      if (chosenTiers.length) {
+        chosenLabel = chosenTiers.map((t: any) => t.name).join(" + ");
+        for (const tier of chosenTiers) {
+          total += (tier.packageIds || []).reduce((s: number, id: string) => s + effectivePrice(id, servicesById[id], vehicle, overrides), 0);
+          total += (tier.addonIds || []).filter((id: string) => chosenAddonIds.includes(id)).reduce((s: number, id: string) => s + (Number(addonsById[id]?.price) || 0), 0);
+        }
       }
     } else {
       for (const v of quote.line_items?.vehicleIds || []) {
@@ -181,7 +188,8 @@ Deno.serve(async (req) => {
       .from("quotes")
       .update({
         status: "approved",
-        chosen_tier_id: chosenTierId,
+        chosen_tier_id: chosenTierIds[0] || null,
+        chosen_tier_ids: chosenTierIds,
         chosen_addon_ids: chosenAddonIds,
         extra_service_ids: extraServiceIds,
         approved_at: new Date().toISOString(),
