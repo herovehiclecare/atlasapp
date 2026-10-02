@@ -225,7 +225,7 @@ function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate, show
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7,minmax(0,1fr))", gap: 6 }}>
         {cells.map((c, i) => {
-          const dayJobs = jobs.filter((j) => sameDay(jobDate(j), c.date));
+          const dayJobs = jobs.filter((j) => sameDay(jobDate(j), c.date)).sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
           const isToday = sameDay(c.date, today);
           const isPreviewed = previewDate && sameDay(c.date, previewDate);
           const holiday = showHolidays ? usHolidayName(c.date) : null;
@@ -708,7 +708,21 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
                 )}
               </div>
               {!addingVehicle && (
-                <select value={vehicleId} onChange={(e) => setVehicleId(e.target.value)} style={inputStyle}>
+                <select
+                  value={vehicleId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setVehicleId(id);
+                    // No customer picked yet, so the dropdown above was listing every
+                    // vehicle across every customer — picking one here clearly identifies
+                    // whose it is, so backfill the customer instead of leaving "No customer".
+                    if (!customerId && id) {
+                      const picked = vehicles.find((v) => v.id === id);
+                      if (picked?.customer_id) setCustomerId(picked.customer_id);
+                    }
+                  }}
+                  style={inputStyle}
+                >
                   <option value="">No vehicle</option>
                   {vehiclesForCustomer.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
                 </select>
