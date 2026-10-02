@@ -1577,19 +1577,19 @@ function PrintHeader({ business, docLabel, preparedDate }) {
   return (
     <div style={{ marginBottom: 18 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           {business.logoUrl ? (
-            <img src={business.logoUrl} alt="" style={{ width: 52, height: 52, borderRadius: "50%", objectFit: "cover" }} />
+            <img src={business.logoUrl} alt="" style={{ width: 52, height: 52, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />
           ) : (
-            <div style={{ width: 52, height: 52, borderRadius: "50%", background: `${PRINT_ACCENT}22`, color: PRINT_ACCENT, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 16 }}>
+            <div style={{ width: 52, height: 52, borderRadius: "50%", background: `${PRINT_ACCENT}22`, color: PRINT_ACCENT, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: 16, flexShrink: 0 }}>
               {initials(business.name || "?")}
             </div>
           )}
           <div>
-            <div style={{ fontSize: 17, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.03em" }}>{business.name}</div>
-            {business.tagline && <div style={{ fontSize: 10.5, color: "#777", marginTop: 2 }}>{business.tagline}</div>}
-            {(business.phone || business.email) && <div style={{ fontSize: 10.5, color: "#777", marginTop: 2 }}>{[business.phone, business.email].filter(Boolean).join(" · ")}</div>}
-            {business.address && <div style={{ fontSize: 10.5, color: "#777", marginTop: 1 }}>{business.address}</div>}
+            <div style={{ fontSize: 17, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.03em", marginBottom: 4 }}>{business.name}</div>
+            {business.tagline && <div style={{ fontSize: 10.5, color: "#777", marginTop: 4 }}>{business.tagline}</div>}
+            {(business.phone || business.email) && <div style={{ fontSize: 10.5, color: "#777", marginTop: 4 }}>{[business.phone, business.email].filter(Boolean).join(" · ")}</div>}
+            {business.address && <div style={{ fontSize: 10.5, color: "#777", marginTop: 3 }}>{business.address}</div>}
           </div>
         </div>
         <div style={{ fontSize: 11, fontWeight: 800, color: PRINT_ACCENT, letterSpacing: "0.06em", whiteSpace: "nowrap" }}>{docLabel}</div>
@@ -1671,38 +1671,49 @@ function PrintableQuote({ q, services, addonsAll, business, id = "atlas-print-ro
 
       <PrintSection label="What's Included">
         {tiered ? (
-          q.tiers.map((tier, i) => {
-            const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, q.taxRate, q.serviceOverrides);
-            const addonNames = tier.addonIds.map((id) => findAddon(addonsAll, id)?.name).filter(Boolean);
-            return (
-              <div key={tier.id} style={{ marginBottom: i < q.tiers.length - 1 ? 16 : 0 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, marginBottom: 6 }}>
-                  <span>{tier.name}</span><span>{money(total)}</span>
-                </div>
-                {tier.packageIds.map((id) => {
-                  const info = effectiveServiceInfo(id, services, q.serviceOverrides, vehicle);
-                  return (
-                    <div key={id} style={{ marginBottom: 8, paddingLeft: 4 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600, color: "#222" }}>
-                        <span>{info.name}</span><span>{money(info.price)}</span>
+          <>
+            {q.tiers.length > 1 && (
+              <div style={{ fontSize: 11, fontStyle: "italic", color: "#888", marginBottom: 10 }}>Choose one of the following options</div>
+            )}
+            {q.tiers.map((tier, i) => {
+              const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, q.taxRate, q.serviceOverrides);
+              const addonNames = tier.addonIds.map((id) => findAddon(addonsAll, id)?.name).filter(Boolean);
+              return (
+                <div key={tier.id} style={{ marginBottom: i < q.tiers.length - 1 ? 18 : 0 }}>
+                  {q.tiers.length > 1 && (
+                    <div style={{ fontSize: 9, fontWeight: 800, color: PRINT_ACCENT, letterSpacing: "0.05em", marginBottom: 2 }}>OPTION {i + 1}</div>
+                  )}
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, marginBottom: 6 }}>
+                    <span>{tier.name}</span><span>{money(total)}</span>
+                  </div>
+                  {tier.packageIds.map((id) => {
+                    const info = effectiveServiceInfo(id, services, q.serviceOverrides, vehicle);
+                    const isRedundantHeader = tier.packageIds.length === 1 && info.name === tier.name;
+                    return (
+                      <div key={id} style={{ marginBottom: 8, paddingLeft: 4 }}>
+                        {!isRedundantHeader && (
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600, color: "#222" }}>
+                            <span>{info.name}</span><span>{money(info.price)}</span>
+                          </div>
+                        )}
+                        {info.description && <p style={{ margin: "2px 0 0", fontSize: 10.5, color: "#777", lineHeight: 1.5 }}>{info.description}</p>}
+                        {info.includes.length > 0 && (
+                          <ul style={{ margin: "4px 0 0", paddingLeft: 16 }}>
+                            {info.includes.map((line, k) => <li key={k} style={{ fontSize: 10.5, color: "#777", lineHeight: 1.5 }}>{line}</li>)}
+                          </ul>
+                        )}
                       </div>
-                      {info.description && <p style={{ margin: "2px 0 0", fontSize: 10.5, color: "#777", lineHeight: 1.5 }}>{info.description}</p>}
-                      {info.includes.length > 0 && (
-                        <ul style={{ margin: "4px 0 0", paddingLeft: 16 }}>
-                          {info.includes.map((line, k) => <li key={k} style={{ fontSize: 10.5, color: "#777", lineHeight: 1.5 }}>{line}</li>)}
-                        </ul>
-                      )}
-                    </div>
-                  );
-                })}
-                {addonNames.length > 0 && (
-                  <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
-                    {addonNames.map((n, j) => <li key={j} style={{ fontSize: 11.5, color: "#333" }}>{n}</li>)}
-                  </ul>
-                )}
-              </div>
-            );
-          })
+                    );
+                  })}
+                  {addonNames.length > 0 && (
+                    <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
+                      {addonNames.map((n, j) => <li key={j} style={{ fontSize: 11.5, color: "#333" }}>{n}</li>)}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
+          </>
         ) : (
           <>
             {q.vehicles.map((v) => {
@@ -1835,16 +1846,20 @@ async function buildQuotePdfDoc(q, services, addonsAll, business) {
   const docLabel = business.quoteLabel || "SERVICE QUOTE";
   const logoDataUri = business.logoUrl ? await urlToDataUri(business.logoUrl) : null;
 
+  const circularLogo = logoDataUri
+    ? { svg: `<svg width="42" height="42" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="p" patternUnits="userSpaceOnUse" width="42" height="42"><image href="${logoDataUri}" width="42" height="42" preserveAspectRatio="xMidYMid slice"/></pattern></defs><circle cx="21" cy="21" r="21" fill="url(#p)"/></svg>`, width: 42, height: 42, margin: [0, 0, 16, 0] }
+    : { text: "", width: 0 };
+
   const headerLeft = {
     width: "*",
     columns: [
-      logoDataUri ? { image: logoDataUri, width: 40, height: 40, margin: [0, 0, 10, 0] } : { text: "", width: 0 },
+      circularLogo,
       {
         stack: [
-          { text: (business.name || "Your Business").toUpperCase(), bold: true, fontSize: 15 },
-          ...(business.tagline ? [{ text: business.tagline, fontSize: 8, color: "#777777", margin: [0, 2, 0, 0] }] : []),
-          ...([business.phone, business.email].filter(Boolean).length > 0 ? [{ text: [business.phone, business.email].filter(Boolean).join(" · "), fontSize: 8, color: "#777777", margin: [0, 2, 0, 0] }] : []),
-          ...(business.address ? [{ text: business.address, fontSize: 8, color: "#777777", margin: [0, 1, 0, 0] }] : []),
+          { text: (business.name || "Your Business").toUpperCase(), bold: true, fontSize: 15, margin: [0, 0, 0, 3] },
+          ...(business.tagline ? [{ text: business.tagline, fontSize: 8, color: "#777777", margin: [0, 0, 0, 4] }] : []),
+          ...([business.phone, business.email].filter(Boolean).length > 0 ? [{ text: [business.phone, business.email].filter(Boolean).join(" · "), fontSize: 8, color: "#777777", margin: [0, 0, 0, 3] }] : []),
+          ...(business.address ? [{ text: business.address, fontSize: 8, color: "#777777", margin: [0, 0, 0, 0] }] : []),
         ],
       },
     ],
@@ -1852,7 +1867,7 @@ async function buildQuotePdfDoc(q, services, addonsAll, business) {
 
   const content = [
     { columns: [headerLeft, { text: docLabel, bold: true, fontSize: 9, color: PRINT_ACCENT, alignment: "right" }] },
-    { canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 2, lineColor: PRINT_ACCENT }], margin: [0, 12, 0, 6] },
+    { canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 2, lineColor: PRINT_ACCENT }], margin: [0, 16, 0, 10] },
     { text: `Prepared ${q.createdAt}`, fontSize: 9, color: "#777777", margin: [0, 0, 0, 14] },
 
     ...pdfSection("Prepared For", pdfBox([
@@ -1869,28 +1884,33 @@ async function buildQuotePdfDoc(q, services, addonsAll, business) {
 
     ...pdfSection("What's Included", pdfBox(
       tiered
-        ? q.tiers.flatMap((tier, i) => {
-            const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, q.taxRate, q.serviceOverrides);
-            const addonNames = tier.addonIds.map((id) => findAddon(addonsAll, id)?.name).filter(Boolean);
-            return [{
-              stack: [
-                { columns: [{ text: tier.name, bold: true, fontSize: 12 }, { text: money(total), bold: true, fontSize: 12, alignment: "right" }], margin: [0, 0, 0, 5] },
-                ...tier.packageIds.flatMap((id) => {
-                  const info = effectiveServiceInfo(id, services, q.serviceOverrides, vehicle);
-                  return [{
-                    stack: [
-                      { columns: [{ text: info.name, bold: true, fontSize: 10.5 }, { text: money(info.price), bold: true, fontSize: 10.5, alignment: "right" }] },
-                      ...(info.description ? [{ text: info.description, fontSize: 9.5, color: "#777777", margin: [0, 2, 0, 0] }] : []),
-                      ...(info.includes.length > 0 ? [{ ul: info.includes, fontSize: 9.5, color: "#777777", margin: [0, 2, 0, 0] }] : []),
-                    ],
-                    margin: [0, 0, 0, 6],
-                  }];
-                }),
-                ...(addonNames.length ? [{ ul: addonNames, fontSize: 10, color: "#333333", margin: [0, 0, 0, 0] }] : []),
-              ],
-              margin: [0, 0, 0, i < q.tiers.length - 1 ? 12 : 0],
-            }];
-          })
+        ? [
+            ...(q.tiers.length > 1 ? [{ text: "Choose one of the following options", italics: true, fontSize: 9.5, color: "#888888", margin: [0, 0, 0, 10] }] : []),
+            ...q.tiers.flatMap((tier, i) => {
+              const { total } = tierTotalWithTax(tier, vehicle, services, addonsAll, q.taxRate, q.serviceOverrides);
+              const addonNames = tier.addonIds.map((id) => findAddon(addonsAll, id)?.name).filter(Boolean);
+              return [{
+                stack: [
+                  ...(q.tiers.length > 1 ? [{ text: `OPTION ${i + 1}`, bold: true, fontSize: 8, color: PRINT_ACCENT, characterSpacing: 0.5, margin: [0, 0, 0, 2] }] : []),
+                  { columns: [{ text: tier.name, bold: true, fontSize: 12 }, { text: money(total), bold: true, fontSize: 12, alignment: "right" }], margin: [0, 0, 0, 5] },
+                  ...tier.packageIds.flatMap((id) => {
+                    const info = effectiveServiceInfo(id, services, q.serviceOverrides, vehicle);
+                    const isRedundantHeader = tier.packageIds.length === 1 && info.name === tier.name;
+                    return [{
+                      stack: [
+                        ...(isRedundantHeader ? [] : [{ columns: [{ text: info.name, bold: true, fontSize: 10.5 }, { text: money(info.price), bold: true, fontSize: 10.5, alignment: "right" }] }]),
+                        ...(info.description ? [{ text: info.description, fontSize: 9.5, color: "#777777", margin: [0, 2, 0, 0] }] : []),
+                        ...(info.includes.length > 0 ? [{ ul: info.includes, fontSize: 9.5, color: "#777777", margin: [0, isRedundantHeader ? 0 : 2, 0, 0] }] : []),
+                      ],
+                      margin: [0, 0, 0, 6],
+                    }];
+                  }),
+                  ...(addonNames.length ? [{ ul: addonNames, fontSize: 10, color: "#333333", margin: [0, 0, 0, 0] }] : []),
+                ],
+                margin: [0, 0, 0, i < q.tiers.length - 1 ? 14 : 0],
+              }];
+            }),
+          ]
         : q.vehicles.flatMap((v) => {
             const ids = q.lineItems[v.id] || [];
             if (!ids.length) return [];
