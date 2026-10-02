@@ -53,7 +53,7 @@ async function sendApprovalAlert(businessId: string, customerName: string, chose
 
 function svcPrice(service: any, vehicle: any): number {
   if (!service) return 0;
-  const isSuv = vehicle?.size_class === "suv" || vehicle?.size_class === "truck" || vehicle?.size_class === "van";
+  const isSuv = vehicle?.size_class === "suv_truck_van";
   return Number(isSuv ? service.price_suv_low : service.price_car_low) || 0;
 }
 
