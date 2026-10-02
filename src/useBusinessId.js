@@ -41,10 +41,16 @@ export function useBusinessId() {
           return;
         }
 
+        // A user could belong to more than one business (e.g. an owner who
+        // also got auto-created a second business some other way) — without
+        // an explicit order, which row Postgres returns first is undefined,
+        // so the same user could land on a different business on different
+        // loads. Oldest membership wins, consistently, every time.
         const { data, error: memberError } = await supabase
           .from("business_members")
           .select("business_id, businesses(name, logo_url, tagline, quote_label, invoice_label, phone, email, address, website, social_links, preferred_comm_app, hours, notification_prefs, ui_prefs, default_tax_rate, tax_enabled)")
           .eq("user_id", user.id)
+          .order("created_at", { ascending: true })
           .limit(1)
           .single();
 

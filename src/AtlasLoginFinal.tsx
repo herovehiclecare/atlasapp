@@ -37,6 +37,7 @@ export default function AtlasLogin() {
   const [mode, setMode] = useState("signin"); // "signin" | "signup" | "reset"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
   const [errors, setErrors] = useState({});
@@ -44,6 +45,7 @@ export default function AtlasLogin() {
 
   function toggleMode() {
     setMode((m) => (m === "signin" ? "signup" : "signin"));
+    setConfirmPassword("");
     setErrors({});
     setStatus("idle");
   }
@@ -66,6 +68,7 @@ export default function AtlasLogin() {
     else if (!/^\S+@\S+\.\S+$/.test(email)) next.email = "That email address doesn't look right.";
     if (!password) next.password = "Enter your password.";
     else if (password.length < 6) next.password = "Password must be at least 6 characters.";
+    if (mode === "signup" && password && password !== confirmPassword) next.confirmPassword = "Passwords don't match.";
     setErrors(next);
     return Object.keys(next).length === 0;
   }
@@ -268,6 +271,21 @@ export default function AtlasLogin() {
                 </div>
                 {errors.password && <p style={{ fontSize: 12.5, color: P.danger, marginTop: 6 }}>{errors.password}</p>}
               </div>
+
+              {mode === "signup" && (
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: P.textSecondary, marginBottom: 7 }}>Confirm password</label>
+                  <input
+                    type={showPassword ? "text" : "password"} autoComplete="new-password" value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)} placeholder="••••••••"
+                    style={{
+                      width: "100%", background: "transparent", border: `1px solid ${errors.confirmPassword ? P.danger : P.border}`,
+                      borderRadius: 10, padding: "11px 14px", fontSize: 14, color: P.textPrimary, outline: "none",
+                    }}
+                  />
+                  {errors.confirmPassword && <p style={{ fontSize: 12.5, color: P.danger, marginTop: 6 }}>{errors.confirmPassword}</p>}
+                </div>
+              )}
 
               <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 14, cursor: "pointer" }}>
                 <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} style={{ accentColor: P.accent }} />
