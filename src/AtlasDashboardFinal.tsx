@@ -368,7 +368,7 @@ function initials(name) { return name.split(" ").map((n) => n[0]).slice(0, 2).jo
 
 function BrandLockup({ size = 34, businessId, realName, realLogoUrl }) {
   const [logo, setLogo] = useState(null);
-  const [name, setName] = useState("Detail Hero");
+  const [name, setName] = useState("My Business");
   const [editingName, setEditingName] = useState(false);
   const fileRef = useRef(null);
 
@@ -708,8 +708,8 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
           {NAV.map((item) => <NavItem key={item.id} item={item} active={currentPage === item.id} onClick={() => onNavigate(item.id)} />)}
         </div>
         <div style={{ marginTop: "auto", display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", borderTop: `1px solid ${P.border}`, paddingTop: 16 }}>
-          <div style={{ width: 28, height: 28, borderRadius: "50%", background: businessLogoUrl ? `url(${businessLogoUrl}) center/cover` : P.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: P.accent }}>{!businessLogoUrl && initials(businessName || "Detail Hero")}</div>
-          <div><div style={{ fontSize: 12.5, fontWeight: 600, color: P.textPrimary }}>{businessName || "Detail Hero"}</div><div style={{ fontSize: 11, color: P.textMuted }}>Owner</div></div>
+          <div style={{ width: 28, height: 28, borderRadius: "50%", background: businessLogoUrl ? `url(${businessLogoUrl}) center/cover` : P.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: P.accent }}>{!businessLogoUrl && initials(businessName || "My Business")}</div>
+          <div><div style={{ fontSize: 12.5, fontWeight: 600, color: P.textPrimary }}>{businessName || "My Business"}</div><div style={{ fontSize: 11, color: P.textMuted }}>Owner</div></div>
         </div>
       </div>
 

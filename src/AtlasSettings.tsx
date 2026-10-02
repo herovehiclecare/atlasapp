@@ -112,7 +112,7 @@ function NavItem({ item, active, onClick }) {
 
 function BrandLockup({ size = 30, businessId, realName, realLogoUrl }) {
   const [logo, setLogo] = useState(null);
-  const [name, setName] = useState("Detail Hero");
+  const [name, setName] = useState("My Business");
   const [editingName, setEditingName] = useState(false);
   const fileRef = useRef(null);
 
@@ -1127,8 +1127,8 @@ function PublicPagePanel() {
             </div>
             <div style={{ background: P.surface, padding: 18 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-                <div style={{ width: 40, height: 40, borderRadius: "50%", background: businessLogoUrl ? `url(${businessLogoUrl}) center/cover` : P.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: P.accent, flexShrink: 0 }}>{!businessLogoUrl && initials(businessName || "Detail Hero")}</div>
-                <div><div style={{ fontSize: 14, fontWeight: 700, color: P.textPrimary }}>{businessName || "Detail Hero"}</div><div style={{ fontSize: 10.5, color: P.textMuted }}>{businessTagline || "Add a tagline in Business Profile"}</div></div>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: businessLogoUrl ? `url(${businessLogoUrl}) center/cover` : P.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: P.accent, flexShrink: 0 }}>{!businessLogoUrl && initials(businessName || "My Business")}</div>
+                <div><div style={{ fontSize: 14, fontWeight: 700, color: P.textPrimary }}>{businessName || "My Business"}</div><div style={{ fontSize: 10.5, color: P.textMuted }}>{businessTagline || "Add a tagline in Business Profile"}</div></div>
               </div>
 
               {sections.services && (
@@ -1658,8 +1658,8 @@ export default function AtlasSettings({ onNavigate, currentPage = "settings", on
         </div>
         <div style={{ marginTop: "auto", padding: "10px 8px", borderTop: `1px solid ${P.border}`, paddingTop: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-            <div style={{ width: 28, height: 28, borderRadius: "50%", background: businessLogoUrl ? `url(${businessLogoUrl}) center/cover` : P.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: P.accent }}>{!businessLogoUrl && initials(businessName || "Detail Hero")}</div>
-            <div><div style={{ fontSize: 12.5, fontWeight: 600, color: P.textPrimary }}>{businessName || "Detail Hero"}</div><div style={{ fontSize: 11, color: P.textMuted }}>Owner</div></div>
+            <div style={{ width: 28, height: 28, borderRadius: "50%", background: businessLogoUrl ? `url(${businessLogoUrl}) center/cover` : P.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: P.accent }}>{!businessLogoUrl && initials(businessName || "My Business")}</div>
+            <div><div style={{ fontSize: 12.5, fontWeight: 600, color: P.textPrimary }}>{businessName || "My Business"}</div><div style={{ fontSize: 11, color: P.textMuted }}>Owner</div></div>
           </div>
           {onSignOut && (
             <button onClick={onSignOut} style={{ width: "100%", textAlign: "left", background: "transparent", border: "none", color: P.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: "4px 2px" }}>
