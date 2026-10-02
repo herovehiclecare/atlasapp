@@ -35,6 +35,18 @@ function toHex(buf: ArrayBuffer): string {
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+// A plain `===` leaks timing information character-by-character, which
+// matters here since `header` is attacker-controlled (anyone can POST to a
+// webhook URL) and `expected` is derived from a secret this business's
+// whole Meta integration depends on. Always walks the full length instead
+// of short-circuiting on the first mismatched character.
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 async function isValidSignature(req: Request, rawBody: string): Promise<boolean> {
   if (!APP_SECRET) return false;
   const header = req.headers.get("x-hub-signature-256") || "";
@@ -48,7 +60,7 @@ async function isValidSignature(req: Request, rawBody: string): Promise<boolean>
     ["sign"]
   );
   const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(rawBody));
-  return expectedPrefix + toHex(mac) === header;
+  return timingSafeEqual(expectedPrefix + toHex(mac), header);
 }
 
 function nowLocalTime(): string {
@@ -325,7 +337,12 @@ async function processMessengerEvent(event: any, pageId: string) {
 
   // 2) Someone already imported by hand/bulk (source_ref empty) with the same
   //    name: adopt that row by stamping the Messenger id on it, instead of
-  //    creating a duplicate customer. Only do this when there is exactly one match.
+  //    creating a duplicate customer. Only do this when there is exactly one match -
+  //    two or more same-named matches is ambiguous (which one actually messaged?),
+  //    so it falls through to 3) and creates a new customer rather than guessing,
+  //    but flagged in that customer's notes so the ambiguity is visible to a human
+  //    instead of silently producing an unexplained duplicate.
+  let possibleDuplicateNote = "";
   if (name !== "Messenger contact") {
     const { data: sameName } = await supabase
       .from("customers")
@@ -341,6 +358,9 @@ async function processMessengerEvent(event: any, pageId: string) {
       }
       return;
     }
+    if (sameName && sameName.length > 1) {
+      possibleDuplicateNote = ` Heads up: ${sameName.length} other customers share the name "${name}" — check this isn't a duplicate before treating them as a new contact.`;
+    }
   }
 
   // 3) Genuinely new person -> customer + follow-up + Quo contact/task + alert.
@@ -351,7 +371,7 @@ async function processMessengerEvent(event: any, pageId: string) {
       name,
       source: "facebook_messenger",
       source_ref: sourceRef,
-      notes: `Messaged the Page on Facebook Messenger. No phone/email on file yet.${snippet ? ` First message: "${snippet}"` : ""}`,
+      notes: `Messaged the Page on Facebook Messenger. No phone/email on file yet.${snippet ? ` First message: "${snippet}"` : ""}${possibleDuplicateNote}`,
     })
     .select("id")
     .single();
