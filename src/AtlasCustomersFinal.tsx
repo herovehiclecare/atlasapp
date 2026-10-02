@@ -777,7 +777,10 @@ function AddCustomerModal({ businessId, onClose, onAdded, onVehicleAdded }) {
       if (vehicleError) {
         setSaving(false);
         setError(`Customer saved, but the vehicle didn't: ${vehicleError.message}`);
-        onAdded(data);
+        // Keep the modal open so this error is actually seen — passing
+        // keepOpen=true adds the customer to the list without closing,
+        // since onAdded alone also closes the modal (handleAdded below).
+        onAdded(data, true);
         return;
       }
     }
@@ -931,9 +934,9 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
 
   function toggleSelect(id) { setSelected((s) => (s.includes(id) ? s.filter((n) => n !== id) : [...s, id])); }
 
-  function handleAdded(customer) {
+  function handleAdded(customer, keepOpen) {
     setCustomers((cs) => [...cs, customer].sort((a, b) => a.name.localeCompare(b.name)));
-    setAddOpen(false);
+    if (!keepOpen) setAddOpen(false);
   }
 
   function handleExport() {

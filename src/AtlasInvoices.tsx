@@ -616,16 +616,20 @@ async function buildInvoicePdfDoc(inv, services, business) {
     ? (await Promise.all(inv.photos.map((url) => urlToDataUri(url)))).filter(Boolean)
     : [];
 
+  const circularLogo = logoDataUri
+    ? { svg: `<svg width="42" height="42" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="p" patternUnits="userSpaceOnUse" width="42" height="42"><image href="${logoDataUri}" width="42" height="42" preserveAspectRatio="xMidYMid slice"/></pattern></defs><circle cx="21" cy="21" r="21" fill="url(#p)"/></svg>`, width: 42, height: 42, margin: [0, 0, 16, 0] }
+    : { text: "", width: 0 };
+
   const headerLeft = {
     width: "*",
     columns: [
-      logoDataUri ? { image: logoDataUri, width: 40, height: 40, margin: [0, 0, 10, 0] } : { text: "", width: 0 },
+      circularLogo,
       {
         stack: [
-          { text: (business.name || "Your Business").toUpperCase(), bold: true, fontSize: 15 },
-          ...(business.tagline ? [{ text: business.tagline, fontSize: 8, color: "#777777", margin: [0, 2, 0, 0] }] : []),
-          ...([business.phone, business.email].filter(Boolean).length > 0 ? [{ text: [business.phone, business.email].filter(Boolean).join(" · "), fontSize: 8, color: "#777777", margin: [0, 2, 0, 0] }] : []),
-          ...(business.address ? [{ text: business.address, fontSize: 8, color: "#777777", margin: [0, 1, 0, 0] }] : []),
+          { text: (business.name || "Your Business").toUpperCase(), bold: true, fontSize: 15, margin: [0, 0, 0, 3] },
+          ...(business.tagline ? [{ text: business.tagline, fontSize: 8, color: "#777777", margin: [0, 0, 0, 4] }] : []),
+          ...([business.phone, business.email].filter(Boolean).length > 0 ? [{ text: [business.phone, business.email].filter(Boolean).join(" · "), fontSize: 8, color: "#777777", margin: [0, 0, 0, 3] }] : []),
+          ...(business.address ? [{ text: business.address, fontSize: 8, color: "#777777", margin: [0, 0, 0, 0] }] : []),
         ],
       },
     ],
@@ -633,7 +637,7 @@ async function buildInvoicePdfDoc(inv, services, business) {
 
   const content = [
     { columns: [headerLeft, { text: docLabel, bold: true, fontSize: 9, color: PRINT_ACCENT, alignment: "right" }] },
-    { canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 2, lineColor: PRINT_ACCENT }], margin: [0, 12, 0, 6] },
+    { canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 2, lineColor: PRINT_ACCENT }], margin: [0, 16, 0, 10] },
     { text: `Prepared ${formatDate(inv.created_at)}`, fontSize: 9, color: "#777777", margin: [0, 0, 0, 14] },
 
     ...pdfSection("Prepared For", pdfBox([

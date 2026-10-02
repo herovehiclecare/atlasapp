@@ -38,7 +38,8 @@ export default async function handler(req, res) {
   }
 
   if (/^https?:\/\//.test(logoUrl)) {
-    res.status(302).setHeader("Location", logoUrl).send("");
+    res.setHeader("Location", logoUrl);
+    res.status(302).end();
     return;
   }
 
