@@ -154,6 +154,14 @@ Deno.serve(async (req) => {
   }
 
   if (req.method === "POST") {
+    // Already approved - a retried/duplicated request (e.g. a slow connection
+    // causing a second tap) should look like success to the customer without
+    // re-running the write or texting the owner a second "approved" alert
+    // for the same approval.
+    if (["approved", "booked"].includes(quote.status)) {
+      return new Response(JSON.stringify({ success: true, alreadyApproved: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+
     let body: any = {};
     try {
       body = await req.json();

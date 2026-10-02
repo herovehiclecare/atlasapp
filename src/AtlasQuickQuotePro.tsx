@@ -1365,7 +1365,9 @@ function StepSend({ channels, toggleChannel, sent, customer, depositLink, onAddT
       </div>
 
       <p style={{ fontSize: 12, color: P.textMuted, marginTop: 16 }}>
-        This marks the quote Sent and saves it to Saved quotes — actually sending it through the channel(s) above is on you for now.
+        {channels.includes("sms") && customer?.phone
+          ? "Text message sends automatically when you hit Send. Email isn't automated yet — copy the link or download the PDF to send that part yourself."
+          : "This marks the quote Sent and saves it to Saved quotes — sending it through email is on you for now; check Text message to have Atlas text the link automatically."}
       </p>
     </div>
   );
@@ -2197,9 +2199,13 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote", 
       return s + ids.reduce((s2, id) => s2 + effectivePrice(id, v, services, serviceOverrides), 0);
     }, 0);
     const addonTotal = addons.reduce((s, id) => s + (Number(findAddon(addonsAll, id)?.price) || 0), 0);
-    const subtotal = servicesTotal + addonTotal - discount;
-    const tax = Math.max(0, subtotal) * (taxRate / 100);
-    return { subtotal, tax, total: Math.max(0, subtotal) + tax, isRange: false };
+    // Clamped here, not just at the tax/total step below - a discount typed
+    // larger than the service total used to leave Subtotal negative on the
+    // customer-facing PDF/print view while Total still floored at $0.00,
+    // which read as a broken quote rather than an intentional "fully comped" one.
+    const subtotal = Math.max(0, servicesTotal + addonTotal - discount);
+    const tax = subtotal * (taxRate / 100);
+    return { subtotal, tax, total: subtotal + tax, isRange: false };
   }, [lineItems, addons, discount, taxRate, proposalMode, tiers, vehicles, services, addonsAll, vehiclesById, serviceOverrides]);
 
   function generateDescription() {
