@@ -294,6 +294,17 @@
   .bg-overlay-toggle-row input{ width:17px; height:17px; accent-color:var(--brand); flex-shrink:0; }
   .bg-screen-overlay{ display:none; position:fixed; inset:0; background:rgba(255,255,255,.55); pointer-events:none; z-index:1; }
 
+  /* Only these few bits of text sit directly on the chosen background - everything
+     else lives inside a white card. Pick a dark background colour and they used to
+     disappear into it, so when the background is dark they switch to light type.
+     Measured, not guessed: see isDarkColor() below. No setting to find, it just
+     reads correctly whatever colour gets picked. */
+  body.on-dark-bg .brandbar-name{ color:#F4F2F8; }
+  body.on-dark-bg .sub{ color:rgba(244,242,248,.78); }
+  body.on-dark-bg .settings-toggle{ color:rgba(244,242,248,.82); }
+  body.on-dark-bg .footer-note{ color:rgba(244,242,248,.72); }
+  body.on-dark-bg .footer-note .credit{ color:#F4F2F8; }
+
   /* ==================================================================
      NEW: editable total price
   ================================================================== */
@@ -893,9 +904,37 @@ function squareBgCss(base,line){
     backgroundPosition:'0 0, 0 0'
   };
 }
+// Perceived brightness of a colour (ITU-R BT.601), 0 = black, 255 = white.
+// Used to decide whether text sitting on the background needs to flip to light.
+function isDarkColor(hex){
+  const h = String(hex || '').replace('#','');
+  const full = h.length === 3 ? h.split('').map(c=>c+c).join('') : h;
+  if (full.length !== 6) return false;
+  const n = parseInt(full, 16);
+  if (isNaN(n)) return false;
+  const r = (n>>16)&255, g = (n>>8)&255, b = n&255;
+  return (r*299 + g*587 + b*114) / 1000 < 128;
+}
+
+// Which colour is actually behind the header and footer text, per background type.
+function backgroundIsDark(bg){
+  if (!bg) return false;
+  if (bg.type === 'gradient'){
+    // Both stops matter - the header sits on one end, the footer on the other.
+    return isDarkColor(bg.gradA || '#4b1f7a') && isDarkColor(bg.gradB || '#eef0f2');
+  }
+  if (bg.type === 'hex')    return isDarkColor(bg.hexBase || '#f5f2fa');
+  if (bg.type === 'square') return isDarkColor(bg.sqBase  || '#f2f4f7');
+  // A photo keeps its white scrim unless the user deliberately turned it off,
+  // and a photo's brightness can't be read from here, so leave that one alone.
+  if (bg.type === 'photo')  return false;
+  return isDarkColor(bg.solid || '#eef0f2');
+}
+
 function applyBackground(bg){
   bg = bg || { type:'solid', solid:'#eef0f2' };
   const body = document.body;
+  body.classList.toggle('on-dark-bg', backgroundIsDark(bg));
   body.style.backgroundImage=''; body.style.backgroundColor=''; body.style.backgroundSize=''; body.style.backgroundPosition=''; body.style.backgroundRepeat=''; body.style.backgroundAttachment='';
   let overlayEl = document.getElementById('bgScreenOverlay');
   if (!overlayEl){
