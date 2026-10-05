@@ -2,7 +2,7 @@
 // serves from cache first, so an already-installed copy keeps serving the old
 // app.html forever until this name changes - re-uploading the folder on its own
 // reaches nobody who already installed it.
-const CACHE_NAME = 'quick-quote-pro-plus-v8';
+const CACHE_NAME = 'quick-quote-pro-plus-v9';
 const ASSETS = [
   './index.html',
   './app.html',

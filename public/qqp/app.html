@@ -188,6 +188,8 @@
     background:none; color:var(--ink-soft); font-weight:600; font-size:13px; cursor:pointer;
   }
 
+  .dep-toggle{ display:flex; align-items:center; gap:10px; margin-top:12px; font-size:14px; color:#fff; cursor:pointer; }
+  .dep-toggle input{ width:20px; height:20px; flex:none; }
   .link-hint{ font-size:12px; line-height:1.45; color:rgba(255,255,255,0.7); margin-top:10px; text-align:center; }
   .action-row{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; }
   .preview-quote-btn{ background:var(--gold) !important; color:var(--ink) !important; border-color:var(--gold) !important; font-weight:700; margin-top:14px; }
@@ -457,6 +459,8 @@
   .cv-x input{ width:22px; height:22px; accent-color:var(--cb); flex:none; }
   .cv-x span{ flex:1; min-width:0; overflow-wrap:anywhere; }
   .cv-x b{ flex:none; color:var(--cbx); }
+  .cv-grp{ font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#6b6f76; margin:16px 2px 8px; }
+  .cv-grp:first-child{ margin-top:0; }
   .cv-help{ font-size:14px; color:#555; line-height:1.45; margin:0 0 12px; }
   .cv-opt{ background:#fff; border:2px solid #e3e5e9; border-radius:16px; padding:14px; margin-bottom:12px; transition:border-color .15s; }
   .cv-opt.sel{ border-color:var(--cb); }
@@ -675,7 +679,8 @@
       <button class="action-btn" id="calendarBtn"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg> Add To Calendar</button>
       <button class="action-btn" id="contactBtn"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> Save Contact</button>
     </div>
-    <div class="link-hint">Copy Quote Link gives you a link to text or email. Your client opens it, picks the options they want, and sees your branding.</div>
+    <label class="dep-toggle" id="depToggle" style="display:none;"><input type="checkbox" id="includeDeposit" checked><span>Include my deposit link on this quote</span></label>
+    <div class="link-hint">Copy Quote Link gives you a link to text or email. Your client opens it, picks the options they want, and sees your branding. Two different vehicles? Make a separate quote for each, so each one gets its own link and vehicle name.</div>
     <button class="action-btn payment-link-btn" id="paymentLinkBtn" style="display:none;"><svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg> Send Payment Link</button>
   </div>
 
@@ -1125,6 +1130,11 @@ applyBrand(currentBrand);
 function updatePaymentLinkBtn(){
   const btn = document.getElementById('paymentLinkBtn');
   btn.style.display = currentBrand.paymentLink ? 'block' : 'none';
+  document.getElementById('depToggle').style.display = currentBrand.paymentLink ? 'flex' : 'none';
+}
+function depLink(){
+  const t = document.getElementById('includeDeposit');
+  return (currentBrand.paymentLink && (!t || t.checked)) ? currentBrand.paymentLink : '';
 }
 updatePaymentLinkBtn();
 
@@ -1564,7 +1574,7 @@ function calc(){
 
 function scriptFor(v, c, s, addonTotal, low, high){
   const addonNote = addonTotal>0 ? ` That includes the add-ons we talked about.` : ``;
-  const depositLink = currentBrand.paymentLink ? `Pay your deposit here: ${currentBrand.paymentLink}` : ``;
+  const depositLink = depLink() ? `Pay your deposit here: ${depLink()}` : ``;
   const template = (config.scriptTemplate && config.scriptTemplate.trim()) ? config.scriptTemplate : DEFAULT_SCRIPT_TEMPLATE;
   return template
     .split('{vehicle}').join(v.label.toLowerCase())
@@ -1960,7 +1970,7 @@ function buildQuoteSummaryText(cust, result, script){
   }
   lines.push('');
   lines.push(script);
-  if (currentBrand.paymentLink && !script.includes(currentBrand.paymentLink)) { lines.push(''); lines.push(`Pay your deposit: ${currentBrand.paymentLink}`); }
+  if (depLink() && !script.includes(depLink())) { lines.push(''); lines.push(`Pay your deposit: ${depLink()}`); }
   return lines.join('\n');
 }
 
@@ -2164,7 +2174,7 @@ function buildQuoteEntry(){
     brandCustomGold: currentBrand.colorIdx === 'custom' ? currentBrand.customGold : null,
     pdfHeaderNote: currentBrand.pdfHeaderNote || '', pdfFooterNote: currentBrand.pdfFooterNote || '',
     photo: pendingPhotoData || null,
-    paymentLink: currentBrand.paymentLink || '',
+    paymentLink: depLink(),
     addonLabels: config.addons.filter(a=>a.checked).map(a=>a.label),
     extras: config.addons.filter(a=>!a.checked && a.price>0).slice(0,8).map(a=>({ label:a.label, price:a.price })),
   };
@@ -2291,7 +2301,8 @@ async function buildPayload(q, forPicture){
   if (q.paymentLink) P.pay = q.paymentLink;
   if (q.customerName) P.cn = q.customerName;
   const ymm = [q.vehicleYear, q.vehicleMake, q.vehicleModel].filter(Boolean).join(' ');
-  if (ymm) P.vh = ymm;
+  const vtypes = new Set((q.options || []).map(o => o.vehicleId || ''));
+  if (ymm && vtypes.size <= 1) P.vh = ymm;
   P.ad = q.addonTotal || 0;
   if (q.addonLabels && q.addonLabels.length) P.ia = q.addonLabels;
   if (q.extras && q.extras.length) P.x = q.extras.slice(0, 8).map(a => [a.label, a.price]);
@@ -2396,10 +2407,19 @@ function renderClientView(S, opts){
 
   if (multi){
     h += `<p class="cv-help">Tap <b>Choose</b> on the ones you want &mdash; you can pick more than one. Tap an option&rsquo;s name to see what&rsquo;s included.</p><div class="cv-opts">`;
+    const grouped = new Set(S.o.map(o => o.vid)).size > 1;
     S.o.forEach((o, i) => {
       const det = o.si >= 0 ? S.inc[o.si] : null;
       const hasDet = det && (det.s || det.b.length);
-      h += `<div class="cv-opt" data-i="${i}"><div class="cv-opt-top"><button type="button" class="cv-opt-info"${hasDet ? '' : ' tabindex="-1"'} aria-expanded="false"><span class="cv-opt-label">${esc(o.label)}</span><span class="cv-opt-price">${esc(priceStr(o.low, o.high))}</span>${hasDet ? `<span class="cv-more">What&rsquo;s included ${CV_CHEV}</span>` : ''}</button><button type="button" class="cv-choose" aria-pressed="false">Choose</button></div>${hasDet ? `<div class="cv-opt-body" hidden>${cvIncHtml(det)}</div>` : ''}</div>`;
+      let lab = o.label;
+      if (grouped){
+        const sp = o.label.indexOf(' \u2014 ');
+        if (sp > 0){
+          if (i === 0 || S.o[i - 1].vid !== o.vid) h += `<div class="cv-grp">${esc(o.label.slice(0, sp))}</div>`;
+          lab = o.label.slice(sp + 3);
+        }
+      }
+      h += `<div class="cv-opt" data-i="${i}"><div class="cv-opt-top"><button type="button" class="cv-opt-info"${hasDet ? '' : ' tabindex="-1"'} aria-expanded="false"><span class="cv-opt-label">${esc(lab)}</span><span class="cv-opt-price">${esc(priceStr(o.low, o.high))}</span>${hasDet ? `<span class="cv-more">What&rsquo;s included ${CV_CHEV}</span>` : ''}</button><button type="button" class="cv-choose" aria-pressed="false">Choose</button></div>${hasDet ? `<div class="cv-opt-body" hidden>${cvIncHtml(det)}</div>` : ''}</div>`;
     });
     h += `</div>`;
   } else {
@@ -3022,6 +3042,7 @@ document.getElementById('contactBtn').onclick = function(){
   flashBtn(this, '✓ Saved');
 };
 
+document.getElementById('includeDeposit').onchange = function(){ renderAll(); };
 document.getElementById('paymentLinkBtn').onclick = async function(){
   if (!currentBrand.paymentLink) return;
   const cust = getCustomer();
