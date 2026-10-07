@@ -64,6 +64,9 @@
   .card-label{ font-family:'IBM Plex Mono',ui-monospace,'SF Mono',Consolas,monospace; font-size:11px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft); display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
   .step-num{ color:var(--brand); font-weight:700; }
   .chips{ display:flex; flex-wrap:wrap; gap:8px; }
+  .cond-vehicle{ width:100%; }
+  .cond-vehicle + .cond-vehicle{ margin-top:12px; }
+  .cond-vehicle-label{ font-size:12.5px; font-weight:700; color:var(--ink-soft); margin:0 0 7px 2px; }
   .chip{ border:1.5px solid var(--line); background:#fff; color:var(--ink); font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; font-weight:600; font-size:14px; padding:10px 14px; border-radius:999px; cursor:pointer; transition:all .15s ease; line-height:1.2; }
   .chip:hover{ border-color:var(--brand-light); }
   .chip:active{ transform:scale(0.96); }
@@ -432,8 +435,8 @@
   #clientView *{ box-sizing:border-box; }
   #clientView.cv-open{ display:block; }
   #clientView.cv-overlay{ position:fixed; inset:0; z-index:5000; overflow-y:auto; -webkit-overflow-scrolling:touch; }
-  .cv-previewbar{ position:sticky; top:0; z-index:6; display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 14px; background:#1c1b1f; color:#fff; font-size:13px; font-weight:600; }
-  .cv-previewbar button{ background:#fff; color:#1c1b1f; border:0; border-radius:999px; padding:8px 16px; font-weight:700; font-size:13px; cursor:pointer; }
+  .cv-previewbar{ position:sticky; top:0; z-index:6; display:flex; justify-content:space-between; align-items:center; gap:12px; padding:calc(10px + env(safe-area-inset-top)) calc(14px + env(safe-area-inset-right)) 10px calc(14px + env(safe-area-inset-left)); background:#1c1b1f; color:#fff; font-size:13px; font-weight:600; }
+  .cv-previewbar button{ background:#fff; color:#1c1b1f; border:0; border-radius:999px; min-height:40px; padding:0 20px; font-weight:700; font-size:14px; cursor:pointer; flex:none; }
   .cv-head{ background:var(--cb); color:var(--cbt); padding:calc(18px + env(safe-area-inset-top)) 20px 18px; }
   .cv-overlay .cv-head{ padding-top:18px; }
   .cv-head-in{ max-width:560px; margin:0 auto; display:flex; align-items:center; gap:14px; }
@@ -508,9 +511,9 @@
   .cv-error p{ color:#555; line-height:1.5; margin:0; }
 
   /* ===== Picture + link-box overlays (seller side) ===== */
-  .pic-overlay, .link-box{ display:none; position:fixed; inset:0; z-index:6000; background:rgba(12,12,14,.9); flex-direction:column; align-items:center; }
+  .pic-overlay, .link-box{ display:none; position:fixed; inset:0; z-index:6000; background:rgba(12,12,14,.97); flex-direction:column; align-items:center; }
   .pic-overlay.open, .link-box.open{ display:flex; }
-  .pic-top{ width:100%; max-width:560px; display:flex; justify-content:space-between; align-items:center; padding:14px 16px; color:#fff; font-size:14px; font-weight:600; gap:12px; }
+  .pic-top{ width:100%; max-width:560px; display:flex; justify-content:space-between; align-items:center; padding:calc(14px + env(safe-area-inset-top)) 16px 14px; color:#fff; font-size:14px; font-weight:600; gap:12px; }
   .pic-top button, .pic-bottom button{ background:#fff; color:#1c1b1f; border:0; border-radius:12px; min-height:46px; padding:0 18px; font-weight:700; font-size:15px; cursor:pointer; font-family:inherit; }
   .pic-scroll{ flex:1; width:100%; max-width:560px; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:0 16px 12px; }
   .pic-scroll img{ display:block; width:100%; height:auto; border-radius:10px; background:#fff; -webkit-touch-callout:default; -webkit-user-select:auto; user-select:auto; }
@@ -549,7 +552,7 @@
   </div>
 
   <div class="card">
-    <div class="card-label"><span><span class="step-num">2 —</span> Condition</span></div>
+    <div class="card-label"><span><span class="step-num">2 —</span> Condition</span><span id="conditionHint" style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;"></span></div>
     <div class="chips" id="conditionChips"></div>
     <div class="gloss-meter"><div class="gloss-fill" id="glossFill"></div></div>
     <div class="gloss-caption" id="glossCaption">Job complexity</div>
@@ -1409,6 +1412,7 @@ document.getElementById('resetBrand').onclick = () => {
 let state = {
   vehicleSel: config.vehicles[0] ? [config.vehicles[0].id] : [],
   condition: config.conditions[0] ? config.conditions[0].id : null,
+  vehicleCond: {},           // per-vehicle condition once 2+ vehicles are picked; anything missing uses state.condition
   serviceSel: config.services[0] ? [config.services[0].id] : [],
   priceOverride: null,       // {mode:'range', low, high} or {mode:'flat', flat}
   priceOverrideKey: null,
@@ -1421,7 +1425,10 @@ function ensureValidState(){
   state.vehicleSel = (state.vehicleSel||[]).filter(id=>config.vehicles.find(v=>v.id===id));
   if (!state.vehicleSel.length) state.vehicleSel = config.vehicles[0] ? [config.vehicles[0].id] : [];
   if (!config.conditions.find(c=>c.id===state.condition)) state.condition = config.conditions[0] ? config.conditions[0].id : null;
-  state.serviceSel = (state.serviceSel||[]).filter(id=>config.services.find(s=>s.id===id));
+  Object.keys(state.vehicleCond||{}).forEach(vid=>{
+    if (!state.vehicleSel.includes(vid) || !config.conditions.find(c=>c.id===state.vehicleCond[vid])) delete state.vehicleCond[vid];
+  });
+  state.serviceSel =(state.serviceSel||[]).filter(id=>config.services.find(s=>s.id===id));
   if (!state.serviceSel.length) state.serviceSel = config.services[0] ? [config.services[0].id] : [];
 }
 
@@ -1433,8 +1440,8 @@ function renderMultiChips(containerId, items, selArray, priceFn){
     const chip = document.createElement('div');
     const active = selArray.includes(item.id);
     chip.className = 'chip' + (active ? ' active' : '');
-    chip.innerHTML = item.label
-      + (item.group ? '<span class="group-badge">'+item.group+'</span>' : '')
+    chip.innerHTML = esc(item.label)
+      + (item.group ? '<span class="group-badge">'+esc(item.group)+'</span>' : '')
       + (priceFn ? '<span class="price-hint">'+priceFn(item)+'</span>' : '');
     chip.onclick = ()=>{
       const idx = selArray.indexOf(item.id);
@@ -1459,16 +1466,43 @@ function renderMultiChips(containerId, items, selArray, priceFn){
     el.appendChild(chip);
   });
 }
-function renderSingleChips(containerId, items, selectedKey){
-  const el = document.getElementById(containerId);
+function condIdFor(vehicleId){ return (state.vehicleCond && state.vehicleCond[vehicleId]) || state.condition; }
+function condFor(vehicleId){ return config.conditions.find(c=>c.id===condIdFor(vehicleId)) || config.conditions[0] || null; }
+function shortCond(c){ return String(c.label).split(' — ')[0].trim() || c.label; }
+function conditionKey(){ return state.vehicleSel.map(id=>id+'='+condIdFor(id)).sort().join(','); }
+// One vehicle: a single row of condition chips. Two or more: one labelled row per
+// vehicle, so a Light sedan and a Moderate SUV can sit in the same quote.
+function renderConditionChips(){
+  const el = document.getElementById('conditionChips');
   el.innerHTML = '';
-  if (!items.length){ el.innerHTML = '<span class="empty-hint">None yet — add one below.</span>'; return; }
-  items.forEach(item=>{
-    const chip = document.createElement('div');
-    chip.className = 'chip' + (state[selectedKey]===item.id ? ' active' : '');
-    chip.innerHTML = item.label;
-    chip.onclick = ()=>{ state[selectedKey]=item.id; state.priceOverride=null; state.menuOptions=null; state.menuSelectedIdx=[]; renderAll(); };
-    el.appendChild(chip);
+  if (!config.conditions.length){ el.innerHTML = '<span class="empty-hint">None yet — add one below.</span>'; return; }
+  const resetPricing = ()=>{ state.priceOverride=null; state.menuOptions=null; state.menuSelectedIdx=[]; renderAll(); };
+  const addChips = (host, activeId, onPick)=>{
+    config.conditions.forEach(item=>{
+      const chip = document.createElement('div');
+      chip.className = 'chip' + (activeId===item.id ? ' active' : '');
+      chip.textContent = item.label;
+      chip.onclick = ()=>onPick(item.id);
+      host.appendChild(chip);
+    });
+  };
+  const vehicles = state.vehicleSel.map(id=>config.vehicles.find(v=>v.id===id)).filter(Boolean);
+  document.getElementById('conditionHint').textContent = vehicles.length > 1 ? ' — pick one for each vehicle' : '';
+  if (vehicles.length <= 1){
+    addChips(el, vehicles[0] ? condIdFor(vehicles[0].id) : state.condition, id=>{ state.condition = id; state.vehicleCond = {}; resetPricing(); });
+    return;
+  }
+  vehicles.forEach(v=>{
+    const row = document.createElement('div');
+    row.className = 'cond-vehicle';
+    const lbl = document.createElement('div');
+    lbl.className = 'cond-vehicle-label';
+    lbl.textContent = v.label;
+    const chips = document.createElement('div');
+    chips.className = 'chips';
+    addChips(chips, condIdFor(v.id), id=>{ state.vehicleCond[v.id] = id; resetPricing(); });
+    row.appendChild(lbl); row.appendChild(chips);
+    el.appendChild(row);
   });
 }
 function renderAddons(){
@@ -1478,7 +1512,7 @@ function renderAddons(){
   config.addons.forEach((a,i)=>{
     const row = document.createElement('div');
     row.className = 'addon-row';
-    row.innerHTML = `<div class="addon-left"><input type="checkbox" id="addon-${a.id}" ${a.checked?'checked':''}><label for="addon-${a.id}">${a.label}</label></div><div class="addon-price">+$${a.price}</div>`;
+    row.innerHTML = `<div class="addon-left"><input type="checkbox" id="addon-${a.id}" ${a.checked?'checked':''}><label for="addon-${a.id}">${esc(a.label)}</label></div><div class="addon-price">+$${a.price}</div>`;
     row.querySelector('input').onchange = (e)=>{ config.addons[i].checked = e.target.checked; persistConfig(); state.priceOverride=null; state.menuOptions=null; state.menuSelectedIdx=[]; renderAll(); };
     el.appendChild(row);
   });
@@ -1494,10 +1528,10 @@ function renderServiceDetailCard(){
   card.innerHTML = services.map(svc => {
     const expanded = !collapsedServiceDetailIds.has(svc.id);
     return `<div class="sd-block">
-      <div class="sd-title"><span>${svc.label}</span><span class="sd-price">from $${svc.base}</span></div>
-      ${svc.summary ? `<div class="sd-summary">${svc.summary}</div>` : ''}
+      <div class="sd-title"><span>${esc(svc.label)}</span><span class="sd-price">from $${svc.base}</span></div>
+      ${svc.summary ? `<div class="sd-summary">${esc(svc.summary)}</div>` : ''}
       ${svc.bullets.length ? `<button type="button" class="desc-toggle-customer sd-toggle" data-svc="${svc.id}">${expanded ? '\u25b4 Hide What\u2019s Included' : '\u25be What\u2019s Included'}</button>
-      <ul class="sd-bullets" style="margin-top:9px;${expanded?'':' display:none;'}">${svc.bullets.map(b=>'<li>'+b+'</li>').join('')}</ul>` : ''}
+      <ul class="sd-bullets" style="margin-top:9px;${expanded?'':' display:none;'}">${svc.bullets.map(b=>'<li>'+esc(b)+'</li>').join('')}</ul>` : ''}
     </div>`;
   }).join('');
   card.querySelectorAll('.sd-toggle').forEach(btn=>{
@@ -1534,15 +1568,29 @@ function combinedTotalFor(chosen, addonTotal){
 }
 function fmtOptionPrice(o){ return o.low===o.high ? `$${o.high}` : `$${o.low} \u2013 $${o.high}`; }
 function selectionKey(){
-  return state.vehicleSel.slice().sort().join(',') + '|' + state.condition + '|' +
+  return state.vehicleSel.slice().sort().join(',') + '|' + conditionKey() + '|' +
     state.serviceSel.slice().sort().join(',') + '|' +
     config.addons.filter(a=>a.checked).map(a=>a.id).sort().join(',');
 }
 
+// Whole dollars only: the client's link rounds prices, so a $99.50 typed here
+// would show one number to the owner and a different one to the client.
+function wholeDollars(x){ x = Math.round(Number(x)); return isFinite(x) && x > 0 ? x : 0; }
+function activeOverride(){
+  return (state.priceOverride && state.priceOverrideKey === selectionKey()) ? state.priceOverride : null;
+}
+function condSummary(){
+  const seen = [];
+  state.vehicleSel.forEach(id=>{ const c = condFor(id); if (c && !seen.includes(c)) seen.push(c); });
+  return seen.length > 1 ? seen.map(shortCond).join(' + ') : (seen[0] ? seen[0].label : '');
+}
 function calc(){
-  const c = config.conditions.find(x=>x.id===state.condition);
-  if (!c || !state.vehicleSel.length || !state.serviceSel.length) return null;
+  if (!state.vehicleSel.length || !state.serviceSel.length) return null;
+  // With mixed conditions, c is the roughest one (drives the complexity meter).
+  const c = state.vehicleSel.map(condFor).filter(Boolean).sort((a,b)=>b.mult-a.mult)[0];
+  if (!c) return null;
   const addonTotal = addonTotalNow();
+  const condText = condSummary();
 
   if (!state.menuOptions && state.vehicleSel.length<=1 && state.serviceSel.length<=1){
     const v = config.vehicles.find(x=>x.id===state.vehicleSel[0]);
@@ -1550,33 +1598,45 @@ function calc(){
     if (!v || !s) return null;
     const base = (s.base * v.mult * c.mult) + addonTotal;
     const r = priceRangeFor(base);
-    return { mode:'single', v, c, s, addonTotal, low:r.low, high:r.high };
+    const ov = activeOverride();
+    let low = r.low, high = r.high;
+    if (ov){
+      if (ov.mode==='flat'){ low = high = ov.flat; } else { low = ov.low; high = ov.high; }
+    }
+    return { mode:'single', v, c, s, addonTotal, condText, low, high, autoLow:r.low, autoHigh:r.high, manual: !!ov };
   }
 
   if (state.menuOptions){
-    return { mode:'multi', c, addonTotal, options: state.menuOptions, custom: true };
+    return { mode:'multi', c, condText, addonTotal, options: state.menuOptions, custom: true };
   }
 
   const vList = state.vehicleSel.map(id=>config.vehicles.find(v=>v.id===id)).filter(Boolean);
   const sList = state.serviceSel.map(id=>config.services.find(s=>s.id===id)).filter(Boolean);
   if (!vList.length || !sList.length) return null;
+  const mixed = new Set(vList.map(v=>condIdFor(v.id))).size > 1;
   const options = [];
   vList.forEach(v=>{
+    const vc = condFor(v.id);
+    const vName = mixed ? `${v.label} (${shortCond(vc)})` : v.label;
     sList.forEach(s=>{
-      const base = (s.base * v.mult * c.mult) + addonTotal;
+      const base = (s.base * v.mult * vc.mult) + addonTotal;
       const r = priceRangeFor(base);
-      const label = (vList.length>1 && sList.length>1) ? `${v.label} — ${s.label}` : (vList.length>1 ? v.label : s.label);
+      const label = (vList.length>1 && sList.length>1) ? `${vName} — ${s.label}` : (vList.length>1 ? vName : s.label);
       options.push({ v, s, label, low:r.low, high:r.high });
     });
   });
-  return { mode:'multi', c, vList, sList, addonTotal, options, custom: false };
+  return { mode:'multi', c, condText, vList, sList, addonTotal, options, custom: false };
 }
 
 function scriptFor(v, c, s, addonTotal, low, high){
   const addonNote = addonTotal>0 ? ` That includes the add-ons we talked about.` : ``;
   const depositLink = depLink() ? `Pay your deposit here: ${depLink()}` : ``;
   const template = (config.scriptTemplate && config.scriptTemplate.trim()) ? config.scriptTemplate : DEFAULT_SCRIPT_TEMPLATE;
-  return template
+  // A flat price reads "$115", not "$115–$115".
+  const tpl = (low === high)
+    ? template.replace(/\{price_low\}\s*[–—-]\s*\$?\{price_high\}/g, '{price_high}')
+    : template;
+  return tpl
     .split('{vehicle}').join(v.label.toLowerCase())
     .split('{service}').join(s.label.toLowerCase())
     .split('{condition_phrase}').join(scriptPhraseFor(c))
@@ -1608,7 +1668,7 @@ function renderMenuTicket(result){
   document.getElementById('menuCustomizeBtn').style.display = 'block';
 
   document.getElementById('menuList').innerHTML = result.options.map((o,i)=>
-    `<div class="menu-row"><label class="mr-left"><input type="checkbox" data-idx="${i}" ${state.menuSelectedIdx.includes(i)?'checked':''}><span class="mr-label">${o.label}</span></label><span class="mr-price">${fmtOptionPrice(o)}</span></div>`
+    `<div class="menu-row"><label class="mr-left"><input type="checkbox" data-idx="${i}" ${state.menuSelectedIdx.includes(i)?'checked':''}><span class="mr-label">${esc(o.label)}</span></label><span class="mr-price">${fmtOptionPrice(o)}</span></div>`
   ).join('');
   document.querySelectorAll('#menuList input[type=checkbox]').forEach(cb=>{
     cb.onchange = () => {
@@ -1622,7 +1682,7 @@ function renderMenuTicket(result){
   });
   renderMenuSelectedTotal(result);
 
-  document.getElementById('menuBreakdown').innerHTML = `${result.c.label}` + (result.addonTotal>0 ? ` · +$${result.addonTotal} add-ons` : '') + (result.custom ? ' <span class="menu-custom-badge">\u270e Customized</span>' : '');
+  document.getElementById('menuBreakdown').innerHTML = `${esc(result.condText)}` + (result.addonTotal>0 ? ` · +$${result.addonTotal} add-ons` : '') + (result.custom ? ' <span class="menu-custom-badge">\u270e Customized</span>' : '');
   const customizeBtn = document.getElementById('menuCustomizeBtn');
   customizeBtn.textContent = result.custom ? '\u270e Edit these options' : '\u270e Customize these options';
   customizeBtn.onclick = () => openMenuEditor(result.options);
@@ -1680,7 +1740,14 @@ function renderMenuEditRows(){
       renderMenuEditRows();
     };
     row.querySelectorAll('.mel-mode-btn').forEach(btn=>{
-      btn.onclick = () => { menuEditDraft[i].flat = (btn.dataset.mode === 'flat'); renderMenuEditRows(); };
+      btn.onclick = () => {
+        const d = menuEditDraft[i];
+        const toFlat = (btn.dataset.mode === 'flat');
+        if (toFlat && !d.flat) d.low = d.high;
+        if (!toFlat && d.flat) d.high = d.low;
+        d.flat = toFlat;
+        renderMenuEditRows();
+      };
     });
     renderMelPriceFields(row.querySelector('.mel-price-fields'), menuEditDraft[i], i);
     wrap.appendChild(row);
@@ -1704,8 +1771,9 @@ document.getElementById('menuAddOptionBtn').onclick = () => {
 document.getElementById('menuEditCancelBtn').onclick = () => { menuEditDraft = null; renderAll(); };
 document.getElementById('menuEditSaveBtn').onclick = () => {
   state.menuOptions = menuEditDraft.map(o => {
-    const high = o.flat ? o.low : o.high;
-    return { label: (o.label||'Option').trim() || 'Option', low:o.low, high, flat: !!o.flat };
+    let low = wholeDollars(o.low), high = o.flat ? low : wholeDollars(o.high);
+    if (!o.flat && high < low){ const t = low; low = high; high = t; }
+    return { label: (o.label||'Option').trim() || 'Option', low, high, flat: !!o.flat };
   });
   menuEditDraft = null;
   state.menuSelectedIdx = [];
@@ -1715,17 +1783,10 @@ function renderSingleTicket(result){
   document.getElementById('ticketSingleView').style.display = 'block';
   document.getElementById('ticketMenuView').style.display = 'none';
   document.getElementById('priceEditBtn').style.display = 'flex';
-  const { v, c, s, addonTotal, low, high } = result;
-  let dLow=low, dHigh=high, manual=false;
-  if (state.priceOverride && state.priceOverrideKey === selectionKey()){
-    manual = true;
-    if (state.priceOverride.mode==='flat'){ dLow=dHigh=state.priceOverride.flat; }
-    else { dLow=state.priceOverride.low; dHigh=state.priceOverride.high; }
-  } else if (state.priceOverride){
-    state.priceOverride = null; // selection changed since override was set
-  }
+  const { v, s, addonTotal, condText, low: dLow, high: dHigh, manual } = result;
+  if (!manual && state.priceOverride) state.priceOverride = null; // selection changed since override was set
   document.getElementById('priceRange').innerHTML = (dLow===dHigh ? '$'+dHigh : '$'+dLow+' \u2013 $'+dHigh) + (manual ? ' <span class="manual-badge">\u270e Manually Set</span>' : '');
-  document.getElementById('priceBreakdown').innerHTML = `${v.label} · ${s.label} · ${c.label}` + (addonTotal>0 ? ` · +$${addonTotal} add-ons` : '') + (manual ? ' <button type="button" class="reset-link" id="priceResetLink">\u21ba Reset to calculated</button>' : '');
+  document.getElementById('priceBreakdown').innerHTML = `${esc(v.label)} · ${esc(s.label)} · ${esc(condText)}` + (addonTotal>0 ? ` · +$${addonTotal} add-ons` : '') + (manual ? ' <button type="button" class="reset-link" id="priceResetLink">\u21ba Reset to calculated</button>' : '');
   if (manual){ document.getElementById('priceResetLink').onclick = ()=>{ state.priceOverride=null; renderAll(); }; }
   return { dLow, dHigh, manual };
 }
@@ -1733,7 +1794,7 @@ function renderSingleTicket(result){
 function renderAll(){
   ensureValidState();
   renderMultiChips('vehicleChips', config.vehicles, state.vehicleSel);
-  renderSingleChips('conditionChips', config.conditions, 'condition');
+  renderConditionChips();
   renderMultiChips('serviceChips', config.services, state.serviceSel, (s)=> '$'+s.base+'+' );
   renderAddons();
   renderServiceDetailCard();
@@ -1775,9 +1836,9 @@ document.getElementById('priceEditBtn').onclick = () => {
   if (opening){
     const result = calc();
     if (!result || result.mode!=='single') return;
-    const existing = (state.priceOverride && state.priceOverrideKey === selectionKey()) ? state.priceOverride : null;
+    const existing = activeOverride();
     priceEditorMode = existing ? existing.mode : 'range';
-    renderPriceEditorInputs(existing, result.low, result.high);
+    renderPriceEditorInputs(existing, result.autoLow, result.autoHigh);
   }
 };
 function renderPriceEditorInputs(existing, calcLow, calcHigh){
@@ -1793,14 +1854,28 @@ function renderPriceEditorInputs(existing, calcLow, calcHigh){
     iw.innerHTML = `<div class="price-input-row"><span class="pfx">$</span><input type="number" id="priceFlatIn" value="${flat}"></div>`;
   }
 }
-document.getElementById('priceModeRange').onclick = () => { priceEditorMode='range'; const r=calc(); if(r&&r.mode==='single') renderPriceEditorInputs(null, r.low, r.high); };
-document.getElementById('priceModeFlat').onclick = () => { priceEditorMode='flat'; const r=calc(); if(r&&r.mode==='single') renderPriceEditorInputs(null, r.low, r.high); };
+document.getElementById('priceModeRange').onclick = () => { priceEditorMode='range'; const r=calc(); if(r&&r.mode==='single') renderPriceEditorInputs(activeOverride(), r.autoLow, r.autoHigh); };
+document.getElementById('priceModeFlat').onclick = () => { priceEditorMode='flat'; const r=calc(); if(r&&r.mode==='single') renderPriceEditorInputs(activeOverride(), r.autoLow, r.autoHigh); };
+function priceErr(msg){
+  let e = document.getElementById('priceErr');
+  if (!e){
+    e = document.createElement('div');
+    e.id = 'priceErr';
+    e.style.cssText = 'color:#c0392b;font-size:12.5px;font-weight:600;margin-top:8px;';
+    document.getElementById('priceInputWrap').appendChild(e);
+  }
+  e.textContent = msg;
+}
 document.getElementById('priceSaveBtn').onclick = () => {
+  const num = (id)=> wholeDollars(document.getElementById(id).value);
   if (priceEditorMode==='range'){
-    const lo=parseFloat(document.getElementById('priceLowIn').value)||0, hi=parseFloat(document.getElementById('priceHighIn').value)||0;
+    let lo=num('priceLowIn'), hi=num('priceHighIn');
+    if (!lo || !hi){ priceErr('Enter a price in both boxes.'); return; }
+    if (hi < lo){ const t=lo; lo=hi; hi=t; }
     state.priceOverride = { mode:'range', low:lo, high:hi };
   } else {
-    const flat=parseFloat(document.getElementById('priceFlatIn').value)||0;
+    const flat=num('priceFlatIn');
+    if (!flat){ priceErr('Enter a flat price.'); return; }
     state.priceOverride = { mode:'flat', flat };
   }
   state.priceOverrideKey = selectionKey();
@@ -1937,7 +2012,7 @@ function buildQuoteSummaryText(cust, result, script){
   if (ymm) lines.push(`Vehicle: ${ymm}`);
   if (cust.vin) lines.push(`VIN: ${cust.vin}`);
   if (result.mode === 'multi'){
-    lines.push(`${result.c.label}${result.addonTotal>0 ? ' · +$'+result.addonTotal+' add-ons' : ''}`);
+    lines.push(`${result.condText}${result.addonTotal>0 ? ' · +$'+result.addonTotal+' add-ons' : ''}`);
     lines.push('');
     result.options.forEach((o,i)=> lines.push(`${state.menuSelectedIdx.includes(i)?'\u2713 ':''}${o.label}: ${fmtOptionPrice(o)}`));
     if (state.menuSelectedIdx.length >= 2){
@@ -1958,9 +2033,9 @@ function buildQuoteSummaryText(cust, result, script){
       });
     }
   } else {
-    const { v, c, s, addonTotal, low, high } = result;
-    lines.push(`${v.label} · ${s.label} · ${c.label}${addonTotal>0 ? ' · +$'+addonTotal+' add-ons' : ''}`);
-    lines.push(`Price: $${low}–$${high}`);
+    const { v, s, addonTotal, condText, low, high } = result;
+    lines.push(`${v.label} · ${s.label} · ${condText}${addonTotal>0 ? ' · +$'+addonTotal+' add-ons' : ''}`);
+    lines.push(low === high ? `Price: $${high}` : `Price: $${low}–$${high}`);
     if (s.summary || (s.bullets && s.bullets.length)){
       lines.push('');
       lines.push(`What's Included:`);
@@ -2051,8 +2126,8 @@ function renderHistory(){
     row.innerHTML = `
       <div class="history-main">
         <div class="history-name">${esc(q.customerName ? q.customerName : 'Walk-in / no name')}${q.photo ? ' <span title="Photo attached">📷</span>' : ''}</div>
-        <div class="history-meta">${dateStr} · ${[q.vehicleYear, q.vehicleMake, q.vehicleModel].filter(Boolean).join(' ') || q.vehicle} · ${q.options ? `${q.options.length} options` : q.service} · ${q.condition}</div>
-        <div class="history-price">$${q.low}–$${q.high}${q.options ? ' range' : ''}</div>
+        <div class="history-meta">${esc(dateStr)} · ${esc([q.vehicleYear, q.vehicleMake, q.vehicleModel].filter(Boolean).join(' ') || q.vehicle)} · ${q.options ? `${q.options.length} options` : esc(q.service)} · ${esc(q.condition)}</div>
+        <div class="history-price">${q.low===q.high ? '$'+q.high : '$'+q.low+'–$'+q.high}${q.options ? ' range' : ''}</div>
       </div>
       <div class="history-actions">
         <button class="history-dl hl-link" title="Copy quote link">🔗</button>
@@ -2179,7 +2254,7 @@ function buildQuoteEntry(){
     extras: config.addons.filter(a=>!a.checked && a.price>0).slice(0,8).map(a=>({ label:a.label, price:a.price })),
   };
   if (result.mode === 'multi'){
-    entry.condition = result.c.label;
+    entry.condition = result.condText;
     entry.addonTotal = result.addonTotal;
     entry.options = result.options.map((o,i)=>({ label:o.label, low:o.low, high:o.high, vehicleId: (o.v && o.v.id) || null, svcLabel: (o.s && o.s.label) || '', selected: state.menuSelectedIdx.includes(i) }));
     entry.vehicle = result.vList ? result.vList.map(v=>v.label).join(' + ') : state.vehicleSel.map(id=>{ const v=config.vehicles.find(x=>x.id===id); return v?v.label:''; }).filter(Boolean).join(' + ');
@@ -2195,7 +2270,7 @@ function buildQuoteEntry(){
       .filter(svc => svc && (svc.summary || (svc.bullets && svc.bullets.length)))
       .map(svc => ({ label: svc.label, summary: svc.summary || '', bullets: svc.bullets || [] }));
   } else {
-    entry.vehicle = result.v.label; entry.condition = result.c.label; entry.service = result.s.label;
+    entry.vehicle = result.v.label; entry.condition = result.condText; entry.service = result.s.label;
     entry.addonTotal = result.addonTotal; entry.low = result.low; entry.high = result.high;
     entry.serviceSummary = result.s.summary || '';
     entry.serviceBullets = result.s.bullets || [];
@@ -2919,6 +2994,11 @@ async function makePicture(entry, btn){
   }
 }
 document.getElementById('picClose').onclick = closePicture;
+document.addEventListener('keydown', (e)=>{
+  if (e.key !== 'Escape') return;
+  if (document.getElementById('picOverlay').classList.contains('open')) closePicture();
+  else if (document.getElementById('clientView').classList.contains('cv-overlay') && document.getElementById('cvClose')) closeClientPreview();
+});
 document.getElementById('picShare').onclick = async function(){
   if (!picBlob) return;
   const name = (document.getElementById('picOverlay').dataset.name || 'quote') + '-quote.png';
