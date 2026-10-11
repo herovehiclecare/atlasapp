@@ -1119,7 +1119,7 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
             <div style={{ background: "rgba(255,107,94,0.1)", border: `1px solid ${P.danger}`, borderRadius: 14, padding: "18px", fontSize: 13, color: P.danger }}>{error}</div>
           ) : filtered.length === 0 ? (
             <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, padding: "40px 18px", textAlign: "center", fontSize: 13, color: P.textMuted }}>
-              {customers.length === 0 ? "No customers yet — add your first one." : `No customers match "${query}"`}
+              {customers.length === 0 ? "No customers yet — add your first one." : query.trim() ? `No customers match "${query}"` : "No customers match this filter."}
             </div>
           ) : (
             <RowsView list={filtered} selected={selected} toggleSelect={toggleSelect} onOpenDetail={setDetailCustomer} commApp={businessPreferredCommApp} />
