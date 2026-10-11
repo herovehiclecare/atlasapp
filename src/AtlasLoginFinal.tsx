@@ -316,6 +316,11 @@ export default function AtlasLogin() {
                 <>New to Atlas? <a href="#" onClick={(e) => { e.preventDefault(); toggleMode(); }} style={{ color: P.accent, textDecoration: "none", fontWeight: 600 }}>Create an account</a></>
               )}
             </p>
+            <p style={{ textAlign: "center", fontSize: 12, color: P.textMuted, marginTop: 14, lineHeight: 1.5 }}>
+              {mode === "signup" ? "By creating an account you agree to our " : "By using Atlas you agree to our "}
+              <a href="/terms.html" target="_blank" rel="noreferrer" style={{ color: P.accent, textDecoration: "none" }}>Terms</a> and{" "}
+              <a href="/privacy.html" target="_blank" rel="noreferrer" style={{ color: P.accent, textDecoration: "none" }}>Privacy Policy</a>.
+            </p>
           </>
         )}
       </div>

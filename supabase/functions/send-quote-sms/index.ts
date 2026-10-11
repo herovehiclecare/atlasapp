@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
   const businessName = (quote as any).businesses?.name || "your detailer";
   const customerFirst = ((quote as any).customers?.name || "").split(" ")[0] || "there";
   const link = quotePortalUrl(quote.share_token);
-  const content = `Hi ${customerFirst}, here's your quote from ${businessName} — tap to view your options and approve: ${link}`;
+  const content = `Hi ${customerFirst}, here's your quote from ${businessName} — tap to view your options and approve: ${link} Reply STOP to opt out.`;
 
   try {
     const res = await fetch("https://api.openphone.com/v1/messages", {
