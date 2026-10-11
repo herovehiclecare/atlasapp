@@ -148,9 +148,12 @@ function BrandLockup({ size = 30, businessId, realName, realLogoUrl }) {
   );
 }
 
-function StatCard({ label, value, sub }) {
+function StatCard({ label, value, sub, active, onClick }) {
   return (
-    <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, padding: "16px 18px" }}>
+    <div
+      onClick={onClick}
+      style={{ background: active ? P.accentSoft : P.surface, border: `1px solid ${active ? P.accent : P.border}`, borderRadius: 14, padding: "16px 18px", cursor: onClick ? "pointer" : "default" }}
+    >
       <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted }}>{label}</div>
       <div style={{ fontSize: 24, fontWeight: 800, color: P.textPrimary, marginTop: 8 }}>{value}</div>
       {sub && <div style={{ fontSize: 11.5, color: P.textSecondary, marginTop: 3 }}>{sub}</div>}
@@ -206,17 +209,21 @@ function RowsView({ list, selected, toggleSelect, onOpenDetail, commApp }) {
 // becomes an input that saves on blur/Enter. Used throughout the customer
 // detail drawer so every field (not just address) can be corrected without
 // a separate "edit customer" modal.
-function EditableField({ label, value, onSave, placeholder, type = "text", big }) {
+function EditableField({ label, value, onSave, placeholder, type = "text", big, validate }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value || "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [fieldError, setFieldError] = useState("");
 
-  useEffect(() => { setDraft(value || ""); setEditing(false); }, [value]);
+  useEffect(() => { setDraft(value || ""); setEditing(false); setFieldError(""); }, [value]);
 
   async function commit() {
+    if (draft === (value || "")) { setEditing(false); setFieldError(""); return; }
+    const problem = validate?.(draft.trim());
+    if (problem) { setFieldError(problem); return; }
+    setFieldError("");
     setEditing(false);
-    if (draft === (value || "")) return;
     setSaving(true);
     await onSave(draft.trim() || null);
     setSaving(false);
@@ -228,13 +235,18 @@ function EditableField({ label, value, onSave, placeholder, type = "text", big }
     ? { fontSize: 15, fontWeight: 700, color: P.textPrimary }
     : { fontSize: 12.5, color: P.textSecondary };
 
+  const errorLine = fieldError ? <div style={{ fontSize: 11, color: P.danger, marginTop: 3 }}>{fieldError}</div> : null;
+
   if (editing) {
     return (
-      <input
-        autoFocus type={type} value={draft} onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit} onKeyDown={(e) => e.key === "Enter" && commit()} placeholder={placeholder}
-        style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", borderBottom: `1px solid ${P.accent}`, outline: "none", padding: 0, fontFamily: "inherit", ...textStyle }}
-      />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <input
+          autoFocus type={type} value={draft} onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit} onKeyDown={(e) => e.key === "Enter" && commit()} placeholder={placeholder}
+          style={{ width: "100%", minWidth: 0, background: "transparent", border: "none", borderBottom: `1px solid ${fieldError ? P.danger : P.accent}`, outline: "none", padding: 0, fontFamily: "inherit", ...textStyle }}
+        />
+        {errorLine}
+      </div>
     );
   }
   return (
@@ -244,6 +256,17 @@ function EditableField({ label, value, onSave, placeholder, type = "text", big }
       {saving ? <Loader2 size={11} className="animate-spin" style={{ flexShrink: 0, color: P.textMuted }} /> : saved ? <Check size={11} color={P.accent} style={{ flexShrink: 0 }} /> : null}
     </button>
   );
+}
+
+// Loose on purpose: catches typos, not exotic-but-valid addresses/numbers.
+function validateEmail(v) {
+  if (!v) return "";
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v) ? "" : "That email doesn't look right.";
+}
+function validatePhone(v) {
+  if (!v) return "";
+  const digits = v.replace(/\D/g, "").length;
+  return digits >= 10 && digits <= 15 && /^[\d\s()+\-.x]+$/i.test(v) ? "" : "Enter a phone number with at least 10 digits.";
 }
 
 function VehicleRow({ vehicle, onUpdated, onDeleted }) {
@@ -275,7 +298,7 @@ function VehicleRow({ vehicle, onUpdated, onDeleted }) {
   );
 }
 
-function CustomerDetail({ customer, vehicles, businessId, businessName, commApp, showAiScript = true, onClose, onUpdated, onDeleted, onVehicleAdded, onVehicleUpdated, onVehicleDeleted, onNavigate }) {
+function CustomerDetail({ customer, vehicles, businessId, businessName, commApp, showAiScript = true, onToggleAiScript, onClose, onUpdated, onDeleted, onVehicleAdded, onVehicleUpdated, onVehicleDeleted, onNavigate }) {
   const [addingVehicle, setAddingVehicle] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newType, setNewType] = useState("Car");
@@ -310,7 +333,7 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, commApp,
     async function loadHistory() {
       setLoadingHistory(true);
       const [jobsRes, quotesRes, invoicesRes, servicesRes, followUpRes] = await Promise.all([
-        supabase.from("jobs").select("id, status, scheduled_at, service_ids, vehicles(label)").eq("business_id", businessId).eq("customer_id", customer.id).order("scheduled_at", { ascending: false }),
+        supabase.from("jobs").select("id, status, scheduled_at, service_ids, price, description, vehicles(label)").eq("business_id", businessId).eq("customer_id", customer.id).order("scheduled_at", { ascending: false }),
         supabase.from("quotes").select("id, status, totals, created_at").eq("business_id", businessId).eq("customer_id", customer.id).order("created_at", { ascending: false }),
         supabase.from("invoices").select("id, status, amount, paid_at, created_at").eq("business_id", businessId).eq("customer_id", customer.id).order("created_at", { ascending: false }),
         supabase.from("services").select("id, name").eq("business_id", businessId),
@@ -507,12 +530,19 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, commApp,
             </div>
           </div>
 
+          {!showAiScript && customer.phone && (
+            <button type="button" onClick={() => onToggleAiScript?.(true)} style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", background: "transparent", border: `1px dashed ${P.border}`, borderRadius: 12, padding: "10px 14px", color: P.textMuted, fontSize: 12, cursor: "pointer" }}>
+              <Sparkles size={12} /> Suggested text is hidden — click to show it again
+            </button>
+          )}
+
           {showAiScript && script && customer.phone && (
             <div style={{ background: P.secondarySoft, border: `1px solid ${P.secondary}55`, borderRadius: 12, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 8 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.secondary }}>
                   <Sparkles size={11} /> {openTextFollowUp ? "Suggested follow-up text" : "Suggested welcome text"}
                 </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <button
                   type="button"
                   onClick={() => { navigator.clipboard?.writeText(script).catch(() => {}); setScriptCopied(true); setTimeout(() => setScriptCopied(false), 1500); }}
@@ -520,6 +550,10 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, commApp,
                 >
                   {scriptCopied ? <Check size={11} /> : <Copy size={11} />} {scriptCopied ? "Copied" : "Copy"}
                 </button>
+                <button type="button" onClick={() => onToggleAiScript?.(false)} title="Turn this off — it stays off until you turn it back on" style={{ display: "flex", alignItems: "center", gap: 4, background: "transparent", border: "none", color: P.textMuted, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                  <X size={11} /> Turn off
+                </button>
+                </div>
               </div>
               <textarea
                 value={script}
@@ -557,10 +591,10 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, commApp,
                 <EditableField label="Call them" value={customer.preferred_name} placeholder={`Nickname, if different from "${customer.name.split(" ")[0]}"`} onSave={(v) => saveField("preferred_name", v)} />
               </div>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
-                <EditableField label="Phone" value={customer.phone} placeholder="(555) 123-4567" onSave={(v) => saveField("phone", v)} />
+                <EditableField label="Phone" value={customer.phone} placeholder="(555) 123-4567" validate={validatePhone} onSave={(v) => saveField("phone", v)} />
               </div>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
-                <EditableField label="Email" type="email" value={customer.email} placeholder="jane@email.com" onSave={(v) => saveField("email", v)} />
+                <EditableField label="Email" type="email" value={customer.email} placeholder="jane@email.com" validate={validateEmail} onSave={(v) => saveField("email", v)} />
               </div>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 6 }}>
                 <EditableField label="Address" value={customer.address} placeholder="123 Main St, City, ST 12345" onSave={(v) => saveField("address", v)} />
@@ -680,8 +714,12 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, commApp,
                     <div style={{ minWidth: 0 }}>
                       <div style={{ fontSize: 12.5, fontWeight: 600, color: P.textPrimary }}>{j.scheduled_at ? formatDate(j.scheduled_at) : "Unscheduled"}</div>
                       <div style={{ fontSize: 11, color: P.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{j.vehicles?.label || "No vehicle"}{names ? ` · ${names}` : ""}</div>
+                      {j.description && <div style={{ fontSize: 11, color: P.textSecondary, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{j.description}</div>}
                     </div>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: statusBadgeColor(j.status), flexShrink: 0 }}>{JOB_STATUS_LABEL[j.status] || j.status}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                      {Number(j.price) > 0 && <span style={{ fontSize: 12.5, fontWeight: 700, color: P.textPrimary }}>{money(j.price)}</span>}
+                      <span style={{ fontSize: 10.5, fontWeight: 700, color: statusBadgeColor(j.status) }}>{JOB_STATUS_LABEL[j.status] || j.status}</span>
+                    </div>
                   </div>
                 );
               })}
@@ -704,7 +742,7 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, commApp,
                 <p style={{ fontSize: 12, color: P.textMuted, fontStyle: "italic", margin: 0 }}>No quotes yet.</p>
               )}
               {quotes.map((q) => (
-                <div key={q.id} onClick={() => onNavigate?.("quote")} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "9px 12px", cursor: onNavigate ? "pointer" : "default" }}>
+                <div key={q.id} onClick={() => onNavigate?.("quote", { openQuoteId: q.id })} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "9px 12px", cursor: onNavigate ? "pointer" : "default" }}>
                   <div style={{ fontSize: 12.5, color: P.textSecondary }}>{formatDate(q.created_at)}</div>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <span style={{ fontSize: 12.5, fontWeight: 700, color: P.textPrimary }}>{q.totals?.isRange ? `${money(q.totals.rangeLow)}–${money(q.totals.rangeHigh)}` : money(q.totals?.total)}</span>
@@ -729,7 +767,8 @@ function CustomerDetail({ customer, vehicles, businessId, businessName, commApp,
 
 /* ---------------------------------- Add Customer modal ---------------------------------- */
 
-function AddCustomerModal({ businessId, onClose, onAdded, onVehicleAdded }) {
+function AddCustomerModal({ businessId, existing = [], onClose, onAdded, onVehicleAdded }) {
+  const [dupOf, setDupOf] = useState(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -745,6 +784,20 @@ function AddCustomerModal({ businessId, onClose, onAdded, onVehicleAdded }) {
     e.preventDefault();
     if (!name.trim()) {
       setError("Enter a name.");
+      return;
+    }
+    const contactProblem = validateEmail(email.trim()) || validatePhone(phone.trim());
+    if (contactProblem) {
+      setError(contactProblem);
+      return;
+    }
+    // Same phone (digits only) or email already on file: warn once, then a second submit adds anyway.
+    const digits = phone.replace(/\D/g, "");
+    const mail = email.trim().toLowerCase();
+    const dup = existing.find((c) => (digits && (c.phone || "").replace(/\D/g, "") === digits) || (mail && (c.email || "").toLowerCase() === mail));
+    if (dup && dupOf?.id !== dup.id) {
+      setDupOf(dup);
+      setError(`${dup.name} already has that ${digits && (dup.phone || "").replace(/\D/g, "") === digits ? "phone number" : "email"}. Tap "Add anyway" to save a second record.`);
       return;
     }
     setSaving(true);
@@ -838,7 +891,7 @@ function AddCustomerModal({ businessId, onClose, onAdded, onVehicleAdded }) {
           </div>
 
           <button type="submit" disabled={saving} style={{ marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: `linear-gradient(120deg, ${P.accent}, ${P.secondary})`, color: P.bg, border: "none", borderRadius: 10, padding: "11px 16px", fontSize: 13.5, fontWeight: 700, cursor: saving ? "default" : "pointer", opacity: saving ? 0.85 : 1 }}>
-            {saving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : "Add customer"}
+            {saving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : dupOf ? "Add anyway" : "Add customer"}
           </button>
         </form>
       </div>
@@ -862,6 +915,29 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
   const [addOpen, setAddOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [aiScriptOn, setAiScriptOn] = useState(true);
+  const [statFilter, setStatFilter] = useState("all");
+  const [toggleError, setToggleError] = useState("");
+  useEffect(() => { setAiScriptOn(businessUiPrefs?.customers?.aiScript !== false); }, [businessUiPrefs]);
+
+  // Saved to the business so it stays off (or on) across sessions; Settings → Customize shows the same switch.
+  async function toggleAiScript(next) {
+    setAiScriptOn(next);
+    setToggleError("");
+    if (!businessId) return;
+    try {
+      const { data, error: fetchError } = await supabase.from("businesses").select("ui_prefs").eq("id", businessId).single();
+      if (fetchError) throw fetchError;
+      const merged = { ...(data?.ui_prefs || {}), customers: { ...(data?.ui_prefs?.customers || {}), aiScript: next } };
+      const { error: updateError } = await supabase.from("businesses").update({ ui_prefs: merged }).eq("id", businessId);
+      if (updateError) throw updateError;
+    } catch (err) {
+      console.error(err);
+      setAiScriptOn(!next);
+      setToggleError("Couldn't save that setting. Check your connection and try again.");
+      setTimeout(() => setToggleError(""), 5000);
+    }
+  }
 
   function handleCustomerUpdated(updated) {
     setCustomers((cs) => cs.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
@@ -927,7 +1003,8 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
   const error = bizError || customersError;
 
   const filtered = customers
-    .filter((c) => c.name.toLowerCase().includes(query.toLowerCase()) || (c.phone || "").includes(query))
+    .filter((c) => statFilter === "withEmail" ? !!c.email : statFilter === "missingPhone" ? !c.phone : true)
+    .filter((c) => c.name.toLowerCase().includes(query.toLowerCase()) || (c.phone || "").includes(query) || (c.email || "").toLowerCase().includes(query.toLowerCase()) || (c.address || "").toLowerCase().includes(query.toLowerCase()))
     .sort((a, b) => (sortAsc ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)));
   const withEmail = customers.filter((c) => c.email).length;
   const missingPhone = customers.filter((c) => !c.phone).length;
@@ -940,16 +1017,16 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
   }
 
   function handleExport() {
-    const rows = [["Name", "Email", "Phone", "Customer Since"]].concat(
-      filtered.map((c) => [c.name, c.email || "", c.phone || "", formatDate(c.created_at)])
+    const rows = [["Name", "Email", "Phone", "Address", "Notes", "Customer Since"]].concat(
+      filtered.map((c) => [c.name, c.email || "", c.phone || "", c.address || "", c.notes || "", formatDate(c.created_at)])
     );
     downloadCsv(rows, "customers.csv");
   }
 
   function handleBulkExport() {
     const targets = customers.filter((c) => selected.includes(c.id));
-    const rows = [["Name", "Email", "Phone", "Customer Since"]].concat(
-      targets.map((c) => [c.name, c.email || "", c.phone || "", formatDate(c.created_at)])
+    const rows = [["Name", "Email", "Phone", "Address", "Notes", "Customer Since"]].concat(
+      targets.map((c) => [c.name, c.email || "", c.phone || "", c.address || "", c.notes || "", formatDate(c.created_at)])
     );
     downloadCsv(rows, "customers-selected.csv");
   }
@@ -1008,15 +1085,15 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
 
         <div style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 18 }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
-            <StatCard label="Total Customers" value={customers.length} />
-            <StatCard label="With Email" value={withEmail} sub={`${customers.length - withEmail} missing`} />
-            <StatCard label="Missing Phone" value={missingPhone} />
+            <StatCard label="Total Customers" value={customers.length} active={statFilter === "all"} onClick={() => setStatFilter("all")} />
+            <StatCard label="With Email" value={withEmail} sub={`${customers.length - withEmail} missing`} active={statFilter === "withEmail"} onClick={() => setStatFilter((f) => (f === "withEmail" ? "all" : "withEmail"))} />
+            <StatCard label="Missing Phone" value={missingPhone} active={statFilter === "missingPhone"} onClick={() => setStatFilter((f) => (f === "missingPhone" ? "all" : "missingPhone"))} />
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <div style={{ flex: "1 1 260px", display: "flex", alignItems: "center", gap: 8, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "9px 12px" }}>
               <Search size={15} color={P.textMuted} />
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name or phone…" style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: P.textPrimary, fontSize: 13.5 }} />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, phone, email or address…" style={{ flex: 1, background: "transparent", border: "none", outline: "none", color: P.textPrimary, fontSize: 13.5 }} />
             </div>
             <button onClick={() => setSortAsc((v) => !v)} title={sortAsc ? "Switch to Z–A" : "Switch to A–Z"} style={{ display: "flex", alignItems: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 10, padding: "9px 13px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>
               <SlidersHorizontal size={13} /> Name {sortAsc ? "A–Z" : "Z–A"} <ChevronDown size={13} style={{ transform: sortAsc ? "none" : "rotate(180deg)", transition: "transform 0.15s ease" }} />
@@ -1074,7 +1151,10 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
         </>
       )}
 
-      {addOpen && <AddCustomerModal businessId={businessId} onClose={() => setAddOpen(false)} onAdded={handleAdded} onVehicleAdded={handleVehicleAdded} />}
+      {toggleError && (
+        <div style={{ position: "fixed", bottom: 96, left: "50%", transform: "translateX(-50%)", zIndex: 60, background: P.surface, border: `1px solid ${P.danger}`, color: P.danger, borderRadius: 10, padding: "10px 14px", fontSize: 12.5, fontWeight: 600, maxWidth: "calc(100vw - 32px)" }}>{toggleError}</div>
+      )}
+      {addOpen && <AddCustomerModal businessId={businessId} existing={customers} onClose={() => setAddOpen(false)} onAdded={handleAdded} onVehicleAdded={handleVehicleAdded} />}
       {detailCustomer && (
         <CustomerDetail
           customer={detailCustomer}
@@ -1082,7 +1162,8 @@ export default function AtlasCustomers({ onNavigate, navParams, currentPage = "c
           businessId={businessId}
           businessName={businessName}
           commApp={businessPreferredCommApp}
-          showAiScript={businessUiPrefs?.customers?.aiScript !== false}
+          showAiScript={aiScriptOn}
+          onToggleAiScript={toggleAiScript}
           onClose={() => setDetailCustomer(null)}
           onUpdated={handleCustomerUpdated}
           onDeleted={handleCustomerDeleted}

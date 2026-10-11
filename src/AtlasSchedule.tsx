@@ -77,6 +77,7 @@ function buildMonthGrid(viewMonth) {
 }
 
 function estimateJobPrice(job, servicesById) {
+  if (job.price != null) return Number(job.price);
   const ids = Array.isArray(job.service_ids) ? job.service_ids : [];
   if (ids.length === 0) return null;
   const isSuv = job.vehicles?.size_class === "suv_truck_van";
@@ -206,7 +207,7 @@ function Legend() {
 
 /* ---------------------------------- Month view (drag to reschedule) ---------------------------------- */
 
-function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate, showHolidays }) {
+function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate, showHolidays, onEditJob }) {
   const [dragId, setDragId] = useState(null);
   const cells = useMemo(() => buildMonthGrid(viewMonth), [viewMonth]);
   const today = new Date();
@@ -255,6 +256,7 @@ function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate, show
                     key={j.id}
                     draggable={supportsDrag}
                     onDragStart={supportsDrag ? () => setDragId(j.id) : undefined}
+                    onClick={(e) => { e.stopPropagation(); onEditJob?.(j); }}
                     title={`${formatTime(j.scheduled_at)} · ${j.customers?.name || "No customer"}`}
                     style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, background: `${STATUS[j.status]}1F`, borderRadius: 5, padding: "2px 4px", cursor: "pointer" }}
                   >
@@ -268,7 +270,7 @@ function MonthView({ jobs, viewMonth, moveJob, previewDate, setPreviewDate, show
           );
         })}
       </div>
-      <p style={{ fontSize: 11.5, color: P.textMuted, marginTop: 10, fontStyle: "italic" }}>Click a day to preview it, or hold and drag a job to reschedule.</p>
+      <p style={{ fontSize: 11.5, color: P.textMuted, marginTop: 10, fontStyle: "italic" }}>Click a day to preview it, click a job to edit it, or hold and drag a job to reschedule.</p>
     </div>
   );
 }
@@ -340,7 +342,7 @@ function DayPreview({ date, jobs, servicesById, openFullDay, onClose, onAddJob, 
 
 /* ---------------------------------- Week view ---------------------------------- */
 
-function WeekView({ jobs, selectedDate, goToDate }) {
+function WeekView({ jobs, selectedDate, goToDate, onEditJob }) {
   const startOfWeek = new Date(selectedDate);
   startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
   const weekDays = Array.from({ length: 7 }, (_, i) => { const d = new Date(startOfWeek); d.setDate(d.getDate() + i); return d; });
@@ -358,7 +360,7 @@ function WeekView({ jobs, selectedDate, goToDate }) {
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
               {dayJobs.map((j) => (
-                <div key={j.id} style={{ background: `${STATUS[j.status]}1F`, borderRadius: 6, padding: "4px 5px", minWidth: 0, overflow: "hidden" }}>
+                <div key={j.id} onClick={(e) => { e.stopPropagation(); onEditJob?.(j); }} style={{ background: `${STATUS[j.status]}1F`, borderRadius: 6, padding: "4px 5px", minWidth: 0, overflow: "hidden", cursor: "pointer" }}>
                   <div style={{ fontSize: 9, color: P.textMuted }}>{formatTime(j.scheduled_at)}</div>
                   <div style={{ fontSize: 10, color: P.textPrimary, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{j.customers?.name || "No customer"}</div>
                 </div>
@@ -403,6 +405,7 @@ function DayView({ jobs, selectedDate, servicesById, onEditJob, showHolidays }) 
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>{j.customers?.name || "No customer"}</div>
               <div style={{ fontSize: 12, color: P.textMuted }}>{j.vehicles?.label || "No vehicle"} · {jobServiceNames(j, servicesById)}</div>
+              {j.description && <div style={{ fontSize: 11.5, color: P.textSecondary, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{j.description}</div>}
             </div>
             {j.customers?.address && (
               <a
@@ -459,7 +462,19 @@ function formatJobDateTime(d) {
   };
 }
 
-function AddJobModal({ businessId, businessName, commApp, customers, vehicles, services, jobs, initialDate, initialCustomerId, initialVehicleId, initialServiceIds, job, onClose, onAdded, onDelete, onVehicleAdded }) {
+const NEW_CUSTOMER = "__new__";
+const EMPTY_CONTACT = { name: "", phone: "", email: "", address: "" };
+
+function Section({ title, children }) {
+  return (
+    <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, padding: 16, display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: P.textMuted }}>{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function AddJobModal({ businessId, businessName, commApp, customers, vehicles, services, jobs, initialDate, initialCustomerId, initialVehicleId, initialServiceIds, initialPrice, job, onClose, onAdded, onDelete, onVehicleAdded, onCustomerSaved }) {
   const isEdit = !!job;
   const [customerId, setCustomerId] = useState(job?.customer_id || initialCustomerId || "");
   const [vehicleId, setVehicleId] = useState(job?.vehicle_id || initialVehicleId || "");
@@ -467,6 +482,21 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
   const [date, setDate] = useState(toInputDate(job ? new Date(job.scheduled_at) : (initialDate || new Date())));
   const [time, setTime] = useState(job ? toInputTime(new Date(job.scheduled_at)) : "09:00");
   const [status, setStatus] = useState(job?.status || "scheduled");
+  const [price, setPrice] = useState(job?.price != null ? String(job.price) : initialPrice != null ? String(initialPrice) : "");
+  const [description, setDescription] = useState(job?.description || "");
+  const [contact, setContact] = useState(EMPTY_CONTACT);
+  const isNewCustomer = customerId === NEW_CUSTOMER;
+  const servicesById = useMemo(() => Object.fromEntries(services.map((s) => [s.id, s])), [services]);
+
+  // Contact fields mirror the selected customer so they can be edited right
+  // here; picking "+ New customer" clears them to add someone from scratch.
+  useEffect(() => {
+    if (customerId === NEW_CUSTOMER) { setContact(EMPTY_CONTACT); return; }
+    const c = customers.find((x) => x.id === customerId);
+    setContact(c ? { name: c.name || "", phone: c.phone || "", email: c.email || "", address: c.address || "" } : EMPTY_CONTACT);
+    // Only re-sync when the selection changes, not when the list refreshes after a save.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerId]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -500,7 +530,7 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
     const draft = readDraft(draftKey);
     if (!draft?.value) return;
     const v = draft.value;
-    if (v.customerId) setCustomerId(v.customerId);
+    if (v.customerId && v.customerId !== NEW_CUSTOMER) setCustomerId(v.customerId);
     if (v.vehicleId) setVehicleId(v.vehicleId);
     if (v.serviceIds?.length) setServiceIds(v.serviceIds);
     if (v.date) setDate(v.date);
@@ -521,7 +551,8 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
     onClose();
   }
 
-  const vehiclesForCustomer = customerId ? vehicles.filter((v) => v.customer_id === customerId) : vehicles;
+  const vehiclesForCustomer = isNewCustomer ? vehicles.filter((v) => v.id === vehicleId) : customerId ? vehicles.filter((v) => v.customer_id === customerId) : vehicles;
+  const estimate = estimateJobPrice({ service_ids: serviceIds, vehicles: vehicles.find((v) => v.id === vehicleId) }, servicesById);
   const categories = [...new Set(services.map((s) => s.category))];
 
   const conflict = useMemo(() => {
@@ -550,7 +581,7 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
         label: newVehicleLabel.trim(),
         vehicle_type: newVehicleType,
         size_class: newVehicleSize,
-        customer_id: customerId || null,
+        customer_id: customerId && !isNewCustomer ? customerId : null,
       })
       .select("*, customers(name)")
       .single();
@@ -574,23 +605,55 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
       setError("Pick a date and time.");
       return;
     }
+    const priceNum = price.trim() === "" ? null : Number(price);
+    if (priceNum != null && (!Number.isFinite(priceNum) || priceNum < 0)) {
+      setError("Enter a valid price, or leave it blank to use the estimate.");
+      return;
+    }
     setSaving(true);
     setError("");
+
+    // Contact changes save to the customer record itself (new customer is
+    // created first so the job can point at it).
+    let jobCustomerId = customerId || null;
+    const contactFields = { name: contact.name.trim(), phone: contact.phone.trim() || null, email: contact.email.trim() || null, address: contact.address.trim() || null };
+    if (isNewCustomer) {
+      if (!contactFields.name) { setSaving(false); setError("Enter the new customer's name."); return; }
+      const { data: created, error: createError } = await supabase.from("customers").insert({ business_id: businessId, ...contactFields }).select("id, name, phone, email, address").single();
+      if (createError) { setSaving(false); setError(createError.message); return; }
+      onCustomerSaved?.(created);
+      jobCustomerId = created.id;
+      if (vehicleId) {
+        const { data: linked } = await supabase.from("vehicles").update({ customer_id: created.id }).eq("id", vehicleId).select("*, customers(name)").single();
+        if (linked) onVehicleAdded?.(linked);
+      }
+    } else if (customerId) {
+      const current = customers.find((c) => c.id === customerId);
+      const changed = current && (current.name !== contactFields.name || (current.phone || null) !== contactFields.phone || (current.email || null) !== contactFields.email || (current.address || null) !== contactFields.address);
+      if (changed) {
+        if (!contactFields.name) { setSaving(false); setError("The customer needs a name."); return; }
+        const { data: updated, error: updateError } = await supabase.from("customers").update(contactFields).eq("id", customerId).select("id, name, phone, email, address").single();
+        if (updateError) { setSaving(false); setError(updateError.message); return; }
+        onCustomerSaved?.(updated);
+      }
+    }
 
     const scheduledAt = new Date(`${date}T${time}`).toISOString();
     const payload = {
       business_id: businessId,
-      customer_id: customerId || null,
+      customer_id: jobCustomerId,
       vehicle_id: vehicleId || null,
       service_ids: serviceIds,
       scheduled_at: scheduledAt,
       status,
+      price: priceNum,
+      description: description.trim() || null,
     };
     const query = isEdit
       ? supabase.from("jobs").update(payload).eq("id", job.id)
       : supabase.from("jobs").insert(payload);
     const { data, error: saveError } = await query
-      .select("*, customers(name, phone, address), vehicles(label, size_class)")
+      .select("*, customers(name, phone, email, address), vehicles(label, size_class)")
       .single();
 
     setSaving(false);
@@ -619,6 +682,7 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
 
   async function handleDelete() {
     if (!job) return;
+    if (!window.confirm("Delete this job? This can't be undone.")) return;
     setDeleting(true);
     await onDelete?.(job.id);
     setDeleting(false);
@@ -633,7 +697,7 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
   return (
     <>
       <div onClick={handleCloseModal} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 50 }} />
-      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: "min(460px, calc(100vw - 32px))", maxHeight: "calc(100vh - 40px)", overflowY: "auto", background: P.bg, border: `1px solid ${P.border}`, borderRadius: 16, zIndex: 51, padding: 22 }}>
+      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: createdJob ? "min(460px, calc(100vw - 32px))" : "min(900px, calc(100vw - 24px))", maxHeight: "calc(100vh - 24px)", overflowY: "auto", background: P.bg, border: `1px solid ${P.border}`, borderRadius: 16, zIndex: 51, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: P.textPrimary }}>{createdJob ? "Job scheduled" : isEdit ? "Edit job" : "New job"}</span>
           <button onClick={handleCloseModal} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", display: "flex" }}><X size={18} /></button>
@@ -689,131 +753,186 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
             </button>
           </div>
         ) : (
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {error && <div style={{ fontSize: 12.5, color: P.danger }}>{error}</div>}
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {error && <div style={{ fontSize: 12.5, color: P.danger, background: "rgba(255,107,94,0.1)", border: `1px solid ${P.danger}`, borderRadius: 9, padding: "8px 11px" }}>{error}</div>}
 
-          <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Customer</label>
-              <select value={customerId} onChange={(e) => { setCustomerId(e.target.value); setVehicleId(""); }} style={inputStyle}>
-                <option value="">No customer</option>
-                {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <label style={labelStyle}>Vehicle</label>
-                {!addingVehicle && (
-                  <button type="button" onClick={() => setAddingVehicle(true)} style={{ background: "transparent", border: "none", color: P.accent, fontSize: 11, fontWeight: 600, cursor: "pointer", marginBottom: 6 }}>+ Add</button>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14, alignItems: "start" }}>
+            {/* LEFT: who + what */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+              <Section title="Customer">
+                <div>
+                  <label style={labelStyle}>Customer</label>
+                  <select value={customerId} onChange={(e) => { setCustomerId(e.target.value); setVehicleId(""); }} style={inputStyle}>
+                    <option value="">No customer</option>
+                    <option value={NEW_CUSTOMER}>+ New customer…</option>
+                    {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                {customerId && (
+                  <>
+                    {isNewCustomer && <div style={{ fontSize: 11.5, color: P.accent }}>Fill in their details — they're added to Customers when you save this job.</div>}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
+                      <div>
+                        <label style={labelStyle}>Name</label>
+                        <input autoFocus={isNewCustomer} value={contact.name} onChange={(e) => setContact((c) => ({ ...c, name: e.target.value }))} placeholder="Jane Doe" style={inputStyle} />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Phone</label>
+                        <input type="tel" value={contact.phone} onChange={(e) => setContact((c) => ({ ...c, phone: e.target.value }))} placeholder="(555) 555-0123" style={inputStyle} />
+                      </div>
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Email</label>
+                      <input type="email" value={contact.email} onChange={(e) => setContact((c) => ({ ...c, email: e.target.value }))} placeholder="jane@example.com" style={inputStyle} />
+                    </div>
+                    <div>
+                      <label style={labelStyle}>Address</label>
+                      <input value={contact.address} onChange={(e) => setContact((c) => ({ ...c, address: e.target.value }))} placeholder="Where the job is" style={inputStyle} />
+                    </div>
+                  </>
                 )}
-              </div>
-              {!addingVehicle && (
-                <select
-                  value={vehicleId}
-                  onChange={(e) => {
-                    const id = e.target.value;
-                    setVehicleId(id);
-                    // No customer picked yet, so the dropdown above was listing every
-                    // vehicle across every customer — picking one here clearly identifies
-                    // whose it is, so backfill the customer instead of leaving "No customer".
-                    if (!customerId && id) {
-                      const picked = vehicles.find((v) => v.id === id);
-                      if (picked?.customer_id) setCustomerId(picked.customer_id);
-                    }
-                  }}
-                  style={inputStyle}
-                >
-                  <option value="">No vehicle</option>
-                  {vehiclesForCustomer.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-                </select>
-              )}
+              </Section>
+
+              <Section title="Vehicle">
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <label style={{ ...labelStyle, marginBottom: 0 }}>Vehicle</label>
+                  {!addingVehicle && (
+                    <button type="button" onClick={() => setAddingVehicle(true)} style={{ background: "transparent", border: "none", color: P.accent, fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>+ Add vehicle</button>
+                  )}
+                </div>
+                {!addingVehicle && (
+                  <select
+                    value={vehicleId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setVehicleId(id);
+                      // No customer picked yet, so the dropdown above was listing every
+                      // vehicle across every customer — picking one here clearly identifies
+                      // whose it is, so backfill the customer instead of leaving "No customer".
+                      if (!customerId && id) {
+                        const picked = vehicles.find((v) => v.id === id);
+                        if (picked?.customer_id) setCustomerId(picked.customer_id);
+                      }
+                    }}
+                    style={inputStyle}
+                  >
+                    <option value="">No vehicle</option>
+                    {vehiclesForCustomer.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
+                  </select>
+                )}
+                {addingVehicle && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {vehicleError && <div style={{ fontSize: 12, color: P.danger }}>{vehicleError}</div>}
+                    <div>
+                      <label style={labelStyle}>Description</label>
+                      <input autoFocus value={newVehicleLabel} onChange={(e) => setNewVehicleLabel(e.target.value)} placeholder="2021 VW ID4" style={inputStyle} />
+                    </div>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <div style={{ flex: 1 }}>
+                        <label style={labelStyle}>Type</label>
+                        <select value={newVehicleType} onChange={(e) => setNewVehicleType(e.target.value)} style={inputStyle}>
+                          {["Car", "Motorcycle", "Boat", "RV & Trailer", "Aircraft", "Other"].map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <label style={labelStyle}>Size class</label>
+                        <select value={newVehicleSize} onChange={(e) => setNewVehicleSize(e.target.value)} style={inputStyle}>
+                          <option value="car">Car</option>
+                          <option value="suv_truck_van">SUV / Truck / Van</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button type="button" onClick={() => { setAddingVehicle(false); setVehicleError(""); }} style={{ flex: 1, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                      <button type="button" onClick={handleAddVehicle} disabled={savingVehicle} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: savingVehicle ? "default" : "pointer" }}>
+                        {savingVehicle ? <Loader2 size={13} className="animate-spin" /> : "Save vehicle"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </Section>
+
+              <Section title="Notes">
+                <div>
+                  <label style={labelStyle}>Job description</label>
+                  <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} placeholder="Gate code, pet hair, special requests, what was agreed…" style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+                </div>
+              </Section>
+            </div>
+
+            {/* RIGHT: when + what + how much */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+              <Section title="When">
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
+                  <div>
+                    <label style={labelStyle}>Date</label>
+                    <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ ...inputStyle, colorScheme: "dark" }} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Time</label>
+                    <input type="time" value={time} onChange={(e) => setTime(e.target.value)} style={{ ...inputStyle, colorScheme: "dark" }} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Status</label>
+                    <select value={status} onChange={(e) => setStatus(e.target.value)} style={inputStyle}>
+                      {Object.keys(STATUS_LABEL).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {conflict && (
+                  <div style={{ fontSize: 12, color: "#F5A623", background: "rgba(245,166,35,0.1)", border: "1px solid rgba(245,166,35,0.3)", borderRadius: 9, padding: "8px 11px" }}>
+                    ⚠ Also booked around this time: {conflict.customers?.name || "another job"} at {formatTime(conflict.scheduled_at)}. You can still save — just flagging the overlap.
+                  </div>
+                )}
+              </Section>
+
+              <Section title="Services">
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, maxHeight: 260, overflowY: "auto" }}>
+                  {categories.map((cat) => (
+                    <div key={cat}>
+                      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: P.textMuted, marginBottom: 6 }}>{cat}</div>
+                      {services.filter((s) => s.category === cat).map((s) => {
+                        const selectedVehicle = vehiclesForCustomer.find((v) => v.id === vehicleId);
+                        const isSuv = selectedVehicle?.size_class === "suv_truck_van";
+                        const svcPriceHint = isSuv ? (s.price_suv_low ?? s.price_car_low) : s.price_car_low;
+                        return (
+                          <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", cursor: "pointer" }}>
+                            <input type="checkbox" checked={serviceIds.includes(s.id)} onChange={() => toggleService(s.id)} style={{ accentColor: P.accent }} />
+                            <span style={{ fontSize: 12.5, color: P.textSecondary, flex: 1 }}>{s.name}</span>
+                            <span style={{ fontSize: 11.5, color: P.textMuted }}>from ${svcPriceHint}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </Section>
+
+              <Section title="Price">
+                <div>
+                  <label style={labelStyle}>Job price</label>
+                  <div style={{ position: "relative" }}>
+                    <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: P.textMuted, fontSize: 13.5 }}>$</span>
+                    <input type="number" inputMode="decimal" min="0" step="any" value={price} onChange={(e) => setPrice(e.target.value)} placeholder={estimate != null ? String(Math.round(estimate)) : "0"} style={{ ...inputStyle, paddingLeft: 24, fontSize: 16, fontWeight: 700 }} />
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 6, fontSize: 11.5, color: P.textMuted }}>
+                    <span>{price.trim() === "" ? (estimate != null ? `Using the services estimate: ${money(estimate)}` : "No price yet — type one in, or pick services.") : estimate != null ? `Custom price (services estimate: ${money(estimate)})` : "Custom price"}</span>
+                    {price.trim() !== "" && (
+                      <button type="button" onClick={() => setPrice("")} style={{ background: "transparent", border: "none", color: P.accent, fontSize: 11.5, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>Use estimate</button>
+                    )}
+                  </div>
+                </div>
+              </Section>
             </div>
           </div>
-
-          {addingVehicle && (
-            <div style={{ border: `1px solid ${P.border}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 10 }}>
-              {vehicleError && <div style={{ fontSize: 12, color: P.danger }}>{vehicleError}</div>}
-              <div>
-                <label style={labelStyle}>Description</label>
-                <input autoFocus value={newVehicleLabel} onChange={(e) => setNewVehicleLabel(e.target.value)} placeholder="2021 VW ID4" style={inputStyle} />
-              </div>
-              <div style={{ display: "flex", gap: 10 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>Type</label>
-                  <select value={newVehicleType} onChange={(e) => setNewVehicleType(e.target.value)} style={inputStyle}>
-                    {["Car", "Motorcycle", "Boat", "RV & Trailer", "Aircraft", "Other"].map((t) => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={labelStyle}>Size class</label>
-                  <select value={newVehicleSize} onChange={(e) => setNewVehicleSize(e.target.value)} style={inputStyle}>
-                    <option value="car">Car</option>
-                    <option value="suv_truck_van">SUV / Truck / Van</option>
-                  </select>
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button type="button" onClick={() => { setAddingVehicle(false); setVehicleError(""); }} style={{ flex: 1, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-                <button type="button" onClick={handleAddVehicle} disabled={savingVehicle} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 9, padding: "9px", fontSize: 12.5, fontWeight: 700, cursor: savingVehicle ? "default" : "pointer" }}>
-                  {savingVehicle ? <Loader2 size={13} className="animate-spin" /> : "Save vehicle"}
-                </button>
-              </div>
-            </div>
-          )}
 
           <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Date</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={{ ...inputStyle, colorScheme: "dark" }} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Time</label>
-              <input type="time" value={time} onChange={(e) => setTime(e.target.value)} style={{ ...inputStyle, colorScheme: "dark" }} />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Status</label>
-              <select value={status} onChange={(e) => setStatus(e.target.value)} style={inputStyle}>
-                {Object.keys(STATUS_LABEL).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {conflict && (
-            <div style={{ fontSize: 12, color: "#F5A623", background: "rgba(245,166,35,0.1)", border: "1px solid rgba(245,166,35,0.3)", borderRadius: 9, padding: "8px 11px" }}>
-              ⚠ Also booked around this time: {conflict.customers?.name || "another job"} at {formatTime(conflict.scheduled_at)}. You can still save — just flagging the overlap.
-            </div>
-          )}
-
-          <div>
-            <label style={labelStyle}>Services</label>
-            <div style={{ border: `1px solid ${P.border}`, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 10, maxHeight: 200, overflowY: "auto" }}>
-              {categories.map((cat) => (
-                <div key={cat}>
-                  <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: P.textMuted, marginBottom: 6 }}>{cat}</div>
-                  {services.filter((s) => s.category === cat).map((s) => {
-                    const selectedVehicle = vehiclesForCustomer.find((v) => v.id === vehicleId);
-                    const isSuv = selectedVehicle?.size_class === "suv_truck_van";
-                    const price = isSuv ? (s.price_suv_low ?? s.price_car_low) : s.price_car_low;
-                    return (
-                      <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", cursor: "pointer" }}>
-                        <input type="checkbox" checked={serviceIds.includes(s.id)} onChange={() => toggleService(s.id)} style={{ accentColor: P.accent }} />
-                        <span style={{ fontSize: 12.5, color: P.textSecondary, flex: 1 }}>{s.name}</span>
-                        <span style={{ fontSize: 11.5, color: P.textMuted }}>from ${price}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
             {isEdit && (
-              <button type="button" onClick={handleDelete} disabled={deleting || saving} title="Delete job" style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: `1px solid ${P.border}`, color: P.danger, borderRadius: 10, padding: "0 14px", cursor: deleting ? "default" : "pointer", opacity: deleting ? 0.6 : 1 }}>
+              <button type="button" onClick={handleDelete} disabled={deleting || saving} title="Delete job" style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: `1px solid ${P.border}`, color: P.danger, borderRadius: 10, padding: "0 16px", cursor: deleting ? "default" : "pointer", opacity: deleting ? 0.6 : 1 }}>
                 {deleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
               </button>
             )}
-            <button type="submit" disabled={saving} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: `linear-gradient(120deg, ${P.accent}, ${P.secondary})`, color: P.bg, border: "none", borderRadius: 10, padding: "11px 16px", fontSize: 13.5, fontWeight: 700, cursor: saving ? "default" : "pointer", opacity: saving ? 0.85 : 1 }}>
+            <button type="submit" disabled={saving} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: `linear-gradient(120deg, ${P.accent}, ${P.secondary})`, color: P.bg, border: "none", borderRadius: 10, padding: "12px 16px", fontSize: 14, fontWeight: 700, cursor: saving ? "default" : "pointer", opacity: saving ? 0.85 : 1 }}>
               {saving ? <><Loader2 size={15} className="animate-spin" /> Saving…</> : isEdit ? "Save changes" : "Create job"}
             </button>
           </div>
@@ -867,8 +986,8 @@ export default function AtlasSchedule({ onNavigate, navParams, currentPage = "sc
     async function load() {
       setLoadingJobs(true);
       const [jobsResult, customersResult, vehiclesResult, servicesResult] = await Promise.all([
-        supabase.from("jobs").select("*, customers(name, phone, address), vehicles(label, size_class)").eq("business_id", businessId).order("scheduled_at", { ascending: true }),
-        supabase.from("customers").select("id, name, phone").eq("business_id", businessId).order("name", { ascending: true }),
+        supabase.from("jobs").select("*, customers(name, phone, email, address), vehicles(label, size_class)").eq("business_id", businessId).order("scheduled_at", { ascending: true }),
+        supabase.from("customers").select("id, name, phone, email, address").eq("business_id", businessId).order("name", { ascending: true }),
         supabase.from("vehicles").select("id, label, customer_id, size_class").eq("business_id", businessId).order("label", { ascending: true }),
         supabase.from("services").select("id, name, category, price_car_low, price_suv_low, duration_hours").eq("business_id", businessId).order("sort_order", { ascending: true }),
       ]);
@@ -945,7 +1064,11 @@ export default function AtlasSchedule({ onNavigate, navParams, currentPage = "sc
   }
 
   function handleVehicleAdded(vehicle) {
-    setVehicles((vs) => [...vs, vehicle].sort((a, b) => a.label.localeCompare(b.label)));
+    setVehicles((vs) => [...vs.filter((v) => v.id !== vehicle.id), vehicle].sort((a, b) => a.label.localeCompare(b.label)));
+  }
+
+  function handleCustomerSaved(customer) {
+    setCustomers((cs) => [...cs.filter((c) => c.id !== customer.id), customer].sort((a, b) => a.name.localeCompare(b.name)));
   }
 
   async function handleDeleteJob(id) {
@@ -1145,11 +1268,11 @@ export default function AtlasSchedule({ onNavigate, navParams, currentPage = "sc
             <div style={{ background: "rgba(255,107,94,0.1)", border: `1px solid ${P.danger}`, borderRadius: 14, padding: "18px", fontSize: 13, color: P.danger }}>{error}</div>
           ) : (
             <>
-              {view === "month" && <MonthView jobs={jobs} viewMonth={viewMonth} moveJob={moveJob} previewDate={previewDate} setPreviewDate={setPreviewDate} showHolidays={visible.holidays} />}
+              {view === "month" && <MonthView jobs={jobs} viewMonth={viewMonth} moveJob={moveJob} previewDate={previewDate} setPreviewDate={setPreviewDate} showHolidays={visible.holidays} onEditJob={setEditingJob} />}
               {view === "month" && previewDate && (
                 <DayPreview date={previewDate} jobs={jobs} servicesById={servicesById} openFullDay={() => goToDate(previewDate)} onClose={() => setPreviewDate(null)} onAddJob={openAddJob} onEditJob={setEditingJob} showHolidays={visible.holidays} />
               )}
-              {view === "week" && <WeekView jobs={jobs} selectedDate={selectedDate} goToDate={goToDate} />}
+              {view === "week" && <WeekView jobs={jobs} selectedDate={selectedDate} goToDate={goToDate} onEditJob={setEditingJob} />}
               {view === "day" && <DayView jobs={jobs} selectedDate={selectedDate} servicesById={servicesById} onEditJob={setEditingJob} showHolidays={visible.holidays} />}
             </>
           )}
@@ -1193,11 +1316,13 @@ export default function AtlasSchedule({ onNavigate, navParams, currentPage = "sc
           initialCustomerId={navParams?.addJobForCustomerId}
           initialVehicleId={navParams?.initialVehicleId}
           initialServiceIds={navParams?.initialServiceIds}
+          initialPrice={navParams?.initialPrice}
           job={editingJob}
           onClose={closeJobModal}
           onAdded={handleAdded}
           onDelete={handleDeleteJob}
           onVehicleAdded={handleVehicleAdded}
+          onCustomerSaved={handleCustomerSaved}
         />
       )}
     </div>

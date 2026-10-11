@@ -59,6 +59,7 @@ function money(n) {
   return `$${Math.round(n || 0).toLocaleString()}`;
 }
 function estimateJobPrice(job, servicesById) {
+  if (job.price != null) return Number(job.price);
   const ids = Array.isArray(job.service_ids) ? job.service_ids : [];
   return ids.reduce((sum, id) => {
     const svc = servicesById[id];

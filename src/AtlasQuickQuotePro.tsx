@@ -2133,6 +2133,17 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote", 
       consumedQuoteNavRef.current = navParams;
     }
   }, [navParams, customersAll, loadingData]);
+
+  // "Quotes" rows on a customer's profile land here with that exact quote open.
+  const consumedOpenQuoteRef = useRef(null);
+  useEffect(() => {
+    if (!navParams?.openQuoteId || consumedOpenQuoteRef.current === navParams || loadingData) return;
+    const match = savedQuotes.find((q) => q.id === navParams.openQuoteId);
+    if (match) {
+      consumedOpenQuoteRef.current = navParams;
+      openQuote(match);
+    }
+  }, [navParams, savedQuotes, loadingData]);
   function toggleVehicle(v) {
     setVehicles((prev) => {
       const exists = prev.some((x) => x.id === v.id);
@@ -2379,6 +2390,7 @@ export default function AtlasQuickQuotePro({ onNavigate, currentPage = "quote", 
       addJobForCustomerId: q.customer?.id || null,
       initialVehicleId: vehicle?.id || null,
       initialServiceIds: serviceIds,
+      initialPrice: !q.totals.isRange && q.totals.subtotal > 0 ? q.totals.subtotal : null,
       quoteId: q.id,
     });
   }
