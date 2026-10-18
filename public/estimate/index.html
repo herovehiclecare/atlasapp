@@ -122,6 +122,12 @@ textarea{min-height:92px;resize:vertical;font-weight:500}
 .box svg{display:none}.svc[aria-pressed=true] .box svg{display:block}
 .svcname{display:block;font-size:17px;font-weight:800;line-height:1.25;letter-spacing:-.01em}
 .svcdesc{display:block;font-size:13px;color:var(--dim);margin-top:4px;line-height:1.4}
+.svcmore{display:inline-block;margin-top:8px;font-size:12.5px;font-weight:700;color:var(--accent2);cursor:pointer;padding:2px 0}
+.svcchev{display:inline-block;transition:transform .15s}.svcchev.up{transform:rotate(180deg)}
+.svcincl{display:block;margin-top:8px;padding-top:10px;border-top:1px solid var(--line)}
+.svcli{display:block;font-size:13px;color:var(--muted);line-height:1.45;padding:2px 0 2px 18px;position:relative}
+.svcli:before{content:"✓";position:absolute;left:0;color:var(--accent2);font-weight:800}
+.svcwhy{display:block;margin-top:9px;font-size:12px;color:var(--dim);line-height:1.45}
 .svcprice{font-size:17px;font-weight:800;color:var(--accent2);white-space:nowrap;margin-left:auto;
   padding-left:10px;font-variant-numeric:tabular-nums}
 
@@ -176,12 +182,12 @@ body.embedded .bar{position:static;margin-top:22px;border-radius:0 0 18px 18px}
 /* ---- business contact block, mirroring the QQP customer quote footer ---- */
 .cfoot{margin-top:24px;padding:18px;border:1.5px solid var(--line);border-radius:18px;
   background:var(--panel2);text-align:center}
-.cfhead{display:flex;align-items:center;justify-content:center;gap:11px;margin-bottom:13px}
+.cfhead{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;margin-bottom:14px;text-align:center}
 .cfmark{width:40px;height:40px;border-radius:50%;background:var(--bg);border:1.5px solid var(--line);
   flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .cfmark img{width:100%;height:100%;object-fit:cover}
-.cfname{font-size:16.5px;font-weight:800;letter-spacing:-.01em;text-align:left}
-.cftag{font-size:12px;color:var(--dim);margin-top:1px;text-align:left}
+.cfname{font-size:17px;font-weight:800;letter-spacing:-.01em;text-align:center}
+.cftag{font-size:12px;color:var(--dim);margin-top:2px;text-align:center}
 /* Three equal buttons on one row - wrapping to a second row made this block
    twice as tall as it needed to be. */
 .pills{display:flex;gap:8px}

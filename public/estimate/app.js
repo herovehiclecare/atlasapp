@@ -21,6 +21,7 @@ const CFG_KEY = "atlas-quote-config-v1";
 // Hosted mode: the page lives at /e/<slug>. The setup comes from the business's Atlas
 // account and Send writes a lead into it. Without a slug it is the local demo.
 const SLUG = window.ATLAS_SLUG || "";
+const openInfo = new Set();
 const API = "https://fqggnekepfzxrkuazpiy.supabase.co/functions/v1/estimate-request";
 
 // Two price tiers, always. They map to price_car_* / price_suv_* in Atlas, so
@@ -543,9 +544,12 @@ function itemBlock(v,i){
     const ct = catTotal(v,cat), open = v.openCats.includes(cat);
     const body = CFG.services.filter(s=>s.cat===cat).map(s=>{
       const p=priceFor(s,v), on=v.services.includes(s.name);
+      const incl=(Array.isArray(s.includes)?s.includes:[]).map(x=>String(x).trim()).filter(Boolean);
+      const brief=s.desc || (incl.length?incl.slice(0,3).join(" · ")+(incl.length>3?" + "+(incl.length-3)+" more":""):"");
+      const info=openInfo.has(s.name);
       return `<button class="svc" aria-pressed="${on}" data-act="svc" data-i="${i}" data-v="${esc(s.name)}">
         <span class="box">${CHECK}</span>
-        <span style="flex:1;min-width:0"><span class="svcname">${esc(s.name)}</span>${s.desc?`<span class="svcdesc">${esc(s.desc)}</span>`:""}</span>
+        <span style="flex:1;min-width:0"><span class="svcname">${esc(s.name)}</span>${brief?`<span class="svcdesc">${esc(brief)}</span>`:""}${incl.length?`<span class="svcmore" data-act="info" data-i="${i}" data-v="${esc(s.name)}">${info?"Hide details":"What's included"} <span class="svcchev${info?" up":""}">▾</span></span>`:""}${info?`<span class="svcincl">${incl.map(x=>`<span class="svcli">${esc(x)}</span>`).join("")}<span class="svcwhy">Price depends on your vehicle's size and condition. We confirm the final price after reviewing your request.</span></span>`:""}</span>
         <span class="svcprice">${p.open?"from "+money(p.low):money(p.low)+"–"+money(p.high)}</span></button>`;
     }).join("");
     return accordion({ open, name:cat, count:ct.n||0,
@@ -890,6 +894,7 @@ document.addEventListener("click", e=>{
   if(act==="size"){ v.size=val; render(); return; }
   if(act==="cond"){ v.condition=val; render(); return; }
   if(act==="freq"){ v.frequency=val; render(); return; }
+  if(act==="info"){ e.stopPropagation(); if(openInfo.has(val)) openInfo.delete(val); else openInfo.add(val); render(); return; }
   if(act==="svc"){ toggle(v.services,val); render(); return; }
   if(act==="addon"){ toggle(v.addons,val); render(); return; }
 
@@ -1049,7 +1054,9 @@ if (/[?&]bare=1/.test(location.search) && window.parent !== window) {
 }
 function postHeight(){
   if (window.parent === window) return;
-  const h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+  // scrollHeight can never drop below the iframe's current height, so collapsing a drawer left a
+  // blank gap. The body's own box is the real content height.
+  const h = Math.ceil(document.body.getBoundingClientRect().height);
   try { window.parent.postMessage({ atlasEstimate:"height", height:h }, "*"); } catch {}
 }
 new ResizeObserver(postHeight).observe(document.body);

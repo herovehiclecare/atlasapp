@@ -131,6 +131,17 @@ Deno.serve(async (req) => {
       if (!business) return json({ error: "Not found" }, 404);
       // alerts holds the owner's private phone number - never send it to the public page.
       const { alerts: _alerts, ...publicConfig } = business.estimate_config;
+      // Show what each service includes: read it live from the services table, matched by name.
+      try {
+        const { data: rows } = await supabase.from("services").select("name, includes").eq("business_id", business.id);
+        const byName = new Map((rows || []).map((r: any) => [String(r.name || "").trim().toLowerCase(), r.includes]));
+        if (Array.isArray(publicConfig.services)) {
+          publicConfig.services = publicConfig.services.map((sv: any) => {
+            const inc = byName.get(String(sv.name || "").trim().toLowerCase());
+            return Array.isArray(inc) && inc.length ? { ...sv, includes: inc } : sv;
+          });
+        }
+      } catch (_e) { /* descriptions are optional */ }
       return json({ config: publicConfig });
     }
 
