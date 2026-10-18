@@ -17,8 +17,10 @@ const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPAB
 const OPENPHONE_API_KEY = Deno.env.get("QUO_API_KEY") || "";
 const OPENPHONE_FROM_NUMBER = Deno.env.get("QUO_FROM_NUMBER") || "";
 const OWNER_ALERT_PHONE = Deno.env.get("OWNER_ALERT_PHONE") || "";
-// Alert texts go out on Andre's own number, so only his business gets them for now.
+// Alert texts go out from the Atlas number. Andre's business falls back to his own phone;
+// any other business gets them only if its owner turned alerts on and entered a phone.
 const ALERT_BUSINESS_ID = Deno.env.get("ATLAS_BUSINESS_ID") || "";
+const MAX_ALERTS_PER_HOUR = 10;
 
 const DEDUPE_WINDOW_MINUTES = 10;
 const MAX_ITEMS = 6;
@@ -65,8 +67,15 @@ async function loadBusiness(slug: string) {
   return data;
 }
 
-async function sendRequestAlert(name: string, phone: string, summary: string, range: string) {
-  if (!OPENPHONE_API_KEY || !OPENPHONE_FROM_NUMBER || !OWNER_ALERT_PHONE) return;
+function toE164(raw: unknown): string {
+  const d = String(raw ?? "").replace(/\D/g, "");
+  if (d.length === 10) return `+1${d}`;
+  if (d.length === 11 && d.startsWith("1")) return `+${d}`;
+  return "";
+}
+
+async function sendRequestAlert(to: string, name: string, phone: string, summary: string, range: string) {
+  if (!OPENPHONE_API_KEY || !OPENPHONE_FROM_NUMBER || !to) return;
   try {
     const res = await fetch("https://api.openphone.com/v1/messages", {
       method: "POST",
@@ -74,7 +83,7 @@ async function sendRequestAlert(name: string, phone: string, summary: string, ra
       body: JSON.stringify({
         content: `New Instant Quote request: ${name}${phone ? ` ${phone}` : ""} - ${range}${summary ? ` (${summary})` : ""}. They're waiting on you.`,
         from: OPENPHONE_FROM_NUMBER,
-        to: [OWNER_ALERT_PHONE],
+        to: [to],
       }),
     });
     if (!res.ok) console.error("Instant Quote alert text failed", res.status, await res.text());
@@ -102,7 +111,9 @@ Deno.serve(async (req) => {
       if (!slug) return json({ error: "Missing slug" }, 400);
       const business = await loadBusiness(slug);
       if (!business) return json({ error: "Not found" }, 404);
-      return json({ config: business.estimate_config });
+      // alerts holds the owner's private phone number - never send it to the public page.
+      const { alerts: _alerts, ...publicConfig } = business.estimate_config;
+      return json({ config: publicConfig });
     }
 
     if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -263,7 +274,18 @@ Deno.serve(async (req) => {
       });
       if (fuErr) console.error("estimate-request: follow-up insert failed", fuErr.message);
 
-      if (business.id === ALERT_BUSINESS_ID) await sendRequestAlert(name, phone, itemsOut.map((i) => i.label).join(", "), range);
+      const alertTo = cfg.alerts?.sms
+        ? toE164(cfg.alerts.phone)
+        : business.id === ALERT_BUSINESS_ID ? OWNER_ALERT_PHONE : "";
+      if (alertTo) {
+        const hourAgo = new Date(Date.now() - 3_600_000).toISOString();
+        const { count: lastHour } = await supabase
+          .from("customers").select("id", { count: "exact", head: true })
+          .eq("business_id", business.id).eq("source", "estimate_request").gte("created_at", hourAgo);
+        if ((lastHour ?? 0) <= MAX_ALERTS_PER_HOUR) {
+          await sendRequestAlert(alertTo, name.slice(0, 40), phone, itemsOut.map((i) => i.label).join(", "), range);
+        }
+      }
     }
 
     return json({ ok: true, estimate_low: totalLow, estimate_high: totalHigh, open_ended: anyOpen });

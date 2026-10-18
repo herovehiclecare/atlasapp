@@ -1751,6 +1751,10 @@ function InstantQuotePanel() {
     if (new Set(names).size !== names.length) { setError("Two services have the same name. Make each one different."); return; }
     if (cfg.services.some((s) => s.car?.[0] == null)) { setError("Every service needs at least a starting price for a car."); return; }
     if (enabled && !cfg.services.length) { setError("Add at least one service before turning the page on."); return; }
+    if (cfg.alerts?.sms) {
+      const digits = String(cfg.alerts.phone || "").replace(/\D/g, "");
+      if (!(digits.length === 10 || (digits.length === 11 && digits.startsWith("1")))) { setError("Enter a 10-digit US mobile number for text alerts, or turn them off."); return; }
+    }
     const fixed = {
       ...cfg,
       services: cfg.services.map((s) => ({
@@ -1859,6 +1863,23 @@ function InstantQuotePanel() {
         ))}
         <button onClick={() => touch({ ...cfg, addons: [...cfg.addons, { name: "", price: null }] })} style={ghostBtn}><Plus size={12} /> Add add-on</button>
       </div>
+
+      <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Text me new requests</div>
+      <Card style={{ padding: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>Send a text when a request comes in</div>
+            <div style={{ fontSize: 11.5, color: P.textMuted, marginTop: 2, lineHeight: 1.45 }}>Fast replies win jobs. You'll also see every request in Customers and Follow-ups.</div>
+          </div>
+          <Toggle on={!!cfg.alerts?.sms} onClick={() => touch({ ...cfg, alerts: { ...cfg.alerts, sms: !cfg.alerts?.sms, phone: cfg.alerts?.phone || biz?.phone || "" } })} />
+        </div>
+        {cfg.alerts?.sms && (
+          <div style={{ marginTop: 12 }}>
+            <Field label="Your mobile number"><input type="tel" inputMode="tel" value={cfg.alerts.phone || ""} onChange={(e) => touch({ ...cfg, alerts: { ...cfg.alerts, phone: e.target.value } })} placeholder="(555) 555-5555" style={inputStyle} /></Field>
+            <p style={{ fontSize: 11.5, color: P.textMuted, margin: "8px 0 0", lineHeight: 1.5 }}>US numbers only. Message and data rates may apply. Never shown to customers.</p>
+          </div>
+        )}
+      </Card>
 
       <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Look and wording</div>
       <Card style={{ padding: 16 }}>
