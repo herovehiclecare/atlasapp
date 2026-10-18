@@ -51,6 +51,7 @@ const MORE_PAGES = [
 const SECTIONS = [
   { id: "profile", label: "Business Profile", Icon: Building2 },
   { id: "services", label: "Services & Packages", Icon: Tag },
+  { id: "instantquote", label: "Instant Quote", Icon: Sparkles },
   { id: "booking", label: "Online Booking", Icon: CalendarCheck },
   { id: "page", label: "Public Business Page", Icon: Globe },
   { id: "integrations", label: "Integrations", Icon: Plug },
@@ -1628,8 +1629,278 @@ function AccountPanel() {
   );
 }
 
+/* ---------------------------------- Instant Quote ---------------------------------- */
+
+const IQ_SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const IQ_THEMES = [["forest", "Forest"], ["midnight", "Midnight"], ["charcoal", "Charcoal"], ["bone", "Light"]];
+
+function iqDefaultConfig(business, services) {
+  const num = (v) => (v == null || v === "" ? null : Number(v));
+  return {
+    trade: "detailing",
+    brand: {
+      name: business.name || "", kick: "Free Estimate", tagline: business.tagline || "", phone: business.phone || "", email: business.email || "",
+      logo: business.logo_url || "", accent: "#18D97A", theme: "forest", pattern: "on", replyWindow: "within 1 business hour",
+      instagram: business.social_links?.instagram || "", facebook: business.social_links?.facebook || "", tiktok: business.social_links?.tiktok || "", google: business.social_links?.google || "",
+    },
+    copy: {
+      headline: "Get Your Quote",
+      sub: "Tell us about your vehicle. You'll see your price range right away, then send it over and we'll confirm the exact number.",
+      step1: "Pick your work", step2: "How do we reach you?",
+      disclaimerTitle: "This is an estimate, not a final price.",
+      disclaimer: "confirms the exact number once they see it. Nothing is booked and no card is needed.",
+    },
+    sizes: [{ id: "car", label: "Car / Sedan", hint: "Coupe, sedan, hatch" }, { id: "suv", label: "SUV / Truck / Van", hint: "3-row, pickup, van" }],
+    conditionQ: "How dirty is it right now?",
+    conditions: [
+      { id: "light", label: "Light", hint: "Easy job", lo: 0, hi: 0.25 },
+      { id: "moderate", label: "Moderate", hint: "About average", lo: 0.25, hi: 0.65 },
+      { id: "heavy", label: "Heavy", hint: "Needs real work", lo: 0.65, hi: 1 },
+    ],
+    frequencyQ: "How often does it get detailed?",
+    frequencies: [
+      { id: "monthly", label: "About monthly", uplift: 0 }, { id: "few", label: "Every few months", uplift: 0 },
+      { id: "twice", label: "Twice a year", uplift: 5 }, { id: "rare", label: "Once a year or less", uplift: 10 },
+    ],
+    fields: [
+      { k: "year", label: "Year", ph: "2021", max: 4, half: true, numeric: true },
+      { k: "make", label: "Make", ph: "Toyota", half: true },
+      { k: "model", label: "Model", ph: "4Runner" },
+    ],
+    services: (services || []).filter((s) => s.name && s.price_car_low != null).map((s) => ({
+      name: s.name, cat: s.category || "", desc: s.description || "",
+      car: [num(s.price_car_low), num(s.price_car_high)],
+      suv: [num(s.price_suv_low ?? s.price_car_low), num(s.price_suv_high)],
+    })),
+    addons: [],
+  };
+}
+
+function IqPrice({ value, onChange, placeholder }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 3, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 8, padding: "6px 8px", minWidth: 0 }}>
+      <span style={{ fontSize: 12, color: P.textMuted }}>$</span>
+      <input type="number" min="0" value={value ?? ""} onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))} placeholder={placeholder} style={{ width: "100%", minWidth: 0, background: "transparent", border: "none", outline: "none", color: P.textPrimary, fontSize: 12.5 }} />
+    </div>
+  );
+}
+
+function InstantQuotePanel() {
+  const { businessId } = useBusinessId();
+  const [loading, setLoading] = useState(true);
+  const [biz, setBiz] = useState(null);
+  const [slug, setSlug] = useState("");
+  const [enabled, setEnabled] = useState(false);
+  const [cfg, setCfg] = useState(null);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState("");
+  const logoRef = useRef(null);
+
+  useEffect(() => {
+    if (!businessId) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error: e } = await supabase.from("businesses").select("name, tagline, phone, email, logo_url, social_links, estimate_slug, estimate_enabled, estimate_config").eq("id", businessId).single();
+      if (cancelled) return;
+      if (e) setError(e.message);
+      else {
+        setBiz(data);
+        setSlug(data.estimate_slug || "");
+        setEnabled(!!data.estimate_enabled);
+        setCfg(data.estimate_config?.services ? data.estimate_config : null);
+      }
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [businessId]);
+
+  function touch(next) { setCfg(next); setDirty(true); setSaved(false); }
+  function setBrand(k, v) { touch({ ...cfg, brand: { ...cfg.brand, [k]: v } }); }
+  function setCopy(k, v) { touch({ ...cfg, copy: { ...cfg.copy, [k]: v } }); }
+  function setService(i, patch) { touch({ ...cfg, services: cfg.services.map((s, idx) => (idx === i ? { ...s, ...patch } : s)) }); }
+  function setBand(i, size, pos, v) {
+    const band = [...(cfg.services[i][size] || [null, null])];
+    band[pos] = v;
+    setService(i, { [size]: band });
+  }
+  function setAddon(i, patch) { touch({ ...cfg, addons: cfg.addons.map((a, idx) => (idx === i ? { ...a, ...patch } : a)) }); }
+
+  async function startSetup() {
+    setError("");
+    const { data } = await supabase.from("services").select("name, category, description, price_car_low, price_car_high, price_suv_low, price_suv_high").eq("business_id", businessId).order("sort_order", { ascending: true });
+    const next = iqDefaultConfig(biz, data || []);
+    if (!slug) setSlug((biz.name || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""));
+    touch(next);
+  }
+
+  async function onLogo(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try { setBrand("logo", await resizeImageToDataUrl(file, 256)); } catch (err) { setError(err.message || "Couldn't read that image."); }
+  }
+
+  async function save() {
+    setError("");
+    const clean = slug.trim().toLowerCase();
+    if (!IQ_SLUG_RE.test(clean)) { setError("Web address can only use letters, numbers and dashes (for example: my-detailing)."); return; }
+    const names = cfg.services.map((s) => (s.name || "").trim().toLowerCase());
+    if (names.some((n) => !n)) { setError("Every service needs a name."); return; }
+    if (new Set(names).size !== names.length) { setError("Two services have the same name. Make each one different."); return; }
+    if (cfg.services.some((s) => s.car?.[0] == null)) { setError("Every service needs at least a starting price for a car."); return; }
+    if (enabled && !cfg.services.length) { setError("Add at least one service before turning the page on."); return; }
+    const fixed = {
+      ...cfg,
+      services: cfg.services.map((s) => ({
+        name: s.name.trim(), cat: (s.cat || "").trim(), desc: s.desc || "",
+        car: [Number(s.car[0]), s.car[1] == null ? null : Number(s.car[1])],
+        suv: [s.suv?.[0] == null ? Number(s.car[0]) : Number(s.suv[0]), s.suv?.[1] == null ? null : Number(s.suv[1])],
+      })),
+      addons: cfg.addons.filter((a) => (a.name || "").trim()).map((a) => ({ name: a.name.trim(), price: Number(a.price) || 0 })),
+    };
+    setSaving(true);
+    const { error: e } = await supabase.from("businesses").update({ estimate_slug: clean, estimate_enabled: enabled, estimate_config: fixed }).eq("id", businessId).select().single();
+    setSaving(false);
+    if (e) { setError(e.code === "23505" ? "That web address is already taken. Try another." : e.message); return; }
+    setSlug(clean);
+    setCfg(fixed);
+    setDirty(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
+
+  const link = slug ? `${window.location.origin}/e/${slug}` : "";
+  const embed = link ? `<div class="atlas-quote-embed" style="max-width:600px;margin:0 auto;">\n  <iframe src="${link}" title="Get your quote" loading="lazy" scrolling="no" style="width:100%;height:820px;border:0;display:block;border-radius:18px;overflow:hidden;"></iframe>\n</div>\n<script>\n(function () {\n  var wrap = document.currentScript.previousElementSibling;\n  var frame = wrap && wrap.querySelector("iframe");\n  if (!frame) return;\n  window.addEventListener("message", function (e) {\n    var d = e.data;\n    if (!d || d.atlasEstimate !== "height") return;\n    if (frame.contentWindow && e.source !== frame.contentWindow) return;\n    var h = Number(d.height);\n    if (h > 0) frame.style.height = Math.max(520, Math.ceil(h)) + "px";\n  });\n})();\n</script>` : "";
+  function copy(what, text) {
+    navigator.clipboard?.writeText(text);
+    setCopied(what);
+    setTimeout(() => setCopied(""), 1600);
+  }
+
+  const smallBtn = { display: "flex", alignItems: "center", gap: 5, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 9, padding: "8px 13px", fontSize: 12.5, fontWeight: 700, cursor: "pointer" };
+  const ghostBtn = { display: "flex", alignItems: "center", gap: 5, background: "transparent", border: `1px dashed ${P.border}`, color: P.textMuted, borderRadius: 9, padding: "8px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer", alignSelf: "flex-start" };
+
+  if (loading) return <Panel title="Instant Quote" sub="Loading…"><span /></Panel>;
+
+  if (!cfg) {
+    return (
+      <Panel title="Instant Quote" sub="A page on your website where customers pick their work, see a price range right away, and send you the request. Every request lands in Customers and Follow-ups.">
+        {error && <p style={{ fontSize: 12.5, color: P.danger, margin: "0 0 12px" }}>{error}</p>}
+        <Card style={{ padding: 20 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: P.textPrimary, marginBottom: 6 }}>Set it up in one tap</div>
+          <p style={{ fontSize: 12.5, color: P.textSecondary, margin: "0 0 14px", lineHeight: 1.5 }}>We'll start from the services and prices already in your Settings, plus your logo, phone and name. You can change everything after.</p>
+          <button onClick={startSetup} style={smallBtn}>Start from my services</button>
+        </Card>
+      </Panel>
+    );
+  }
+
+  return (
+    <Panel title="Instant Quote" sub="A page on your website where customers pick their work, see a price range right away, and send you the request. Every request lands in Customers and Follow-ups.">
+      {error && <p style={{ fontSize: 12.5, color: P.danger, margin: "0 0 12px" }}>{error}</p>}
+
+      <Card style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>Page is {enabled ? "on" : "off"}</div>
+          <div style={{ fontSize: 11.5, color: P.textMuted, marginTop: 2 }}>{enabled ? "Customers can use your link." : "Your link shows 'not found' until you turn this on."}</div>
+        </div>
+        <Toggle on={enabled} onClick={() => { setEnabled((v) => !v); setDirty(true); setSaved(false); }} />
+      </Card>
+
+      <Card style={{ padding: 16, marginBottom: 16 }}>
+        <Field label="Web address">
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 9, padding: "9px 12px" }}>
+            <span style={{ fontSize: 12.5, color: P.textMuted, whiteSpace: "nowrap" }}>{window.location.host}/e/</span>
+            <input value={slug} onChange={(e) => { setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "")); setDirty(true); setSaved(false); }} style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none", color: P.textPrimary, fontSize: 13 }} />
+          </div>
+        </Field>
+        {link && !dirty && enabled && (
+          <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+            <button onClick={() => copy("link", link)} style={smallBtn}>{copied === "link" ? <CheckIcon size={13} /> : <Copy size={13} />} Copy link</button>
+            <a href={link} target="_blank" rel="noreferrer" style={{ ...smallBtn, textDecoration: "none" }}><ExternalLink size={13} /> Open page</a>
+            <button onClick={() => copy("embed", embed)} style={smallBtn}>{copied === "embed" ? <CheckIcon size={13} /> : <Copy size={13} />} Copy website code</button>
+          </div>
+        )}
+        {(dirty || !enabled) && <p style={{ fontSize: 11.5, color: P.textMuted, margin: "10px 0 0" }}>{dirty ? "Save your changes to get the link and website code." : "Turn the page on and save to get your link."}</p>}
+        <p style={{ fontSize: 11.5, color: P.textMuted, margin: "10px 0 0", lineHeight: 1.5 }}>Website code: paste it into an HTML / Embed block on your site (Wix, Squarespace, WordPress, Bluehost, GoDaddy, Shopify). Or just share the link.</p>
+      </Card>
+
+      <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "0 0 10px" }}>Services and price ranges</div>
+      <p style={{ fontSize: 12, color: P.textSecondary, margin: "0 0 12px", lineHeight: 1.5 }}>Fill in a low and a high price. Cleaner vehicles quote near the low end, dirtier ones near the high end. Leave the high price blank and customers see "from $X".</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {cfg.services.map((s, i) => (
+          <Card key={i} style={{ padding: 14 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <input value={s.name} onChange={(e) => setService(i, { name: e.target.value })} placeholder="Service name" style={{ ...inputStyle, fontWeight: 700, flex: 2, minWidth: 0 }} />
+              <input value={s.cat || ""} onChange={(e) => setService(i, { cat: e.target.value })} placeholder="Group" style={{ ...inputStyle, flex: 1, minWidth: 0, color: P.textSecondary }} />
+              <button onClick={() => touch({ ...cfg, services: cfg.services.filter((_, idx) => idx !== i) })} title="Remove" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer" }}><Trash2 size={15} /></button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8 }}>
+              <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>Car - low</div><IqPrice value={s.car?.[0]} onChange={(v) => setBand(i, "car", 0, v)} /></div>
+              <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>Car - high</div><IqPrice value={s.car?.[1]} onChange={(v) => setBand(i, "car", 1, v)} placeholder="from" /></div>
+              <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>SUV/Truck - low</div><IqPrice value={s.suv?.[0]} onChange={(v) => setBand(i, "suv", 0, v)} /></div>
+              <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>SUV/Truck - high</div><IqPrice value={s.suv?.[1]} onChange={(v) => setBand(i, "suv", 1, v)} placeholder="from" /></div>
+            </div>
+          </Card>
+        ))}
+        <button onClick={() => touch({ ...cfg, services: [...cfg.services, { name: "", cat: "", desc: "", car: [null, null], suv: [null, null] }] })} style={ghostBtn}><Plus size={12} /> Add service</button>
+      </div>
+
+      <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Add-ons (flat price)</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {cfg.addons.map((a, i) => (
+          <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input value={a.name} onChange={(e) => setAddon(i, { name: e.target.value })} placeholder="Add-on name" style={{ ...inputStyle, flex: 1, minWidth: 0 }} />
+            <div style={{ width: 110 }}><IqPrice value={a.price} onChange={(v) => setAddon(i, { price: v })} /></div>
+            <button onClick={() => touch({ ...cfg, addons: cfg.addons.filter((_, idx) => idx !== i) })} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer" }}><Trash2 size={15} /></button>
+          </div>
+        ))}
+        <button onClick={() => touch({ ...cfg, addons: [...cfg.addons, { name: "", price: null }] })} style={ghostBtn}><Plus size={12} /> Add add-on</button>
+      </div>
+
+      <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Look and wording</div>
+      <Card style={{ padding: 16 }}>
+        <div className="settings-profile-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Field label="Business name"><input value={cfg.brand.name || ""} onChange={(e) => setBrand("name", e.target.value)} style={inputStyle} /></Field>
+          <Field label="Tagline"><input value={cfg.brand.tagline || ""} onChange={(e) => setBrand("tagline", e.target.value)} style={inputStyle} /></Field>
+          <Field label="Phone shown on the page"><input value={cfg.brand.phone || ""} onChange={(e) => setBrand("phone", e.target.value)} style={inputStyle} /></Field>
+          <Field label="Email shown on the page"><input value={cfg.brand.email || ""} onChange={(e) => setBrand("email", e.target.value)} style={inputStyle} /></Field>
+          <Field label="How fast you reply"><input value={cfg.brand.replyWindow || ""} onChange={(e) => setBrand("replyWindow", e.target.value)} placeholder="within 1 business hour" style={inputStyle} /></Field>
+          <Field label="Page headline"><input value={cfg.copy.headline || ""} onChange={(e) => setCopy("headline", e.target.value)} style={inputStyle} /></Field>
+          <Field label="Background">
+            <select value={cfg.brand.theme || "forest"} onChange={(e) => setBrand("theme", e.target.value)} style={inputStyle}>
+              {IQ_THEMES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </Field>
+          <Field label="Accent colour">
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input type="color" value={cfg.brand.accent || "#18D97A"} onChange={(e) => setBrand("accent", e.target.value)} style={{ width: 44, height: 36, border: `1px solid ${P.border}`, borderRadius: 8, background: P.surface, padding: 2, cursor: "pointer" }} />
+              <span style={{ fontSize: 12.5, color: P.textSecondary }}>{cfg.brand.accent}</span>
+            </div>
+          </Field>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 14 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 12, border: `1px solid ${P.border}`, background: cfg.brand.logo ? `url(${cfg.brand.logo}) center/cover` : P.accentSoft, flexShrink: 0 }} />
+          <button onClick={() => logoRef.current?.click()} style={smallBtn}><ImageIcon size={13} /> Change logo</button>
+          {biz?.logo_url && cfg.brand.logo !== biz.logo_url && <button onClick={() => setBrand("logo", biz.logo_url)} style={{ ...ghostBtn, alignSelf: "center" }}>Use my business logo</button>}
+          <input ref={logoRef} type="file" accept="image/*" onChange={onLogo} style={{ display: "none" }} />
+        </div>
+      </Card>
+
+      <div style={{ position: "sticky", bottom: 78, marginTop: 20, display: "flex", alignItems: "center", gap: 12, background: P.bgTop, border: `1px solid ${P.border}`, borderRadius: 12, padding: "10px 14px" }}>
+        <button onClick={save} disabled={saving || !dirty} style={{ ...smallBtn, opacity: saving || !dirty ? 0.5 : 1 }}>
+          {saving ? <Loader2 size={13} className="animate-spin" /> : saved ? <CheckIcon size={13} /> : null} {saved ? "Saved" : "Save changes"}
+        </button>
+        <span style={{ fontSize: 12, color: dirty ? P.secondary : P.textMuted }}>{dirty ? "You have unsaved changes." : "Everything is saved."}</span>
+      </div>
+    </Panel>
+  );
+}
+
 const PANELS = {
-  profile: ProfilePanel, services: ServicesPanel, booking: BookingPanel, page: PublicPagePanel,
+  profile: ProfilePanel, services: ServicesPanel, instantquote: InstantQuotePanel, booking: BookingPanel, page: PublicPagePanel,
   integrations: IntegrationsPanel, taxes: TaxesPanel,
   employees: EmployeesPanel, hours: HoursPanel, notifications: NotificationsPanel, customize: CustomizePanel,
   account: AccountPanel,
