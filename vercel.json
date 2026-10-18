@@ -1,5 +1,12 @@
 {
   "rewrites": [
-    { "source": "/quote/:token", "destination": "/api/quote-portal?token=:token" }
+    {
+      "source": "/quote/:token",
+      "destination": "/api/quote-portal?token=:token"
+    },
+    {
+      "source": "/e/:slug",
+      "destination": "/estimate/index.html"
+    }
   ]
 }

@@ -1,0 +1,53 @@
+<!--
+  ===========================================================
+  ATLAS INSTANT QUOTE - WEBSITE EMBED
+  ===========================================================
+
+  Paste this block into any page on your website where you want
+  the "get a quote" section to appear. It works on Bluehost,
+  WordPress, Wix, Squarespace, GoDaddy, Shopify - anywhere you
+  can add an HTML / "Custom Code" / "Embed" block.
+
+  ONE THING TO CHANGE: replace YOUR-LINK-HERE below with your
+  own quote page address. Everything else stays as it is.
+
+  WORDPRESS: add a "Custom HTML" block and paste this in.
+  WIX / SQUARESPACE: add an "Embed" or "Code" block.
+  BLUEHOST SITE BUILDER: add an "HTML" / "Embed Code" element.
+  SHOPIFY: Online Store > Pages > show the code editor (< >).
+
+  The box resizes itself as the customer opens and closes
+  sections, so you never get an inner scrollbar or a tall
+  empty gap underneath it.
+  ===========================================================
+-->
+
+<div class="atlas-quote-embed" style="max-width:600px;margin:0 auto;">
+  <iframe
+    src="YOUR-LINK-HERE"
+    title="Get your quote"
+    loading="lazy"
+    scrolling="no"
+    style="width:100%;height:820px;border:0;display:block;border-radius:18px;overflow:hidden;">
+  </iframe>
+</div>
+
+<script>
+(function () {
+  // The quote page tells its parent how tall it currently is. Without this the
+  // iframe would be a fixed height, which means either an inner scrollbar or a
+  // big empty gap once the customer collapses a section again.
+  var wrap = document.currentScript.previousElementSibling;
+  var frame = wrap && wrap.querySelector("iframe");
+  if (!frame) return;
+
+  window.addEventListener("message", function (e) {
+    var d = e.data;
+    if (!d || d.atlasEstimate !== "height") return;
+    // Only listen to the frame we actually placed here.
+    if (frame.contentWindow && e.source !== frame.contentWindow) return;
+    var h = Number(d.height);
+    if (h > 0) frame.style.height = Math.max(520, Math.ceil(h)) + "px";
+  });
+})();
+</script>

@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Get Your Estimate — Detail Hero</title>
+<style>
+:root{
+  --bg:#06100C; --panel:#0B1813; --panel2:#0F1B15; --line:#1E2E25;
+  --text:#EDF6F1; --muted:#92AA9D; --dim:#566B5E;
+  --accent:#18D97A; --accent2:#35E890; --warn:#FF7A63;
+  --radius:16px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased}
+body{padding-bottom:120px}
+.wrap{max-width:560px;margin:0 auto;padding:0 16px}
+
+header{padding:20px 0 14px;display:flex;align-items:center;gap:12px}
+.mark{width:40px;height:40px;border-radius:12px;background:linear-gradient(160deg,#0B1813,#06100C);
+  border:1px solid var(--line);display:flex;align-items:center;justify-content:center;flex:none}
+.biz{font-size:17px;font-weight:700;line-height:1.2}
+.bizsub{font-size:12.5px;color:var(--muted);margin-top:2px}
+
+h1{font-size:26px;line-height:1.15;margin:10px 0 8px;letter-spacing:-.01em}
+.lede{font-size:14.5px;color:var(--muted);line-height:1.5;margin:0 0 20px}
+
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:var(--radius);
+  padding:18px;margin-bottom:14px}
+.cardhead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.cardtitle{font-size:15px;font-weight:700}
+.step{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);font-weight:700;margin-bottom:8px}
+.sub{font-size:12.5px;color:var(--dim);margin:-4px 0 12px;line-height:1.45}
+
+label.f{display:block;font-size:12px;color:var(--muted);margin:0 0 6px;font-weight:600}
+input[type=text],input[type=tel],input[type=email],textarea{
+  width:100%;background:var(--panel);border:1px solid var(--line);border-radius:11px;
+  color:var(--text);font-size:16px;padding:12px 13px;font-family:inherit}
+input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(24,217,122,.14)}
+input::placeholder,textarea::placeholder{color:var(--dim)}
+textarea{min-height:84px;resize:vertical}
+.row{display:flex;gap:10px}
+.row>*{flex:1;min-width:0}
+.field{margin-bottom:13px}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{background:var(--panel);border:1px solid var(--line);color:var(--text);
+  border-radius:999px;padding:10px 15px;font-size:14px;font-weight:600;cursor:pointer;
+  font-family:inherit;transition:background .12s,border-color .12s}
+.chip small{display:block;font-size:11px;font-weight:500;color:var(--dim);margin-top:2px}
+.chip[aria-pressed=true]{background:rgba(24,217,122,.14);border-color:var(--accent);color:var(--accent2)}
+.chip[aria-pressed=true] small{color:rgba(53,232,144,.75)}
+
+.svc{display:flex;align-items:flex-start;gap:12px;background:var(--panel);
+  border:1px solid var(--line);border-radius:13px;padding:13px;margin-bottom:9px;
+  cursor:pointer;text-align:left;width:100%;font-family:inherit;color:inherit;
+  transition:border-color .12s,background .12s}
+.svc[aria-pressed=true]{border-color:var(--accent);background:rgba(24,217,122,.08)}
+.box{width:21px;height:21px;border-radius:7px;border:1.5px solid var(--dim);flex:none;margin-top:1px;
+  display:flex;align-items:center;justify-content:center}
+.svc[aria-pressed=true] .box{background:var(--accent);border-color:var(--accent)}
+.box svg{display:none}
+.svc[aria-pressed=true] .box svg{display:block}
+.svcname{display:block;font-size:14.5px;font-weight:650;line-height:1.3}
+.svcdesc{display:block;font-size:12px;color:var(--dim);margin-top:3px;line-height:1.4}
+.svcprice{font-size:13.5px;font-weight:700;color:var(--accent2);white-space:nowrap;margin-left:auto;padding-left:8px}
+.cat{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);
+  font-weight:700;margin:16px 0 8px}
+.cat:first-of-type{margin-top:0}
+
+.ghost{background:none;border:1px dashed var(--line);color:var(--muted);width:100%;
+  border-radius:12px;padding:12px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit}
+.ghost:hover{border-color:var(--accent);color:var(--accent2)}
+.remove{background:none;border:none;color:var(--dim);font-size:12.5px;cursor:pointer;
+  font-family:inherit;padding:4px;font-weight:600}
+.remove:hover{color:var(--warn)}
+
+.bar{position:fixed;left:0;right:0;bottom:0;background:rgba(6,16,12,.93);
+  backdrop-filter:blur(12px);border-top:1px solid var(--line);padding:12px 16px 16px;z-index:40}
+.barin{max-width:560px;margin:0 auto;display:flex;align-items:center;gap:12px}
+.total{flex:1;min-width:0}
+.totlabel{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);font-weight:700}
+.totval{font-size:21px;font-weight:800;color:var(--accent2);line-height:1.15;margin-top:2px;
+  font-variant-numeric:tabular-nums}
+.cta{background:var(--accent);color:#06100C;border:none;border-radius:12px;
+  padding:14px 22px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;flex:none}
+.cta:disabled{background:var(--line);color:var(--dim);cursor:not-allowed}
+
+.note{background:rgba(24,217,122,.07);border:1px solid rgba(24,217,122,.25);
+  border-radius:12px;padding:12px 14px;font-size:12.5px;color:var(--muted);line-height:1.5;margin-top:4px}
+.note b{color:var(--text)}
+
+.line{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;
+  padding:7px 0;border-bottom:1px solid var(--line)}
+.line:last-child{border-bottom:none}
+.line span:last-child{color:var(--accent2);font-weight:700;white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+.vlabel{font-size:12px;color:var(--dim);font-weight:700;text-transform:uppercase;
+  letter-spacing:.1em;margin:12px 0 4px}
+
+.done{text-align:center;padding:40px 0}
+.tick{width:64px;height:64px;border-radius:50%;background:rgba(24,217,122,.14);
+  display:flex;align-items:center;justify-content:center;margin:0 auto 18px}
+footer{text-align:center;padding:26px 0 10px;font-size:11.5px;color:var(--dim)}
+footer b{color:var(--muted)}
+.err{color:var(--warn);font-size:12.5px;margin-top:6px}
+</style>
+</head>
+<body>
+
+<div class="wrap" id="app"></div>
+
+<div class="bar" id="bar" hidden>
+  <div class="barin">
+    <div class="total">
+      <div class="totlabel">Your estimate</div>
+      <div class="totval" id="totval">—</div>
+    </div>
+    <button class="cta" id="cta">Continue</button>
+  </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------
+// Atlas Instant Estimate — prototype
+// Seeded with Detail Hero's real service catalog so the numbers are
+// the ones a live business would actually show.
+// In production this catalog comes from the `services` table.
+// ---------------------------------------------------------------
+
+const BIZ = {
+  name: "Detail Hero",
+  tagline: "Mobile detailing & ceramic coatings",
+  phone: "(407) 227-4673",
+  replyWindow: "within 1 business hour",
+};
+
+// price_car_low/high and price_suv_low/high straight out of Atlas.
+// high === null means the business set a starting price, not a band.
+const SERVICES = [
+  { cat:"Mobile Maintenance", name:"Platinum Seal Package",
+    desc:"Maintenance wash, interior wipe-down and a sealant top-up.",
+    car:[175,200], suv:[200,225] },
+  { cat:"Mobile Maintenance", name:"Platinum 5-Star Detail",
+    desc:"Full inside-and-out detail. The one most people book first.",
+    car:[275,350], suv:[300,500] },
+  { cat:"Paint Correction", name:"Stage 1 CPR Package",
+    desc:"Single-stage polish to pull out light swirls and haze.",
+    car:[600,null], suv:[700,null] },
+  { cat:"Paint Correction", name:"Stage 2 CPR Package",
+    desc:"Two-stage correction for deeper defects and dull paint.",
+    car:[600,null], suv:[700,null] },
+  { cat:"Ceramic Coatings", name:"499 Fall Special",
+    desc:"Entry coating package at the fall promo price.",
+    car:[499,1000], suv:[499,1200] },
+  { cat:"Ceramic Coatings", name:"3 Year Graphene Coating",
+    desc:"Three years of protection, gloss and easier washes.",
+    car:[800,1000], suv:[1000,1200] },
+  { cat:"Ceramic Coatings", name:"5 Year Graphene Coating",
+    desc:"Five-year graphene coating with prep and correction.",
+    car:[1000,null], suv:[1200,null] },
+  { cat:"Ceramic Coatings", name:"10 Year Graphene Coating",
+    desc:"Our longest-lasting package, including paint correction.",
+    car:[2000,2500], suv:[2200,3000] },
+];
+
+const ADDONS = [
+  { name:"Wheel Coating", price:200 },
+  { name:"Glass Coating", price:200 },
+  { name:"Interior Coating", price:200 },
+];
+
+const SIZES = [
+  { id:"car", label:"Car / Sedan", hint:"Coupe, sedan, small hatch" },
+  { id:"suv", label:"SUV / Truck / Van", hint:"3-row, pickup, minivan" },
+];
+
+// Condition decides WHERE in the business's price band this job lands.
+// Light work sits at the bottom of the band, heavy work at the top —
+// so the range a customer sees is honest for their actual vehicle
+// instead of just repeating the full catalog spread every time.
+const CONDITIONS = [
+  { id:"light",    label:"Light",    hint:"Looks after itself",      band:[0,.25] },
+  { id:"moderate", label:"Moderate", hint:"Normal daily driver",     band:[.25,.65] },
+  { id:"heavy",    label:"Heavy",    hint:"Needs real work",         band:[.65,1] },
+];
+
+// How long since the last clean nudges the top of the range only —
+// it never lowers the floor, so we can't under-promise.
+const FREQUENCIES = [
+  { id:"monthly", label:"About monthly",       uplift:0 },
+  { id:"few",     label:"Every few months",    uplift:0 },
+  { id:"twice",   label:"Twice a year",        uplift:.05 },
+  { id:"rare",    label:"Once a year or less", uplift:.10 },
+];
+
+const PEAK = '<svg width="24" height="24" viewBox="0 0 100 100" aria-hidden="true">'
+  + '<path d="M18 82 L49 33 L51 33 L82 82" stroke="#18D97A" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+  + '<circle cx="50" cy="31" r="18" fill="#35E890"/></svg>';
+const CHECK = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#06100C" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5.2 5.2L20 7"/></svg>';
+
+let state = {
+  screen: "form",
+  vehicles: [ newVehicle() ],
+  contact: { name:"", phone:"", email:"", address:"", notes:"" },
+  touched: false,
+};
+
+function newVehicle(){
+  return { id: Math.random().toString(36).slice(2,9),
+    year:"", make:"", model:"", size:"car", condition:"moderate", frequency:"few",
+    services:[], addons:[] };
+}
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = n => "$" + Math.round(n).toLocaleString();
+const round5 = n => Math.round(n/5)*5;
+
+// A single service's range for one vehicle, after condition + frequency.
+function priceFor(svc, v){
+  const band = svc[v.size === "suv" ? "suv" : "car"];
+  const low = band[0];
+  const high = band[1];
+  const cond = CONDITIONS.find(c => c.id === v.condition) || CONDITIONS[1];
+  const freq = FREQUENCIES.find(f => f.id === v.frequency) || FREQUENCIES[1];
+
+  if (high == null) {
+    // Business published a starting price, not a band. Keep it a floor and
+    // let condition add on top, so we never quote below what they set.
+    const add = low * (cond.band[1] * 0.18 + freq.uplift);
+    return { low: round5(low), high: round5(low + add), open: true };
+  }
+  const spread = high - low;
+  return {
+    low:  round5(low + spread * cond.band[0]),
+    high: round5((low + spread * cond.band[1]) * (1 + freq.uplift)),
+    open: false,
+  };
+}
+
+function vehicleTotal(v){
+  let low = 0, high = 0, open = false;
+  v.services.forEach(name => {
+    const svc = SERVICES.find(s => s.name === name); if (!svc) return;
+    const p = priceFor(svc, v); low += p.low; high += p.high; open = open || p.open;
+  });
+  v.addons.forEach(name => {
+    const a = ADDONS.find(x => x.name === name); if (!a) return;
+    low += a.price; high += a.price;
+  });
+  return { low, high, open };
+}
+
+function grandTotal(){
+  return state.vehicles.reduce((acc,v) => {
+    const t = vehicleTotal(v);
+    return { low: acc.low + t.low, high: acc.high + t.high, open: acc.open || t.open };
+  }, { low:0, high:0, open:false });
+}
+
+function rangeText(t){
+  if (!t.low && !t.high) return "—";
+  if (t.low === t.high) return money(t.low);
+  return money(t.low) + " – " + money(t.high);
+}
+
+function anyServices(){ return state.vehicles.some(v => v.services.length || v.addons.length); }
+
+function contactReady(){
+  const c = state.contact;
+  return c.name.trim().length > 1 && (c.phone.trim().length >= 7 || /\S+@\S+\.\S+/.test(c.email));
+}
+
+// ---------------------------------------------------------------
+// Render
+// ---------------------------------------------------------------
+function vehicleCard(v, i){
+  const multi = state.vehicles.length > 1;
+  const t = vehicleTotal(v);
+  const cats = [...new Set(SERVICES.map(s => s.cat))];
+
+  return `
+  <div class="card">
+    <div class="cardhead">
+      <div class="cardtitle">${multi ? "Vehicle " + (i+1) : "Your vehicle"}</div>
+      ${multi ? `<button class="remove" data-act="rmveh" data-i="${i}">Remove</button>` : ""}
+    </div>
+
+    <div class="row">
+      <div class="field"><label class="f" for="y${v.id}">Year</label>
+        <input type="text" id="y${v.id}" inputmode="numeric" maxlength="4" placeholder="2021"
+          value="${esc(v.year)}" data-veh="${i}" data-k="year"></div>
+      <div class="field"><label class="f" for="mk${v.id}">Make</label>
+        <input type="text" id="mk${v.id}" placeholder="Toyota" value="${esc(v.make)}" data-veh="${i}" data-k="make"></div>
+    </div>
+    <div class="field"><label class="f" for="md${v.id}">Model</label>
+      <input type="text" id="md${v.id}" placeholder="4Runner" value="${esc(v.model)}" data-veh="${i}" data-k="model"></div>
+
+    <div class="field">
+      <label class="f">Size</label>
+      <div class="chips">${SIZES.map(s => `
+        <button class="chip" aria-pressed="${v.size===s.id}" data-act="size" data-i="${i}" data-v="${s.id}">
+          ${s.label}<small>${s.hint}</small></button>`).join("")}
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="f">How dirty is it right now?</label>
+      <div class="chips">${CONDITIONS.map(c => `
+        <button class="chip" aria-pressed="${v.condition===c.id}" data-act="cond" data-i="${i}" data-v="${c.id}">
+          ${c.label}<small>${c.hint}</small></button>`).join("")}
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="f">How often does it get detailed?</label>
+      <div class="chips">${FREQUENCIES.map(f => `
+        <button class="chip" aria-pressed="${v.frequency===f.id}" data-act="freq" data-i="${i}" data-v="${f.id}">
+          ${f.label}</button>`).join("")}
+      </div>
+    </div>
+
+    <div class="field" style="margin-top:18px">
+      <label class="f">What are you looking for?</label>
+      <div class="sub">Pick as many as you want.</div>
+      ${cats.map(cat => `
+        <div class="cat">${cat}</div>
+        ${SERVICES.filter(s => s.cat === cat).map(s => {
+          const p = priceFor(s, v), on = v.services.includes(s.name);
+          return `<button class="svc" aria-pressed="${on}" data-act="svc" data-i="${i}" data-v="${esc(s.name)}">
+            <span class="box">${CHECK}</span>
+            <span style="flex:1;min-width:0">
+              <span class="svcname">${esc(s.name)}</span>
+              <span class="svcdesc">${esc(s.desc)}</span>
+            </span>
+            <span class="svcprice">${p.open ? "from " + money(p.low) : money(p.low) + "–" + money(p.high)}</span>
+          </button>`;
+        }).join("")}
+      `).join("")}
+
+      <div class="cat">Add-ons</div>
+      ${ADDONS.map(a => {
+        const on = v.addons.includes(a.name);
+        return `<button class="svc" aria-pressed="${on}" data-act="addon" data-i="${i}" data-v="${esc(a.name)}">
+          <span class="box">${CHECK}</span>
+          <span style="flex:1;min-width:0"><span class="svcname">${esc(a.name)}</span></span>
+          <span class="svcprice">+${money(a.price)}</span>
+        </button>`;
+      }).join("")}
+    </div>
+
+    ${t.low ? `<div class="note" style="margin-top:14px">
+      <b>${multi ? "This vehicle" : "Your estimate"}: ${rangeText(t)}</b></div>` : ""}
+  </div>`;
+}
+
+function formScreen(){
+  const t = grandTotal();
+  return `
+  <header>
+    <div class="mark">${PEAK}</div>
+    <div><div class="biz">${esc(BIZ.name)}</div>
+      <div class="bizsub">${esc(BIZ.tagline)}</div></div>
+  </header>
+
+  <h1>Get your estimate</h1>
+  <p class="lede">Tell us about your vehicle and what you want done. You'll see a price range
+    right away, then send it over and we'll confirm the exact number.</p>
+
+  ${state.vehicles.map(vehicleCard).join("")}
+
+  <button class="ghost" data-act="addveh" style="margin-bottom:18px">+ Add another vehicle</button>
+
+  <div class="card">
+    <div class="step">Last step</div>
+    <div class="cardtitle" style="margin-bottom:12px">Where do we send it?</div>
+    <div class="field"><label class="f" for="cname">Your name</label>
+      <input type="text" id="cname" placeholder="John Doe" value="${esc(state.contact.name)}" data-c="name"></div>
+    <div class="row">
+      <div class="field"><label class="f" for="cphone">Phone</label>
+        <input type="tel" id="cphone" placeholder="(407) 555-0123" value="${esc(state.contact.phone)}" data-c="phone"></div>
+      <div class="field"><label class="f" for="cemail">Email</label>
+        <input type="email" id="cemail" placeholder="you@email.com" value="${esc(state.contact.email)}" data-c="email"></div>
+    </div>
+    <div class="field"><label class="f" for="caddr">Where is the vehicle? <span style="color:var(--dim);font-weight:500">(optional)</span></label>
+      <input type="text" id="caddr" placeholder="Street, city" value="${esc(state.contact.address)}" data-c="address"></div>
+    <div class="field" style="margin-bottom:0"><label class="f" for="cnotes">Anything we should know? <span style="color:var(--dim);font-weight:500">(optional)</span></label>
+      <textarea id="cnotes" placeholder="Pet hair in the back, scratch on the driver door…" data-c="notes">${esc(state.contact.notes)}</textarea></div>
+    ${state.touched && !contactReady() ? `<div class="err">Add your name and a phone number or email so we can reply.</div>` : ""}
+  </div>
+
+  <div class="note">
+    <b>This is an estimate, not a final price.</b> ${esc(BIZ.name)} confirms the exact number
+    once they see the vehicle. Nothing is booked and no card is needed.
+  </div>
+
+  <footer>Powered by <b>Atlas</b></footer>`;
+}
+
+function doneScreen(){
+  const t = grandTotal();
+  return `
+  <header>
+    <div class="mark">${PEAK}</div>
+    <div><div class="biz">${esc(BIZ.name)}</div>
+      <div class="bizsub">${esc(BIZ.tagline)}</div></div>
+  </header>
+
+  <div class="done">
+    <div class="tick"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#18D97A"
+      stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5.2 5.2L20 7"/></svg></div>
+    <h1 style="margin:0 0 8px">Request sent</h1>
+    <p class="lede" style="margin:0">${esc(BIZ.name)} will get back to you ${esc(BIZ.replyWindow)}.
+      Need it sooner? Call or text ${esc(BIZ.phone)}.</p>
+  </div>
+
+  <div class="card">
+    <div class="cardtitle" style="margin-bottom:10px">What you asked for</div>
+    ${state.vehicles.map((v,i) => {
+      const rows = [
+        ...v.services.map(n => { const s = SERVICES.find(x=>x.name===n); const p = priceFor(s,v);
+          return `<div class="line"><span>${esc(n)}</span><span>${p.open?"from "+money(p.low):money(p.low)+"–"+money(p.high)}</span></div>`; }),
+        ...v.addons.map(n => { const a = ADDONS.find(x=>x.name===n);
+          return `<div class="line"><span>${esc(n)}</span><span>+${money(a.price)}</span></div>`; }),
+      ].join("");
+      const label = [v.year, v.make, v.model].filter(Boolean).join(" ") || ("Vehicle " + (i+1));
+      return `<div class="vlabel">${esc(label)}</div>${rows || '<div class="line"><span style="color:var(--dim)">Nothing selected</span><span></span></div>'}`;
+    }).join("")}
+    <div class="line" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
+      <span style="font-weight:700">Estimated total</span><span>${rangeText(t)}</span></div>
+  </div>
+
+  <div class="note">We saved this to ${esc(BIZ.name)}'s Atlas inbox with your vehicle details and
+    condition notes, so they already know what they're looking at before they call.</div>
+
+  <footer>Powered by <b>Atlas</b></footer>`;
+}
+
+function render(){
+  document.getElementById("app").innerHTML =
+    state.screen === "form" ? formScreen() : doneScreen();
+
+  const bar = document.getElementById("bar");
+  if (state.screen !== "form") { bar.hidden = true; return; }
+  bar.hidden = false;
+  const t = grandTotal();
+  document.getElementById("totval").textContent = t.open && t.low ? rangeText(t) + "+" : rangeText(t);
+  const cta = document.getElementById("cta");
+  cta.disabled = !anyServices();
+  cta.textContent = "Send request";
+}
+
+// ---------------------------------------------------------------
+// Events
+// ---------------------------------------------------------------
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const act = b.dataset.act, i = Number(b.dataset.i), val = b.dataset.v;
+  const v = state.vehicles[i];
+
+  if (act === "addveh") { state.vehicles.push(newVehicle()); render();
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); return; }
+  if (act === "rmveh")  { state.vehicles.splice(i,1); render(); return; }
+  if (act === "size")   { v.size = val; render(); return; }
+  if (act === "cond")   { v.condition = val; render(); return; }
+  if (act === "freq")   { v.frequency = val; render(); return; }
+  if (act === "svc")    { toggle(v.services, val); render(); return; }
+  if (act === "addon")  { toggle(v.addons, val); render(); return; }
+});
+
+function toggle(arr, val){
+  const i = arr.indexOf(val);
+  if (i === -1) arr.push(val); else arr.splice(i,1);
+}
+
+// Typing must not re-render — that would steal focus on every keystroke.
+document.addEventListener("input", e => {
+  const el = e.target;
+  if (el.dataset.veh !== undefined) { state.vehicles[Number(el.dataset.veh)][el.dataset.k] = el.value; return; }
+  if (el.dataset.c) { state.contact[el.dataset.c] = el.value; }
+});
+
+document.getElementById("cta").addEventListener("click", () => {
+  state.touched = true;
+  if (!anyServices()) return;
+  // An empty extra vehicle someone added and then ignored shouldn't show up
+  // on the summary or land in the business's inbox as a blank line.
+  state.vehicles = state.vehicles.filter(v => v.services.length || v.addons.length);
+  if (!contactReady()) {
+    render();
+    const el = document.getElementById("cname");
+    if (el) { el.scrollIntoView({ block:"center", behavior:"smooth" }); el.focus(); }
+    return;
+  }
+  // Production: POST this payload to the estimate-request endpoint, which
+  // writes a customer + a quote row into the business's Atlas account.
+  console.log("ESTIMATE REQUEST", JSON.stringify(buildPayload(), null, 2));
+  state.screen = "done";
+  render();
+  window.scrollTo({ top:0 });
+});
+
+function buildPayload(){
+  const t = grandTotal();
+  return {
+    business: BIZ.name,
+    contact: state.contact,
+    estimate_low: t.low,
+    estimate_high: t.high,
+    vehicles: state.vehicles.map(v => ({
+      year: v.year, make: v.make, model: v.model, size_class: v.size,
+      condition: v.condition, clean_frequency: v.frequency,
+      services: v.services, addons: v.addons,
+      range: vehicleTotal(v),
+    })),
+    submitted_at: new Date().toISOString(),
+  };
+}
+
+render();
+</script>
+</body>
+</html>

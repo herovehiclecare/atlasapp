@@ -58,7 +58,7 @@ function LeadToast({ lead, onView, onDismiss }) {
         <UserPlus size={18} color="#18D97A" />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#EDF6F1" }}>{lead.source === "facebook_messenger" ? "New Facebook Messenger lead" : "New Facebook lead"}</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#EDF6F1" }}>{lead.source === "estimate_request" ? "New Instant Quote request" : lead.source === "facebook_messenger" ? "New Facebook Messenger lead" : "New Facebook lead"}</div>
         <div style={{ fontSize: 12.5, color: "#92AA9D", marginTop: 2 }}>{lead.name || "A new lead"} just came in — reach out fast.</div>
         {lead.created_at && (
           <div style={{ fontSize: 11, color: "#566B5E", marginTop: 2 }}>
@@ -182,7 +182,7 @@ export default function App() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "customers", filter: `business_id=eq.${businessId}` },
         (payload) => {
-          if (payload.new?.source === "facebook_lead_ads" || payload.new?.source === "facebook_messenger") {
+          if (payload.new?.source === "facebook_lead_ads" || payload.new?.source === "facebook_messenger" || payload.new?.source === "estimate_request") {
             setLeadToast(payload.new);
           }
         }

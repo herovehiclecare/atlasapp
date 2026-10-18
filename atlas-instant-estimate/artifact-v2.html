@@ -1,0 +1,302 @@
+<title>Atlas Instant Quote</title>
+<style>
+:root{
+  --bg:#06100C; --panel:#0B1813; --panel2:#0F1B15; --line:#1E2E25;
+  --text:#EDF6F1; --muted:#92AA9D; --dim:#566B5E;
+  --accent:#18D97A; --accent2:#35E890; --warn:#FF7A63;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased}
+/* The page is viewport-fit=cover so the background runs edge to edge, which
+   means every edge has to pay the safe area back or the header sits under the
+   clock and the Send button sits under the home bar. The extra bottom padding
+   is the height of the fixed bar plus that inset, so the last drawer can always
+   be scrolled clear of it. */
+body{padding-bottom:calc(142px + env(safe-area-inset-bottom))}
+.wrap{position:relative;z-index:1;max-width:560px;margin:0 auto;
+  padding-left:max(16px, env(safe-area-inset-left));
+  padding-right:max(16px, env(safe-area-inset-right))}
+
+/* ---- Atlas hex print: the peak mark tiled like armour plating. Each plate
+   carries its own weight so the grid catches light unevenly instead of
+   reading as graph paper, and only a few plates carry the mark. ---- */
+.print{position:absolute;top:0;left:0;right:0;height:860px;z-index:0;pointer-events:none;
+  -webkit-mask-image:linear-gradient(#000 0%,#000 26%,transparent 62%);
+  mask-image:linear-gradient(#000 0%,#000 26%,transparent 62%)}
+.print.soft{-webkit-mask-image:linear-gradient(transparent 0%,#000 34%,transparent 92%);
+  mask-image:linear-gradient(transparent 0%,#000 34%,transparent 92%)}
+
+/* The plate pattern is painted as a mask over the brand colour, so when a
+   business changes their accent the print follows instead of staying green. */
+.printin{position:absolute;inset:0;background:var(--accent);opacity:var(--printo,.62);
+  -webkit-mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='69.28' viewBox='0 0 120 69.28'><g fill='none' stroke='%23ffffff' stroke-width='1'><path d='M20 -34.64L10 -17.32L-10 -17.32L-20 -34.64L-10 -51.96L10 -51.96Z' stroke-opacity='0.11'/><path d='M20 0L10 17.32L-10 17.32L-20 0L-10 -17.32L10 -17.32Z' stroke-opacity='0.05'/><path d='M20 34.64L10 51.96L-10 51.96L-20 34.64L-10 17.32L10 17.32Z' stroke-opacity='0.08'/><path d='M20 69.28L10 86.6L-10 86.6L-20 69.28L-10 51.96L10 51.96Z' stroke-opacity='0.035'/><path d='M50 -17.32L40 0L20 0L10 -17.32L20 -34.64L40 -34.64Z' stroke-opacity='0.13'/><path d='M50 17.32L40 34.64L20 34.64L10 17.32L20 0L40 0Z' stroke-opacity='0.06'/><path d='M50 51.96L40 69.28L20 69.28L10 51.96L20 34.64L40 34.64Z' stroke-opacity='0.09'/><path d='M50 86.6L40 103.92L20 103.92L10 86.6L20 69.28L40 69.28Z' stroke-opacity='0.04'/><path d='M80 -34.64L70 -17.32L50 -17.32L40 -34.64L50 -51.96L70 -51.96Z' stroke-opacity='0.07'/><path d='M80 0L70 17.32L50 17.32L40 0L50 -17.32L70 -17.32Z' stroke-opacity='0.12'/><path d='M80 34.64L70 51.96L50 51.96L40 34.64L50 17.32L70 17.32Z' stroke-opacity='0.045'/><path d='M80 69.28L70 86.6L50 86.6L40 69.28L50 51.96L70 51.96Z' stroke-opacity='0.1'/><path d='M110 -17.32L100 0L80 0L70 -17.32L80 -34.64L100 -34.64Z' stroke-opacity='0.11'/><path d='M110 17.32L100 34.64L80 34.64L70 17.32L80 0L100 0Z' stroke-opacity='0.05'/><path d='M110 51.96L100 69.28L80 69.28L70 51.96L80 34.64L100 34.64Z' stroke-opacity='0.08'/><path d='M110 86.6L100 103.92L80 103.92L70 86.6L80 69.28L100 69.28Z' stroke-opacity='0.035'/><path d='M140 -34.64L130 -17.32L110 -17.32L100 -34.64L110 -51.96L130 -51.96Z' stroke-opacity='0.13'/><path d='M140 0L130 17.32L110 17.32L100 0L110 -17.32L130 -17.32Z' stroke-opacity='0.06'/><path d='M140 34.64L130 51.96L110 51.96L100 34.64L110 17.32L130 17.32Z' stroke-opacity='0.09'/><path d='M140 69.28L130 86.6L110 86.6L100 69.28L110 51.96L130 51.96Z' stroke-opacity='0.04'/></g><path d='M-5.44 5.1L-0.17 -3.23L0.17 -3.23L5.44 5.1' fill='none' stroke='%23ffffff' stroke-opacity='0.05' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='0' cy='-3.57' r='3.06' fill='%23ffffff' fill-opacity='0.04'/><path d='M24.56 57.06L29.83 48.73L30.17 48.73L35.44 57.06' fill='none' stroke='%23ffffff' stroke-opacity='0.08' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='30' cy='48.39' r='3.06' fill='%23ffffff' fill-opacity='0.06'/><path d='M54.56 39.74L59.83 31.41L60.17 31.41L65.44 39.74' fill='none' stroke='%23ffffff' stroke-opacity='0.04' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='60' cy='31.07' r='3.06' fill='%23ffffff' fill-opacity='0.03'/><path d='M84.56 22.42L89.83 14.09L90.17 14.09L95.44 22.42' fill='none' stroke='%23ffffff' stroke-opacity='0.05' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='90' cy='13.75' r='3.06' fill='%23ffffff' fill-opacity='0.04'/><path d='M114.56 74.38L119.83 66.05L120.17 66.05L125.44 74.38' fill='none' stroke='%23ffffff' stroke-opacity='0.04' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='120' cy='65.71' r='3.06' fill='%23ffffff' fill-opacity='0.03'/></svg>");
+  mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='69.28' viewBox='0 0 120 69.28'><g fill='none' stroke='%23ffffff' stroke-width='1'><path d='M20 -34.64L10 -17.32L-10 -17.32L-20 -34.64L-10 -51.96L10 -51.96Z' stroke-opacity='0.11'/><path d='M20 0L10 17.32L-10 17.32L-20 0L-10 -17.32L10 -17.32Z' stroke-opacity='0.05'/><path d='M20 34.64L10 51.96L-10 51.96L-20 34.64L-10 17.32L10 17.32Z' stroke-opacity='0.08'/><path d='M20 69.28L10 86.6L-10 86.6L-20 69.28L-10 51.96L10 51.96Z' stroke-opacity='0.035'/><path d='M50 -17.32L40 0L20 0L10 -17.32L20 -34.64L40 -34.64Z' stroke-opacity='0.13'/><path d='M50 17.32L40 34.64L20 34.64L10 17.32L20 0L40 0Z' stroke-opacity='0.06'/><path d='M50 51.96L40 69.28L20 69.28L10 51.96L20 34.64L40 34.64Z' stroke-opacity='0.09'/><path d='M50 86.6L40 103.92L20 103.92L10 86.6L20 69.28L40 69.28Z' stroke-opacity='0.04'/><path d='M80 -34.64L70 -17.32L50 -17.32L40 -34.64L50 -51.96L70 -51.96Z' stroke-opacity='0.07'/><path d='M80 0L70 17.32L50 17.32L40 0L50 -17.32L70 -17.32Z' stroke-opacity='0.12'/><path d='M80 34.64L70 51.96L50 51.96L40 34.64L50 17.32L70 17.32Z' stroke-opacity='0.045'/><path d='M80 69.28L70 86.6L50 86.6L40 69.28L50 51.96L70 51.96Z' stroke-opacity='0.1'/><path d='M110 -17.32L100 0L80 0L70 -17.32L80 -34.64L100 -34.64Z' stroke-opacity='0.11'/><path d='M110 17.32L100 34.64L80 34.64L70 17.32L80 0L100 0Z' stroke-opacity='0.05'/><path d='M110 51.96L100 69.28L80 69.28L70 51.96L80 34.64L100 34.64Z' stroke-opacity='0.08'/><path d='M110 86.6L100 103.92L80 103.92L70 86.6L80 69.28L100 69.28Z' stroke-opacity='0.035'/><path d='M140 -34.64L130 -17.32L110 -17.32L100 -34.64L110 -51.96L130 -51.96Z' stroke-opacity='0.13'/><path d='M140 0L130 17.32L110 17.32L100 0L110 -17.32L130 -17.32Z' stroke-opacity='0.06'/><path d='M140 34.64L130 51.96L110 51.96L100 34.64L110 17.32L130 17.32Z' stroke-opacity='0.09'/><path d='M140 69.28L130 86.6L110 86.6L100 69.28L110 51.96L130 51.96Z' stroke-opacity='0.04'/></g><path d='M-5.44 5.1L-0.17 -3.23L0.17 -3.23L5.44 5.1' fill='none' stroke='%23ffffff' stroke-opacity='0.05' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='0' cy='-3.57' r='3.06' fill='%23ffffff' fill-opacity='0.04'/><path d='M24.56 57.06L29.83 48.73L30.17 48.73L35.44 57.06' fill='none' stroke='%23ffffff' stroke-opacity='0.08' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='30' cy='48.39' r='3.06' fill='%23ffffff' fill-opacity='0.06'/><path d='M54.56 39.74L59.83 31.41L60.17 31.41L65.44 39.74' fill='none' stroke='%23ffffff' stroke-opacity='0.04' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='60' cy='31.07' r='3.06' fill='%23ffffff' fill-opacity='0.03'/><path d='M84.56 22.42L89.83 14.09L90.17 14.09L95.44 22.42' fill='none' stroke='%23ffffff' stroke-opacity='0.05' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='90' cy='13.75' r='3.06' fill='%23ffffff' fill-opacity='0.04'/><path d='M114.56 74.38L119.83 66.05L120.17 66.05L125.44 74.38' fill='none' stroke='%23ffffff' stroke-opacity='0.04' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='120' cy='65.71' r='3.06' fill='%23ffffff' fill-opacity='0.03'/></svg>");
+  -webkit-mask-size:132px 76px;mask-size:132px 76px}
+.soft .printin{filter:blur(1.6px);opacity:calc(var(--printo,.62) * .68);-webkit-mask-size:150px 86.6px;mask-size:150px 86.6px}
+
+/* Soft green bloom behind the header so the print sits in light rather than
+   on a flat black field. */
+.bloom{position:absolute;top:0;left:0;right:0;height:720px;z-index:0;pointer-events:none;
+  background:var(--bloom)}
+
+.band{position:relative;z-index:1;background:var(--bandbg),var(--bandbase);
+  border-bottom:2px solid var(--accent);margin-bottom:22px;
+  padding:calc(20px + env(safe-area-inset-top)) 0 22px}
+.bandin{max-width:560px;margin:0 auto;display:flex;align-items:center;gap:14px;
+  padding-left:max(16px, env(safe-area-inset-left));
+  padding-right:max(16px, env(safe-area-inset-right))}
+.mark{width:52px;height:52px;border-radius:50%;background:var(--bg);border:1.5px solid var(--line);
+  display:flex;align-items:center;justify-content:center;flex:none}
+.kick{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent2);font-weight:800}
+.biz{font-size:23px;font-weight:800;line-height:1.1;margin-top:3px;letter-spacing:-.01em}
+
+/* Centred so the ragged right edge of the wrapped sub-line doesn't read as a
+   page that's sitting off to one side. The content below stays left-aligned. */
+h1{font-size:34px;line-height:1.08;margin:0 0 10px;letter-spacing:-.02em;font-weight:800;
+  text-align:center;text-wrap:balance}
+.lede{font-size:15.5px;color:var(--muted);line-height:1.5;margin:0 auto 24px;
+  text-align:center;max-width:34ch;text-wrap:pretty}
+
+.hero{background:var(--herobg);border:1.5px solid var(--accent);
+  border-radius:20px;padding:22px 24px;margin:0 0 22px;box-shadow:0 14px 34px rgba(0,0,0,.45)}
+.herolabel{font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent2);font-weight:800}
+.heroval{font-size:42px;font-weight:800;line-height:1.05;margin-top:7px;letter-spacing:-.025em;
+  font-variant-numeric:tabular-nums}
+.herosub{font-size:13.5px;color:var(--herotext);margin-top:8px;line-height:1.45}
+
+.secnum{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);
+  font-weight:800;margin:26px 0 10px}
+
+/* ---- everything is a drawer: nothing is open unless you opened it ---- */
+.acc{border:1.5px solid var(--line);border-radius:16px;margin-bottom:11px;overflow:hidden;
+  background:var(--panel2)}
+.acc.on{border-color:var(--accentsoft)}
+.acchead{display:flex;align-items:center;gap:13px;width:100%;background:none;border:none;
+  color:inherit;font-family:inherit;cursor:pointer;padding:18px;text-align:left}
+.accname{font-size:17.5px;font-weight:800;letter-spacing:-.01em}
+.accmeta{margin-left:auto;font-size:13.5px;font-weight:700;color:var(--dim);white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+.accmeta.has{color:var(--accent2)}
+.chev{flex:none;width:22px;height:22px;display:flex;align-items:center;justify-content:center;
+  transition:transform .18s ease;color:var(--muted)}
+.acchead[aria-expanded=true] .chev{transform:rotate(180deg);color:var(--accent2)}
+.accbody{padding:0 18px 18px}
+.count{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;
+  padding:0 7px;border-radius:999px;background:var(--accent);color:var(--onaccent);font-size:12.5px;
+  font-weight:800;margin-left:9px}
+
+label.f{display:block;font-size:12.5px;color:var(--muted);margin:0 0 7px;font-weight:700}
+input[type=text],input[type=tel],input[type=email],textarea{
+  width:100%;background:var(--panel);border:1.5px solid var(--line);border-radius:13px;
+  color:var(--text);font-size:17px;padding:14px;font-family:inherit;font-weight:600}
+input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(24,217,122,.16)}
+input::placeholder,textarea::placeholder{color:var(--dim);font-weight:500}
+textarea{min-height:92px;resize:vertical;font-weight:500}
+.row{display:flex;gap:11px}.row>*{flex:1;min-width:0}
+.field{margin-bottom:15px}
+
+.chips{display:flex;flex-wrap:wrap;gap:9px}
+.chip{background:var(--panel);border:1.5px solid var(--line);color:var(--text);
+  border-radius:999px;padding:13px 20px;font-size:16px;font-weight:700;cursor:pointer;
+  font-family:inherit;transition:background .12s,border-color .12s}
+.chip small{display:block;font-size:11.5px;font-weight:600;color:var(--dim);margin-top:3px}
+.chip[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:var(--onaccent)}
+.chip[aria-pressed=true] small{color:var(--onaccent);opacity:.72}
+
+.svc{display:flex;align-items:center;gap:14px;background:var(--panel);
+  border:1.5px solid var(--line);border-radius:16px;padding:16px 17px;margin-bottom:10px;
+  cursor:pointer;text-align:left;width:100%;font-family:inherit;color:inherit;
+  transition:border-color .12s,background .12s}
+.svc:last-child{margin-bottom:0}
+.svc[aria-pressed=true]{border-color:var(--accent);background:var(--notebg)}
+.box{width:26px;height:26px;border-radius:9px;border:2px solid var(--dim);flex:none;
+  display:flex;align-items:center;justify-content:center}
+.svc[aria-pressed=true] .box{background:var(--accent);border-color:var(--accent);color:var(--onaccent)}
+.box svg{display:none}.svc[aria-pressed=true] .box svg{display:block}
+.svcname{display:block;font-size:17px;font-weight:800;line-height:1.25;letter-spacing:-.01em}
+.svcdesc{display:block;font-size:13px;color:var(--dim);margin-top:4px;line-height:1.4}
+.svcprice{font-size:17px;font-weight:800;color:var(--accent2);white-space:nowrap;margin-left:auto;
+  padding-left:10px;font-variant-numeric:tabular-nums}
+
+.ghost{background:none;border:2px dashed var(--line);color:var(--muted);width:100%;
+  border-radius:15px;padding:16px;font-size:15.5px;font-weight:800;cursor:pointer;font-family:inherit}
+.ghost:hover{border-color:var(--accent);color:var(--accent2)}
+.remove{background:none;border:none;color:var(--dim);font-size:13px;cursor:pointer;
+  font-family:inherit;padding:4px 2px;font-weight:700}
+.remove:hover{color:var(--warn)}
+
+/* Embedded in someone's page the frame has no scrollbar of its own, so a
+   fixed bar would hang in the middle of their layout. Let it sit at the end
+   of the content instead; standalone it stays pinned to the screen. */
+body.embedded{padding-bottom:0}
+body.embedded .bar{position:static;margin-top:22px;border-radius:0 0 18px 18px}
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--barbg);
+  backdrop-filter:blur(14px);border-top:2px solid var(--accent);z-index:40;
+  padding:14px max(16px, env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))}
+.barin{max-width:560px;margin:0 auto;display:flex;align-items:center;gap:14px}
+.total{flex:1;min-width:0}
+.totlabel{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent2);font-weight:800}
+.totval{font-size:27px;font-weight:800;line-height:1.1;margin-top:3px;font-variant-numeric:tabular-nums;
+  letter-spacing:-.02em}
+.cta{background:var(--accent);color:var(--onaccent);border:none;border-radius:14px;
+  padding:17px 26px;font-size:16.5px;font-weight:800;cursor:pointer;font-family:inherit;flex:none;color:var(--onaccent)}
+.cta:disabled{background:var(--line);color:var(--dim);cursor:not-allowed}
+
+.note{background:var(--notebg);border:1.5px solid var(--accentsoft);
+  border-radius:15px;padding:15px 17px;font-size:13.5px;color:var(--muted);line-height:1.5;margin-top:16px}
+.note b{color:var(--text)}
+.line{display:flex;justify-content:space-between;gap:12px;font-size:16px;font-weight:600;
+  padding:12px 0;border-bottom:1px solid var(--line)}
+.line:last-child{border-bottom:none}
+.line span:last-child{color:var(--accent2);font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
+.vlabel{font-size:12px;color:var(--muted);font-weight:800;text-transform:uppercase;
+  letter-spacing:.14em;margin:18px 0 2px}
+.tick{width:76px;height:76px;border-radius:50%;background:var(--accent);color:var(--onaccent);
+  display:flex;align-items:center;justify-content:center;margin:0 auto 20px}
+/* ---- business contact block, mirroring the QQP customer quote footer ---- */
+.cfoot{margin-top:24px;padding:18px;border:1.5px solid var(--line);border-radius:18px;
+  background:var(--panel2);text-align:center}
+.cfhead{display:flex;align-items:center;justify-content:center;gap:11px;margin-bottom:13px}
+.cfmark{width:40px;height:40px;border-radius:50%;background:var(--bg);border:1.5px solid var(--line);
+  flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.cfmark img{width:100%;height:100%;object-fit:cover}
+.cfname{font-size:16.5px;font-weight:800;letter-spacing:-.01em;text-align:left}
+.cftag{font-size:12px;color:var(--dim);margin-top:1px;text-align:left}
+/* Three equal buttons on one row - wrapping to a second row made this block
+   twice as tall as it needed to be. */
+.pills{display:flex;gap:8px}
+.pill{flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  background:var(--panel);border:1.5px solid var(--line);color:var(--text);border-radius:12px;
+  padding:11px 8px;font-size:14px;font-weight:700;text-decoration:none}
+.pill:hover{border-color:var(--accent);color:var(--accent2)}
+.socs{display:flex;gap:9px;justify-content:center;margin-top:11px}
+.soc{width:36px;height:36px;border-radius:50%;background:var(--panel);border:1.5px solid var(--line);
+  display:flex;align-items:center;justify-content:center;color:var(--muted);text-decoration:none}
+.soc:hover{border-color:var(--accent);color:var(--accent2)}
+
+footer{text-align:center;padding:28px 0 12px;font-size:12px;color:var(--dim)}
+footer b{color:var(--muted)}
+.err{color:var(--warn);font-size:13.5px;margin-top:8px;font-weight:600}
+
+/* ---- brand settings: the business's own name, mark and colour. In the real
+   product these come from their Atlas account; the gear is here so the demo
+   can be dressed up as any business. "Powered by Atlas" is not editable. ---- */
+.gear{margin-left:auto;flex:none;width:40px;height:40px;border-radius:12px;cursor:pointer;
+  background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--muted);
+  display:flex;align-items:center;justify-content:center;font-family:inherit}
+.gear:hover{color:var(--accent2);border-color:var(--accent)}
+.modal{position:fixed;inset:0;z-index:60;background:var(--scrim);backdrop-filter:blur(6px);
+  display:flex;align-items:flex-end;justify-content:center;padding:0}
+.sheet{background:var(--panel2);border:1.5px solid var(--line);border-bottom:none;
+  border-radius:22px 22px 0 0;width:100%;max-width:560px;max-height:92vh;overflow:auto;
+  padding:22px 18px calc(22px + env(safe-area-inset-bottom))}
+.sheethead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+.sheettitle{font-size:21px;font-weight:800;letter-spacing:-.01em}
+.x{background:none;border:none;color:var(--muted);cursor:pointer;font-size:26px;line-height:1;
+  padding:2px 6px;font-family:inherit}
+.logorow{display:flex;align-items:center;gap:14px;margin-bottom:8px}
+.logoprev{width:58px;height:58px;border-radius:50%;background:var(--bg);border:1.5px solid var(--line);
+  flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.logoprev img{width:100%;height:100%;object-fit:cover}
+.filebtn{position:relative;overflow:hidden;display:inline-block}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}
+.btn{background:var(--panel);border:1.5px solid var(--line);color:var(--text);border-radius:11px;
+  padding:11px 16px;font-size:14.5px;font-weight:700;cursor:pointer;font-family:inherit}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--onaccent)}
+.swatches{display:flex;flex-wrap:wrap;gap:10px}
+.sw{width:40px;height:40px;border-radius:12px;border:2px solid transparent;cursor:pointer;padding:0}
+.sw[aria-pressed=true]{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.16)}
+.locked{display:flex;gap:10px;align-items:flex-start;background:rgba(255,255,255,.04);
+  border:1px solid var(--line);border-radius:13px;padding:13px 15px;font-size:12.5px;
+  color:var(--dim);line-height:1.45;margin-top:4px}
+
+/* ---- owner-side editor: tabs, service rows, compact repeat rows ---- */
+.tabs{display:flex;gap:7px;margin-bottom:16px;background:var(--panel);padding:5px;border-radius:13px}
+.tab{flex:1;background:none;border:none;color:var(--muted);font-family:inherit;font-size:14px;
+  font-weight:800;padding:10px 6px;border-radius:9px;cursor:pointer}
+.tab[aria-pressed=true]{background:var(--accent);color:var(--onaccent)}
+.tabbody{min-height:120px}
+.hint{font-size:12px;color:var(--dim);line-height:1.45}
+.erow{border:1.5px solid var(--line);border-radius:14px;margin-bottom:9px;overflow:hidden;background:var(--panel)}
+.erow.on{border-color:var(--accentsoft)}
+.erowhead{display:flex;align-items:center;gap:11px;width:100%;background:none;border:none;color:inherit;
+  font-family:inherit;cursor:pointer;padding:13px 14px;text-align:left}
+.erowname{display:block;font-size:15px;font-weight:800;line-height:1.25}
+.erowcat{display:block;font-size:11.5px;color:var(--dim);margin-top:2px}
+.erowhead>span:first-child{flex:1;min-width:0}
+.erowprice{font-size:13.5px;font-weight:800;color:var(--accent2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.erowbody{padding:0 14px 14px}
+.pricegrid{display:flex;gap:11px}.pricegrid>div{flex:1;min-width:0}
+.plab{font-size:11.5px;color:var(--muted);font-weight:700;margin-bottom:6px}
+.arow{display:flex;gap:8px;align-items:center;margin-bottom:9px}
+.arow input{flex:1;min-width:0;font-size:15px;padding:11px 12px}
+.pct{color:var(--dim);font-size:13px;font-weight:700;margin-left:-4px}
+.iconbtn{flex:none;background:none;border:1.5px solid var(--line);color:var(--dim);border-radius:11px;
+  width:42px;height:44px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit}
+.iconbtn:hover{border-color:var(--warn);color:var(--warn)}
+.btn.danger{color:var(--warn);border-color:rgba(255,122,99,.4);display:inline-flex;align-items:center;gap:7px}
+
+/* Light theme: the glass bar and the dashed outline were tuned for a dark
+   ground and go muddy on a pale one. */
+body.light .bar{backdrop-filter:blur(14px) saturate(1.2)}
+body.light .ghost{border-color:var(--line)}
+body.light .soc,body.light .pill,body.light .chip,body.light .svc,body.light input,body.light textarea{background:var(--panel)}
+body.light .acc,body.light .erow{background:var(--panel)}
+body.light .gear{background:rgba(0,0,0,.04)}
+.pwr{display:inline-flex;align-items:center;gap:6px}
+.pwr svg{width:15px;height:15px;opacity:.85}
+.sw.custom{position:relative;overflow:hidden;display:inline-flex;cursor:pointer}
+.sw.custom input{position:absolute;inset:-6px;opacity:0;cursor:pointer;border:none;padding:0}
+.sw.theme{display:flex;align-items:center;justify-content:center;border:2px solid var(--line)}
+.sw.theme span{width:13px;height:13px;border-radius:50%}
+.sw.theme[aria-pressed=true]{border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,255,255,.14)}
+
+/* Service editor grouped by category, matching what the customer sees */
+.egroup{border:1.5px solid var(--line);border-radius:16px;padding:12px;margin-bottom:12px;background:rgba(127,127,127,.04)}
+.egrouphead{display:flex;align-items:center;gap:9px;margin:2px 2px 10px}
+.egroupname{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:800}
+.egroupcount{min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--line);
+  color:var(--muted);font-size:11.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
+.ghost.small{padding:11px;font-size:13.5px;border-width:1.5px;border-radius:12px}
+/* Narrow phones were truncating both inputs on a repeat row - let them stack */
+@media (max-width:400px){ .arow{flex-wrap:wrap}
+  .arow input{flex:1 1 100%}
+  .arow .iconbtn{margin-left:auto} }
+.mv{display:inline-flex;flex-direction:column;gap:2px;flex:none;margin-left:6px}
+.mvb{width:30px;height:21px;border:1.5px solid var(--line);background:var(--panel);color:var(--muted);
+  border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;font-family:inherit}
+.mvb:hover:not(:disabled){border-color:var(--accent);color:var(--accent2)}
+.mvb:disabled{opacity:.3;cursor:not-allowed}
+.erow .mv{position:absolute;right:52px;top:50%;transform:translateY(-50%)}
+.erow{position:relative}
+.erowhead{padding-right:92px}
+</style>
+<div class="print"><div class="printin"></div></div>
+<div class="print soft"><div class="printin"></div></div>
+<div class="bloom"></div>
+
+<div class="band"><div class="bandin">
+  <div class="mark" id="mark"></div>
+  <div><div class="kick" id="bizkick">Free Estimate</div><div class="biz" id="bizname"></div></div>
+  <button class="gear" id="gear" title="Brand this page" aria-label="Brand this page">
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
+</div></div>
+
+<div class="wrap" id="app"></div>
+<div id="modal"></div>
+
+<div class="bar" id="bar" hidden>
+  <div class="barin">
+    <div class="total">
+      <div class="totlabel">Your estimate</div>
+      <div class="totval" id="totval">—</div>
+    </div>
+    <button class="cta" id="cta">Send</button>
+  </div>
+</div>
+
+<script src="app.js"></script>

@@ -1,0 +1,274 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
+
+// Atlas Instant Quote - the public page a business links from its website.
+//
+// GET  ?slug=<estimate_slug>  -> that business's saved quote-tool setup (businesses.estimate_config)
+// POST                        -> records one request as a lead (customer + follow-up)
+//
+// The page itself is static and served by Vercel (public/estimate). This function only speaks JSON.
+//
+// The browser sends *selections* (service names, size/condition ids), never prices. Every figure
+// on the lead is recomputed here from the business's saved setup, so a customer can't post
+// their own total.
+
+const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
+const OPENPHONE_API_KEY = Deno.env.get("QUO_API_KEY") || "";
+const OPENPHONE_FROM_NUMBER = Deno.env.get("QUO_FROM_NUMBER") || "";
+const OWNER_ALERT_PHONE = Deno.env.get("OWNER_ALERT_PHONE") || "";
+// Alert texts go out on Andre's own number, so only his business gets them for now.
+const ALERT_BUSINESS_ID = Deno.env.get("ATLAS_BUSINESS_ID") || "";
+
+const DEDUPE_WINDOW_MINUTES = 10;
+const MAX_ITEMS = 6;
+const MAX_PICKS = 20;
+const MAX_PER_MINUTE = 20;
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+  });
+
+const round5 = (n: number) => Math.round(n / 5) * 5;
+const money = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString("en-US")}`;
+const clean = (s: unknown, max = 200) => String(s ?? "").trim().slice(0, max);
+const rangeText = (low: number, high: number, open: boolean) =>
+  open && low === high ? `from ${money(low)}` : low === high ? money(low) : `${money(low)} - ${money(high)}${open ? "+" : ""}`;
+
+// Same maths as the page (app.js priceFor): condition picks the spot inside the business's own
+// low-high band; the timing question only ever lifts the top; a blank high means "from $X".
+function priceFor(svc: any, sizeId: string, cond: any, freq: any) {
+  const band = (sizeId === "suv" ? svc.suv : svc.car) || [0, null];
+  const low = Number(band[0]) || 0;
+  const rawHigh = band[1];
+  const lo = Number(cond?.lo) || 0;
+  const hi = cond?.hi == null ? 1 : Number(cond.hi) || 0;
+  const up = (Number(freq?.uplift) || 0) / 100;
+  if (rawHigh == null || rawHigh === "") {
+    return { low: round5(low), high: round5(low + low * (hi * 0.18 + up)), open: true };
+  }
+  const high = Number(rawHigh) || low;
+  const spread = Math.max(0, high - low);
+  return { low: round5(low + spread * lo), high: round5((low + spread * hi) * (1 + up)), open: false };
+}
+
+async function loadBusiness(slug: string) {
+  const { data, error } = await supabase
+    .from("businesses")
+    .select("id, name, estimate_enabled, estimate_config")
+    .eq("estimate_slug", slug)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data || !data.estimate_enabled || !data.estimate_config?.services) return null;
+  return data;
+}
+
+async function sendRequestAlert(name: string, phone: string, summary: string, range: string) {
+  if (!OPENPHONE_API_KEY || !OPENPHONE_FROM_NUMBER || !OWNER_ALERT_PHONE) return;
+  try {
+    const res = await fetch("https://api.openphone.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: OPENPHONE_API_KEY },
+      body: JSON.stringify({
+        content: `New Instant Quote request: ${name}${phone ? ` ${phone}` : ""} - ${range}${summary ? ` (${summary})` : ""}. They're waiting on you.`,
+        from: OPENPHONE_FROM_NUMBER,
+        to: [OWNER_ALERT_PHONE],
+      }),
+    });
+    if (!res.ok) console.error("Instant Quote alert text failed", res.status, await res.text());
+  } catch (err) {
+    console.error("Instant Quote alert text threw", err);
+  }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "content-type, authorization, apikey",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      },
+    });
+  }
+
+  try {
+    const url = new URL(req.url);
+
+    if (req.method === "GET") {
+      const slug = clean(url.searchParams.get("slug"), 60);
+      if (!slug) return json({ error: "Missing slug" }, 400);
+      const business = await loadBusiness(slug);
+      if (!business) return json({ error: "Not found" }, 404);
+      return json({ config: business.estimate_config });
+    }
+
+    if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return json({ error: "Bad request" }, 400);
+    }
+
+    const slug = clean(body?.slug, 60);
+    const business = slug ? await loadBusiness(slug) : null;
+    if (!business) return json({ error: "Not found" }, 404);
+    const cfg = business.estimate_config;
+
+    const name = clean(body?.contact?.name, 120);
+    const phone = clean(body?.contact?.phone, 40);
+    const email = clean(body?.contact?.email, 160);
+    const address = clean(body?.contact?.address, 240);
+    const notes = clean(body?.contact?.notes, 1000);
+
+    if (name.length < 2) return json({ error: "Please add your name." }, 422);
+    if (!phone && !email) return json({ error: "Please add a phone number or an email." }, 422);
+
+    // Crude flood guard: a public form needs one, and this keeps a bot from filling a
+    // business's customer list. Real customers never get near it.
+    const minuteAgo = new Date(Date.now() - 60_000).toISOString();
+    const { count: recent } = await supabase
+      .from("customers")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", business.id)
+      .eq("source", "estimate_request")
+      .gte("created_at", minuteAgo);
+    if ((recent ?? 0) >= MAX_PER_MINUTE) return json({ error: "Too many requests right now. Please call us instead." }, 429);
+
+    const services: any[] = Array.isArray(cfg.services) ? cfg.services : [];
+    const addons: any[] = Array.isArray(cfg.addons) ? cfg.addons : [];
+    const conditions: any[] = Array.isArray(cfg.conditions) ? cfg.conditions : [];
+    const frequencies: any[] = Array.isArray(cfg.frequencies) ? cfg.frequencies : [];
+    const sizes: any[] = Array.isArray(cfg.sizes) ? cfg.sizes : [];
+    const fields: any[] = Array.isArray(cfg.fields) ? cfg.fields : [];
+
+    const itemsIn = Array.isArray(body?.items) ? body.items.slice(0, MAX_ITEMS) : [];
+    let totalLow = 0;
+    let totalHigh = 0;
+    let anyOpen = false;
+    const lines: any[] = [];
+    const itemsOut: any[] = [];
+
+    for (const raw of itemsIn) {
+      const sizeId = sizes.find((s) => s.id === raw?.size)?.id ?? sizes[0]?.id ?? "car";
+      const cond = conditions.find((c) => c.id === raw?.condition) ?? conditions[1] ?? conditions[0];
+      const freq = frequencies.find((f) => f.id === raw?.frequency) ?? frequencies[1] ?? frequencies[0];
+
+      const picked = (Array.isArray(raw?.services) ? raw.services : []).slice(0, MAX_PICKS)
+        .map((n: string) => services.find((s) => s.name === n)).filter(Boolean);
+      const pickedAddons = (Array.isArray(raw?.addons) ? raw.addons : []).slice(0, MAX_PICKS)
+        .map((n: string) => addons.find((a) => a.name === n)).filter(Boolean);
+      if (!picked.length && !pickedAddons.length) continue;
+
+      const vals: Record<string, string> = {};
+      for (const f of fields) {
+        const v = clean(raw?.vals?.[f.k], 120);
+        if (v) vals[f.label] = v;
+      }
+      const label = Object.values(vals).join(" ") || "Job";
+
+      let iLow = 0;
+      let iHigh = 0;
+      for (const s of picked) {
+        const p = priceFor(s, sizeId, cond, freq);
+        iLow += p.low;
+        iHigh += p.high;
+        anyOpen = anyOpen || p.open;
+        lines.push(`${label}: ${s.name} ${p.open ? `from ${money(p.low)}` : `${money(p.low)}-${money(p.high)}`}`);
+      }
+      for (const a of pickedAddons) {
+        const price = Number(a.price) || 0;
+        iLow += price;
+        iHigh += price;
+        lines.push(`${label}: ${a.name} +${money(price)}`);
+      }
+      totalLow += iLow;
+      totalHigh += iHigh;
+      itemsOut.push({
+        label,
+        details: vals,
+        size: sizes.find((s) => s.id === sizeId)?.label ?? sizeId,
+        condition: cond?.label ?? null,
+        timing: freq?.label ?? null,
+        services: picked.map((s: any) => s.name),
+        addons: pickedAddons.map((a: any) => a.name),
+        low: iLow,
+        high: iHigh,
+      });
+    }
+
+    if (!itemsOut.length) return json({ error: "Please choose at least one service." }, 422);
+
+    const range = rangeText(totalLow, totalHigh, anyOpen);
+
+    const leadContext = {
+      kind: "instant_quote",
+      submitted_at: new Date().toISOString(),
+      estimate_low: totalLow,
+      estimate_high: totalHigh,
+      open_ended: anyOpen,
+      items: itemsOut,
+      answers: {
+        estimate_shown: range,
+        requested_work: lines.join(" | "),
+        ...(address ? { address } : {}),
+        ...(notes ? { notes } : {}),
+      },
+    };
+
+    // Same person double-tapping Send, or tweaking and resending, is one lead.
+    const since = new Date(Date.now() - DEDUPE_WINDOW_MINUTES * 60_000).toISOString();
+    let customerId: string | null = null;
+    const probe = supabase
+      .from("customers").select("id")
+      .eq("business_id", business.id).eq("source", "estimate_request").gte("created_at", since).limit(1);
+    const { data: existing } = phone ? await probe.eq("phone", phone) : await probe.eq("email", email);
+    if (existing?.length) customerId = existing[0].id;
+
+    if (customerId) {
+      await supabase.from("customers")
+        .update({ name, email: email || null, phone: phone || null, address: address || null, lead_context: leadContext })
+        .eq("id", customerId);
+    } else {
+      const { data: inserted, error: custErr } = await supabase
+        .from("customers")
+        .insert({
+          business_id: business.id,
+          name,
+          email: email || null,
+          phone: phone || null,
+          address: address || null,
+          source: "estimate_request",
+          source_ref: slug,
+          lead_context: leadContext,
+        })
+        .select("id")
+        .single();
+      if (custErr) {
+        console.error("estimate-request: customer insert failed", custErr.message);
+        return json({ error: "Could not save your request. Please call us instead." }, 500);
+      }
+      customerId = inserted.id;
+
+      const { error: fuErr } = await supabase.from("follow_ups").insert({
+        business_id: business.id,
+        note: `New Instant Quote request: ${name} - ${range}. ${itemsOut.map((i) => `${i.label}: ${i.services.concat(i.addons).join(", ")}`).join("; ")}`.slice(0, 500),
+        due_date: new Date().toISOString().slice(0, 10),
+        method: phone ? "text" : "email",
+        customer_ids: [customerId],
+      });
+      if (fuErr) console.error("estimate-request: follow-up insert failed", fuErr.message);
+
+      if (business.id === ALERT_BUSINESS_ID) await sendRequestAlert(name, phone, itemsOut.map((i) => i.label).join(", "), range);
+    }
+
+    return json({ ok: true, estimate_low: totalLow, estimate_high: totalHigh, open_ended: anyOpen });
+  } catch (err) {
+    console.error("estimate-request failed", err);
+    return json({ error: "Something went wrong. Please call us instead." }, 500);
+  }
+});

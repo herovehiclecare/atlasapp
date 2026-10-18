@@ -1,0 +1,727 @@
+<title>Get Your Quote — Atlas Demo</title>
+<style>
+:root{
+  --bg:#06100C; --panel:#0B1813; --panel2:#0F1B15; --line:#1E2E25;
+  --text:#EDF6F1; --muted:#92AA9D; --dim:#566B5E;
+  --accent:#18D97A; --accent2:#35E890; --warn:#FF7A63;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased}
+/* The page is viewport-fit=cover so the background runs edge to edge, which
+   means every edge has to pay the safe area back or the header sits under the
+   clock and the Send button sits under the home bar. The extra bottom padding
+   is the height of the fixed bar plus that inset, so the last drawer can always
+   be scrolled clear of it. */
+body{padding-bottom:calc(142px + env(safe-area-inset-bottom))}
+.wrap{position:relative;z-index:1;max-width:560px;margin:0 auto;
+  padding-left:max(16px, env(safe-area-inset-left));
+  padding-right:max(16px, env(safe-area-inset-right))}
+
+/* ---- Atlas hex print: the peak mark tiled like armour plating. Each plate
+   carries its own weight so the grid catches light unevenly instead of
+   reading as graph paper, and only a few plates carry the mark. ---- */
+.print{position:absolute;top:0;left:0;right:0;height:860px;z-index:0;pointer-events:none;
+  -webkit-mask-image:linear-gradient(#000 0%,#000 26%,transparent 62%);
+  mask-image:linear-gradient(#000 0%,#000 26%,transparent 62%)}
+.print.soft{-webkit-mask-image:linear-gradient(transparent 0%,#000 34%,transparent 92%);
+  mask-image:linear-gradient(transparent 0%,#000 34%,transparent 92%)}
+
+/* The plate pattern is painted as a mask over the brand colour, so when a
+   business changes their accent the print follows instead of staying green. */
+.printin{position:absolute;inset:0;background:var(--accent);opacity:.62;
+  -webkit-mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='69.28' viewBox='0 0 120 69.28'><g fill='none' stroke='%23ffffff' stroke-width='1'><path d='M20 -34.64L10 -17.32L-10 -17.32L-20 -34.64L-10 -51.96L10 -51.96Z' stroke-opacity='0.11'/><path d='M20 0L10 17.32L-10 17.32L-20 0L-10 -17.32L10 -17.32Z' stroke-opacity='0.05'/><path d='M20 34.64L10 51.96L-10 51.96L-20 34.64L-10 17.32L10 17.32Z' stroke-opacity='0.08'/><path d='M20 69.28L10 86.6L-10 86.6L-20 69.28L-10 51.96L10 51.96Z' stroke-opacity='0.035'/><path d='M50 -17.32L40 0L20 0L10 -17.32L20 -34.64L40 -34.64Z' stroke-opacity='0.13'/><path d='M50 17.32L40 34.64L20 34.64L10 17.32L20 0L40 0Z' stroke-opacity='0.06'/><path d='M50 51.96L40 69.28L20 69.28L10 51.96L20 34.64L40 34.64Z' stroke-opacity='0.09'/><path d='M50 86.6L40 103.92L20 103.92L10 86.6L20 69.28L40 69.28Z' stroke-opacity='0.04'/><path d='M80 -34.64L70 -17.32L50 -17.32L40 -34.64L50 -51.96L70 -51.96Z' stroke-opacity='0.07'/><path d='M80 0L70 17.32L50 17.32L40 0L50 -17.32L70 -17.32Z' stroke-opacity='0.12'/><path d='M80 34.64L70 51.96L50 51.96L40 34.64L50 17.32L70 17.32Z' stroke-opacity='0.045'/><path d='M80 69.28L70 86.6L50 86.6L40 69.28L50 51.96L70 51.96Z' stroke-opacity='0.1'/><path d='M110 -17.32L100 0L80 0L70 -17.32L80 -34.64L100 -34.64Z' stroke-opacity='0.11'/><path d='M110 17.32L100 34.64L80 34.64L70 17.32L80 0L100 0Z' stroke-opacity='0.05'/><path d='M110 51.96L100 69.28L80 69.28L70 51.96L80 34.64L100 34.64Z' stroke-opacity='0.08'/><path d='M110 86.6L100 103.92L80 103.92L70 86.6L80 69.28L100 69.28Z' stroke-opacity='0.035'/><path d='M140 -34.64L130 -17.32L110 -17.32L100 -34.64L110 -51.96L130 -51.96Z' stroke-opacity='0.13'/><path d='M140 0L130 17.32L110 17.32L100 0L110 -17.32L130 -17.32Z' stroke-opacity='0.06'/><path d='M140 34.64L130 51.96L110 51.96L100 34.64L110 17.32L130 17.32Z' stroke-opacity='0.09'/><path d='M140 69.28L130 86.6L110 86.6L100 69.28L110 51.96L130 51.96Z' stroke-opacity='0.04'/></g><path d='M-5.44 5.1L-0.17 -3.23L0.17 -3.23L5.44 5.1' fill='none' stroke='%23ffffff' stroke-opacity='0.05' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='0' cy='-3.57' r='3.06' fill='%23ffffff' fill-opacity='0.04'/><path d='M24.56 57.06L29.83 48.73L30.17 48.73L35.44 57.06' fill='none' stroke='%23ffffff' stroke-opacity='0.08' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='30' cy='48.39' r='3.06' fill='%23ffffff' fill-opacity='0.06'/><path d='M54.56 39.74L59.83 31.41L60.17 31.41L65.44 39.74' fill='none' stroke='%23ffffff' stroke-opacity='0.04' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='60' cy='31.07' r='3.06' fill='%23ffffff' fill-opacity='0.03'/><path d='M84.56 22.42L89.83 14.09L90.17 14.09L95.44 22.42' fill='none' stroke='%23ffffff' stroke-opacity='0.05' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='90' cy='13.75' r='3.06' fill='%23ffffff' fill-opacity='0.04'/><path d='M114.56 74.38L119.83 66.05L120.17 66.05L125.44 74.38' fill='none' stroke='%23ffffff' stroke-opacity='0.04' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='120' cy='65.71' r='3.06' fill='%23ffffff' fill-opacity='0.03'/></svg>");
+  mask-image:url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='69.28' viewBox='0 0 120 69.28'><g fill='none' stroke='%23ffffff' stroke-width='1'><path d='M20 -34.64L10 -17.32L-10 -17.32L-20 -34.64L-10 -51.96L10 -51.96Z' stroke-opacity='0.11'/><path d='M20 0L10 17.32L-10 17.32L-20 0L-10 -17.32L10 -17.32Z' stroke-opacity='0.05'/><path d='M20 34.64L10 51.96L-10 51.96L-20 34.64L-10 17.32L10 17.32Z' stroke-opacity='0.08'/><path d='M20 69.28L10 86.6L-10 86.6L-20 69.28L-10 51.96L10 51.96Z' stroke-opacity='0.035'/><path d='M50 -17.32L40 0L20 0L10 -17.32L20 -34.64L40 -34.64Z' stroke-opacity='0.13'/><path d='M50 17.32L40 34.64L20 34.64L10 17.32L20 0L40 0Z' stroke-opacity='0.06'/><path d='M50 51.96L40 69.28L20 69.28L10 51.96L20 34.64L40 34.64Z' stroke-opacity='0.09'/><path d='M50 86.6L40 103.92L20 103.92L10 86.6L20 69.28L40 69.28Z' stroke-opacity='0.04'/><path d='M80 -34.64L70 -17.32L50 -17.32L40 -34.64L50 -51.96L70 -51.96Z' stroke-opacity='0.07'/><path d='M80 0L70 17.32L50 17.32L40 0L50 -17.32L70 -17.32Z' stroke-opacity='0.12'/><path d='M80 34.64L70 51.96L50 51.96L40 34.64L50 17.32L70 17.32Z' stroke-opacity='0.045'/><path d='M80 69.28L70 86.6L50 86.6L40 69.28L50 51.96L70 51.96Z' stroke-opacity='0.1'/><path d='M110 -17.32L100 0L80 0L70 -17.32L80 -34.64L100 -34.64Z' stroke-opacity='0.11'/><path d='M110 17.32L100 34.64L80 34.64L70 17.32L80 0L100 0Z' stroke-opacity='0.05'/><path d='M110 51.96L100 69.28L80 69.28L70 51.96L80 34.64L100 34.64Z' stroke-opacity='0.08'/><path d='M110 86.6L100 103.92L80 103.92L70 86.6L80 69.28L100 69.28Z' stroke-opacity='0.035'/><path d='M140 -34.64L130 -17.32L110 -17.32L100 -34.64L110 -51.96L130 -51.96Z' stroke-opacity='0.13'/><path d='M140 0L130 17.32L110 17.32L100 0L110 -17.32L130 -17.32Z' stroke-opacity='0.06'/><path d='M140 34.64L130 51.96L110 51.96L100 34.64L110 17.32L130 17.32Z' stroke-opacity='0.09'/><path d='M140 69.28L130 86.6L110 86.6L100 69.28L110 51.96L130 51.96Z' stroke-opacity='0.04'/></g><path d='M-5.44 5.1L-0.17 -3.23L0.17 -3.23L5.44 5.1' fill='none' stroke='%23ffffff' stroke-opacity='0.05' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='0' cy='-3.57' r='3.06' fill='%23ffffff' fill-opacity='0.04'/><path d='M24.56 57.06L29.83 48.73L30.17 48.73L35.44 57.06' fill='none' stroke='%23ffffff' stroke-opacity='0.08' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='30' cy='48.39' r='3.06' fill='%23ffffff' fill-opacity='0.06'/><path d='M54.56 39.74L59.83 31.41L60.17 31.41L65.44 39.74' fill='none' stroke='%23ffffff' stroke-opacity='0.04' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='60' cy='31.07' r='3.06' fill='%23ffffff' fill-opacity='0.03'/><path d='M84.56 22.42L89.83 14.09L90.17 14.09L95.44 22.42' fill='none' stroke='%23ffffff' stroke-opacity='0.05' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='90' cy='13.75' r='3.06' fill='%23ffffff' fill-opacity='0.04'/><path d='M114.56 74.38L119.83 66.05L120.17 66.05L125.44 74.38' fill='none' stroke='%23ffffff' stroke-opacity='0.04' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='120' cy='65.71' r='3.06' fill='%23ffffff' fill-opacity='0.03'/></svg>");
+  -webkit-mask-size:132px 76px;mask-size:132px 76px}
+.soft .printin{filter:blur(1.6px);opacity:.42;-webkit-mask-size:150px 86.6px;mask-size:150px 86.6px}
+
+/* Soft green bloom behind the header so the print sits in light rather than
+   on a flat black field. */
+.bloom{position:absolute;top:0;left:0;right:0;height:720px;z-index:0;pointer-events:none;
+  background:var(--bloom)}
+
+.band{position:relative;z-index:1;background:var(--bandbg),linear-gradient(165deg,rgba(11,24,19,.9),rgba(11,24,19,.9));
+  border-bottom:2px solid var(--accent);margin-bottom:22px;
+  padding:calc(20px + env(safe-area-inset-top)) 0 22px}
+.bandin{max-width:560px;margin:0 auto;display:flex;align-items:center;gap:14px;
+  padding-left:max(16px, env(safe-area-inset-left));
+  padding-right:max(16px, env(safe-area-inset-right))}
+.mark{width:52px;height:52px;border-radius:50%;background:#06100C;border:1.5px solid var(--line);
+  display:flex;align-items:center;justify-content:center;flex:none}
+.kick{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent2);font-weight:800}
+.biz{font-size:23px;font-weight:800;line-height:1.1;margin-top:3px;letter-spacing:-.01em}
+
+/* Centred so the ragged right edge of the wrapped sub-line doesn't read as a
+   page that's sitting off to one side. The content below stays left-aligned. */
+h1{font-size:34px;line-height:1.08;margin:0 0 10px;letter-spacing:-.02em;font-weight:800;
+  text-align:center;text-wrap:balance}
+.lede{font-size:15.5px;color:var(--muted);line-height:1.5;margin:0 auto 24px;
+  text-align:center;max-width:34ch;text-wrap:pretty}
+
+.hero{background:linear-gradient(160deg,#17422E,#0F2A1E);border:1.5px solid var(--accent);
+  border-radius:20px;padding:22px 24px;margin:0 0 22px;box-shadow:0 14px 34px rgba(0,0,0,.45)}
+.herolabel{font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent2);font-weight:800}
+.heroval{font-size:42px;font-weight:800;line-height:1.05;margin-top:7px;letter-spacing:-.025em;
+  font-variant-numeric:tabular-nums}
+.herosub{font-size:13.5px;color:rgba(237,246,241,.72);margin-top:8px;line-height:1.45}
+
+.secnum{font-size:12.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);
+  font-weight:800;margin:26px 0 10px}
+
+/* ---- everything is a drawer: nothing is open unless you opened it ---- */
+.acc{border:1.5px solid var(--line);border-radius:16px;margin-bottom:11px;overflow:hidden;
+  background:var(--panel2)}
+.acc.on{border-color:rgba(24,217,122,.45)}
+.acchead{display:flex;align-items:center;gap:13px;width:100%;background:none;border:none;
+  color:inherit;font-family:inherit;cursor:pointer;padding:18px;text-align:left}
+.accname{font-size:17.5px;font-weight:800;letter-spacing:-.01em}
+.accmeta{margin-left:auto;font-size:13.5px;font-weight:700;color:var(--dim);white-space:nowrap;
+  font-variant-numeric:tabular-nums}
+.accmeta.has{color:var(--accent2)}
+.chev{flex:none;width:22px;height:22px;display:flex;align-items:center;justify-content:center;
+  transition:transform .18s ease;color:var(--muted)}
+.acchead[aria-expanded=true] .chev{transform:rotate(180deg);color:var(--accent2)}
+.accbody{padding:0 18px 18px}
+.count{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;
+  padding:0 7px;border-radius:999px;background:var(--accent);color:#06100C;font-size:12.5px;
+  font-weight:800;margin-left:9px}
+
+label.f{display:block;font-size:12.5px;color:var(--muted);margin:0 0 7px;font-weight:700}
+input[type=text],input[type=tel],input[type=email],textarea{
+  width:100%;background:var(--panel);border:1.5px solid var(--line);border-radius:13px;
+  color:var(--text);font-size:17px;padding:14px;font-family:inherit;font-weight:600}
+input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(24,217,122,.16)}
+input::placeholder,textarea::placeholder{color:var(--dim);font-weight:500}
+textarea{min-height:92px;resize:vertical;font-weight:500}
+.row{display:flex;gap:11px}.row>*{flex:1;min-width:0}
+.field{margin-bottom:15px}
+
+.chips{display:flex;flex-wrap:wrap;gap:9px}
+.chip{background:var(--panel);border:1.5px solid var(--line);color:var(--text);
+  border-radius:999px;padding:13px 20px;font-size:16px;font-weight:700;cursor:pointer;
+  font-family:inherit;transition:background .12s,border-color .12s}
+.chip small{display:block;font-size:11.5px;font-weight:600;color:var(--dim);margin-top:3px}
+.chip[aria-pressed=true]{background:var(--accent);border-color:var(--accent);color:#06100C}
+.chip[aria-pressed=true] small{color:rgba(6,16,12,.7)}
+
+.svc{display:flex;align-items:center;gap:14px;background:var(--panel);
+  border:1.5px solid var(--line);border-radius:16px;padding:16px 17px;margin-bottom:10px;
+  cursor:pointer;text-align:left;width:100%;font-family:inherit;color:inherit;
+  transition:border-color .12s,background .12s}
+.svc:last-child{margin-bottom:0}
+.svc[aria-pressed=true]{border-color:var(--accent);background:rgba(24,217,122,.1)}
+.box{width:26px;height:26px;border-radius:9px;border:2px solid var(--dim);flex:none;
+  display:flex;align-items:center;justify-content:center}
+.svc[aria-pressed=true] .box{background:var(--accent);border-color:var(--accent)}
+.box svg{display:none}.svc[aria-pressed=true] .box svg{display:block}
+.svcname{display:block;font-size:17px;font-weight:800;line-height:1.25;letter-spacing:-.01em}
+.svcdesc{display:block;font-size:13px;color:var(--dim);margin-top:4px;line-height:1.4}
+.svcprice{font-size:17px;font-weight:800;color:var(--accent2);white-space:nowrap;margin-left:auto;
+  padding-left:10px;font-variant-numeric:tabular-nums}
+
+.ghost{background:none;border:2px dashed var(--line);color:var(--muted);width:100%;
+  border-radius:15px;padding:16px;font-size:15.5px;font-weight:800;cursor:pointer;font-family:inherit}
+.ghost:hover{border-color:var(--accent);color:var(--accent2)}
+.remove{background:none;border:none;color:var(--dim);font-size:13px;cursor:pointer;
+  font-family:inherit;padding:4px 2px;font-weight:700}
+.remove:hover{color:var(--warn)}
+
+/* Embedded in someone's page the frame has no scrollbar of its own, so a
+   fixed bar would hang in the middle of their layout. Let it sit at the end
+   of the content instead; standalone it stays pinned to the screen. */
+body.embedded{padding-bottom:0}
+body.embedded .bar{position:static;margin-top:22px;border-radius:0 0 18px 18px}
+.bar{position:fixed;left:0;right:0;bottom:0;background:rgba(6,16,12,.95);
+  backdrop-filter:blur(14px);border-top:2px solid var(--accent);z-index:40;
+  padding:14px max(16px, env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))}
+.barin{max-width:560px;margin:0 auto;display:flex;align-items:center;gap:14px}
+.total{flex:1;min-width:0}
+.totlabel{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent2);font-weight:800}
+.totval{font-size:27px;font-weight:800;line-height:1.1;margin-top:3px;font-variant-numeric:tabular-nums;
+  letter-spacing:-.02em}
+.cta{background:var(--accent);color:#06100C;border:none;border-radius:14px;
+  padding:17px 26px;font-size:16.5px;font-weight:800;cursor:pointer;font-family:inherit;flex:none}
+.cta:disabled{background:var(--line);color:var(--dim);cursor:not-allowed}
+
+.note{background:rgba(24,217,122,.08);border:1.5px solid rgba(24,217,122,.3);
+  border-radius:15px;padding:15px 17px;font-size:13.5px;color:var(--muted);line-height:1.5;margin-top:16px}
+.note b{color:var(--text)}
+.line{display:flex;justify-content:space-between;gap:12px;font-size:16px;font-weight:600;
+  padding:12px 0;border-bottom:1px solid var(--line)}
+.line:last-child{border-bottom:none}
+.line span:last-child{color:var(--accent2);font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums}
+.vlabel{font-size:12px;color:var(--muted);font-weight:800;text-transform:uppercase;
+  letter-spacing:.14em;margin:18px 0 2px}
+.tick{width:76px;height:76px;border-radius:50%;background:var(--accent);
+  display:flex;align-items:center;justify-content:center;margin:0 auto 20px}
+/* ---- business contact block, mirroring the QQP customer quote footer ---- */
+.cfoot{margin-top:24px;padding:18px;border:1.5px solid var(--line);border-radius:18px;
+  background:var(--panel2);text-align:center}
+.cfhead{display:flex;align-items:center;justify-content:center;gap:11px;margin-bottom:13px}
+.cfmark{width:40px;height:40px;border-radius:50%;background:#06100C;border:1.5px solid var(--line);
+  flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.cfmark img{width:100%;height:100%;object-fit:cover}
+.cfname{font-size:16.5px;font-weight:800;letter-spacing:-.01em;text-align:left}
+.cftag{font-size:12px;color:var(--dim);margin-top:1px;text-align:left}
+/* Three equal buttons on one row - wrapping to a second row made this block
+   twice as tall as it needed to be. */
+.pills{display:flex;gap:8px}
+.pill{flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  background:var(--panel);border:1.5px solid var(--line);color:var(--text);border-radius:12px;
+  padding:11px 8px;font-size:14px;font-weight:700;text-decoration:none}
+.pill:hover{border-color:var(--accent);color:var(--accent2)}
+.socs{display:flex;gap:9px;justify-content:center;margin-top:11px}
+.soc{width:36px;height:36px;border-radius:50%;background:var(--panel);border:1.5px solid var(--line);
+  display:flex;align-items:center;justify-content:center;color:var(--muted);text-decoration:none}
+.soc:hover{border-color:var(--accent);color:var(--accent2)}
+
+footer{text-align:center;padding:28px 0 12px;font-size:12px;color:var(--dim)}
+footer b{color:var(--muted)}
+.err{color:var(--warn);font-size:13.5px;margin-top:8px;font-weight:600}
+
+/* ---- brand settings: the business's own name, mark and colour. In the real
+   product these come from their Atlas account; the gear is here so the demo
+   can be dressed up as any business. "Powered by Atlas" is not editable. ---- */
+.gear{margin-left:auto;flex:none;width:40px;height:40px;border-radius:12px;cursor:pointer;
+  background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--muted);
+  display:flex;align-items:center;justify-content:center;font-family:inherit}
+.gear:hover{color:var(--accent2);border-color:var(--accent)}
+.modal{position:fixed;inset:0;z-index:60;background:rgba(3,8,6,.72);backdrop-filter:blur(6px);
+  display:flex;align-items:flex-end;justify-content:center;padding:0}
+.sheet{background:var(--panel2);border:1.5px solid var(--line);border-bottom:none;
+  border-radius:22px 22px 0 0;width:100%;max-width:560px;max-height:92vh;overflow:auto;
+  padding:22px 18px calc(22px + env(safe-area-inset-bottom))}
+.sheethead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+.sheettitle{font-size:21px;font-weight:800;letter-spacing:-.01em}
+.x{background:none;border:none;color:var(--muted);cursor:pointer;font-size:26px;line-height:1;
+  padding:2px 6px;font-family:inherit}
+.logorow{display:flex;align-items:center;gap:14px;margin-bottom:8px}
+.logoprev{width:58px;height:58px;border-radius:50%;background:#06100C;border:1.5px solid var(--line);
+  flex:none;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.logoprev img{width:100%;height:100%;object-fit:cover}
+.filebtn{position:relative;overflow:hidden;display:inline-block}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}
+.btn{background:var(--panel);border:1.5px solid var(--line);color:var(--text);border-radius:11px;
+  padding:11px 16px;font-size:14.5px;font-weight:700;cursor:pointer;font-family:inherit}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#06100C}
+.swatches{display:flex;flex-wrap:wrap;gap:10px}
+.sw{width:40px;height:40px;border-radius:12px;border:2px solid transparent;cursor:pointer;padding:0}
+.sw[aria-pressed=true]{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.16)}
+.locked{display:flex;gap:10px;align-items:flex-start;background:rgba(255,255,255,.04);
+  border:1px solid var(--line);border-radius:13px;padding:13px 15px;font-size:12.5px;
+  color:var(--dim);line-height:1.45;margin-top:4px}
+</style>
+<div class="print"><div class="printin"></div></div>
+<div class="print soft"><div class="printin"></div></div>
+<div class="bloom"></div>
+
+<div class="band"><div class="bandin">
+  <div class="mark" id="mark"></div>
+  <div><div class="kick" id="bizkick">Free Estimate</div><div class="biz" id="bizname"></div></div>
+  <button class="gear" id="gear" title="Brand this page" aria-label="Brand this page">
+    <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+  </button>
+</div></div>
+
+<div class="wrap" id="app"></div>
+<div id="modal"></div>
+
+<div class="bar" id="bar" hidden>
+  <div class="barin">
+    <div class="total">
+      <div class="totlabel">Your estimate</div>
+      <div class="totval" id="totval">—</div>
+    </div>
+    <button class="cta" id="cta">Send</button>
+  </div>
+</div>
+
+<script>
+// The business's own branding. In the live product this is read from their
+// Atlas account (businesses.name / logo_url / tagline / phone); here the gear
+// stands in for that screen so the page can be dressed as any business.
+const BRAND_KEY = "atlas-estimate-brand-demo";
+const DEFAULT_BRAND = { name:"Summit Auto Care", kick:"Free Estimate",
+  tagline:"Mobile detailing & paint protection", phone:"(555) 012-3456",
+  replyWindow:"within 1 business hour", logo:"", accent:"#18D97A",
+  headline:"Get Your Quote",
+  sub:"Tell us what you've got. You'll see the price range straight away, then send it over and we'll confirm the exact number.",
+  email:"hello@summitautocare.com",
+  instagram:"", facebook:"", tiktok:"", google:"" };
+
+// Same hand-drawn glyphs the QQP customer quote uses, so the two pages look
+// like they came from the same place.
+const SOCIAL = {
+  instagram:{ label:"Instagram", icon:'<rect x="3" y="3" width="18" height="18" rx="6" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="12" cy="12" r="4.2" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="17.2" cy="6.8" r="1.1" fill="currentColor"/>' },
+  facebook:{ label:"Facebook", icon:'<path d="M14 8.5h2V5.2h-2.2C11.5 5.2 10 6.7 10 9v2H8v3.3h2V19h3.3v-4.7h2.3l.4-3.3h-2.7V9c0-.4.3-.5.5-.5Z" fill="currentColor"/>' },
+  tiktok:{ label:"TikTok", icon:'<path d="M13.2 3.5c.4 1.8 1.6 2.9 3.5 3.1v2.6a6.6 6.6 0 0 1-3.5-1v6.1a4.7 4.7 0 1 1-4-4.6v2.7a2 2 0 1 0 1.5 1.9V3.5h2.5Z" fill="currentColor"/>' },
+  google:{ label:"Google Reviews", icon:'<path d="M12 2.6l2.3 5 5.5.6-4.1 3.7 1.2 5.5L12 14.7l-4.9 2.7 1.2-5.5-4.1-3.7 5.5-.6L12 2.6Z" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linejoin="round"/>' },
+};
+const digits = s => String(s||"").replace(/[^\d+]/g,"");
+const normUrl = u => !u ? "" : (/^https?:\/\//i.test(u) ? u : "https://"+u);
+
+const ACCENTS = ["#18D97A","#3B9BFF","#A855F7","#F59E0B","#EF4444","#14B8A6","#E8B84A","#F43F8E"];
+
+let BIZ = loadBrand();
+
+function loadBrand(){
+  try { return { ...DEFAULT_BRAND, ...JSON.parse(localStorage.getItem(BRAND_KEY) || "{}") }; }
+  catch { return { ...DEFAULT_BRAND }; }
+}
+function saveBrand(){ try { localStorage.setItem(BRAND_KEY, JSON.stringify(BIZ)); } catch {} }
+
+// Lighten the chosen accent for the secondary tone, so one colour pick drives
+// the whole palette instead of asking the business to choose two.
+function lighten(hex, amt){
+  const n = parseInt(String(hex).replace("#",""), 16);
+  if (Number.isNaN(n)) return hex;
+  const mix = c => Math.round(c + (255 - c) * amt);
+  return "#" + [16,8,0].map(sh => mix((n >> sh) & 255).toString(16).padStart(2,"0")).join("");
+}
+function rgba(hex, a){
+  const n = parseInt(String(hex).replace("#",""), 16);
+  if (Number.isNaN(n)) return `rgba(24,217,122,${a})`;
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+function applyBrand(){
+  const r = document.documentElement.style;
+  r.setProperty("--accent", BIZ.accent);
+  r.setProperty("--accent2", lighten(BIZ.accent, .28));
+  r.setProperty("--bloom", `radial-gradient(130% 62% at 50% -8%, ${rgba(BIZ.accent,.13)}, ${rgba(BIZ.accent,.04)} 42%, transparent 70%)`);
+  r.setProperty("--bandbg", `linear-gradient(165deg, ${rgba(BIZ.accent,.10)}, ${rgba(BIZ.accent,.02)})`);
+}
+
+// Categories come straight from services.category in Atlas, so each business
+// controls its own grouping and ordering — these are sample ones.
+const CAT_ORDER = ["Maintenance", "Detailing", "Paint Correction", "Ceramic Coating"];
+
+const SERVICES = [
+  { cat:"Maintenance", name:"Express Wash & Seal", desc:"Outside wash, interior wipe-down and a spray sealant.", car:[120,160], suv:[140,185] },
+  { cat:"Detailing", name:"Full Interior & Exterior", desc:"The complete clean, inside and out. Most people start here.", car:[250,340], suv:[290,420] },
+  { cat:"Paint Correction", name:"Single-Stage Polish", desc:"One pass to cut light swirls and bring the gloss back.", car:[450,650], suv:[520,760] },
+  { cat:"Paint Correction", name:"Two-Stage Correction", desc:"Cut and refine for deeper scratches and dull paint.", car:[800,1200], suv:[900,1400] },
+  { cat:"Ceramic Coating", name:"1 Year Coating", desc:"Entry coating with prep. Easier washes for a year.", car:[600,900], suv:[700,1050] },
+  { cat:"Ceramic Coating", name:"3 Year Coating", desc:"Longer-life coating with a light correction included.", car:[900,1400], suv:[1100,1700] },
+  { cat:"Ceramic Coating", name:"5 Year Coating", desc:"Our longest protection, with full paint correction.", car:[1400,2000], suv:[1700,2400] },
+];
+const ADDONS = [ { name:"Wheel Coating", price:150 }, { name:"Glass Coating", price:150 }, { name:"Pet Hair Removal", price:90 } ];
+const SIZES = [ { id:"car", label:"Car / Sedan", hint:"Coupe, sedan, hatch" }, { id:"suv", label:"SUV / Truck / Van", hint:"3-row, pickup, van" } ];
+const CONDITIONS = [
+  { id:"light", label:"Light", hint:"Looks after itself", band:[0,.25] },
+  { id:"moderate", label:"Moderate", hint:"Normal daily driver", band:[.25,.65] },
+  { id:"heavy", label:"Heavy", hint:"Needs real work", band:[.65,1] },
+];
+const FREQUENCIES = [
+  { id:"monthly", label:"About monthly", uplift:0 },
+  { id:"few", label:"Every few months", uplift:0 },
+  { id:"twice", label:"Twice a year", uplift:.05 },
+  { id:"rare", label:"Once a year or less", uplift:.10 },
+];
+
+const PEAK = '<svg width="30" height="30" viewBox="0 0 100 100" aria-hidden="true">'
+  + '<path d="M18 82 L49 33 L51 33 L82 82" stroke="#18D97A" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" fill="none"/>'
+  + '<circle cx="50" cy="31" r="18" fill="#35E890"/></svg>';
+const CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#06100C" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5.2 5.2L20 7"/></svg>';
+const CHEV = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+const ic = d => `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const ICON = {
+  phone: ic('<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>'),
+  chat:  ic('<path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.5 8.5 0 0 1-3.8-.9L3 20.5l1.5-4.6A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4z"/>'),
+  mail:  ic('<rect x="2.5" y="4.5" width="19" height="15" rx="2.5"/><path d="M3 6.5l9 6.5 9-6.5"/>'),
+};
+
+// Nothing starts expanded — the page opens as a short stack of drawers you
+// drill into. A vehicle you add later does open, since you just asked for it.
+// A business can text this link straight to someone and fill in what they
+// already know: ?name=John%20Doe&phone=4075550123. Anything not in the link is
+// just left blank, so a plain link with no parameters still works.
+function prefillFromLink(){
+  const q = new URLSearchParams(location.search);
+  const pick = k => (q.get(k) || "").slice(0, 160);
+  return { name:pick("name"), phone:pick("phone"), email:pick("email"),
+           address:pick("address"), notes:pick("notes") };
+}
+
+let state = { screen:"form", vehicles:[newVehicle(false)],
+  contact:prefillFromLink(), contactOpen:false, touched:false };
+
+function newVehicle(first){
+  return { id:Math.random().toString(36).slice(2,9), year:"",make:"",model:"",size:"car",
+    condition:"moderate", frequency:"few", services:[], addons:[],
+    detailsOpen: !!first, openCats:[] };
+}
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const money = n => "$" + Math.round(n).toLocaleString();
+const round5 = n => Math.round(n/5)*5;
+
+function priceFor(svc, v){
+  const band = svc[v.size === "suv" ? "suv" : "car"], low = band[0], high = band[1];
+  const cond = CONDITIONS.find(c=>c.id===v.condition) || CONDITIONS[1];
+  const freq = FREQUENCIES.find(f=>f.id===v.frequency) || FREQUENCIES[1];
+  if (high == null) return { low:round5(low), high:round5(low + low*(cond.band[1]*0.18 + freq.uplift)), open:true };
+  const spread = high - low;
+  return { low:round5(low + spread*cond.band[0]), high:round5((low + spread*cond.band[1])*(1+freq.uplift)), open:false };
+}
+function catTotal(v, cat){
+  let low=0, high=0, n=0, open=false;
+  SERVICES.filter(s=>s.cat===cat).forEach(s=>{
+    if(!v.services.includes(s.name)) return;
+    const p=priceFor(s,v); low+=p.low; high+=p.high; open=open||p.open; n++;
+  });
+  return { low, high, n, open };
+}
+function addonTotal(v){
+  let low=0,n=0;
+  v.addons.forEach(name=>{ const a=ADDONS.find(x=>x.name===name); if(a){ low+=a.price; n++; } });
+  return { low, high:low, n, open:false };
+}
+function vehicleTotal(v){
+  let low=0, high=0, open=false;
+  CAT_ORDER.forEach(c=>{ const t=catTotal(v,c); low+=t.low; high+=t.high; open=open||t.open; });
+  const a=addonTotal(v); low+=a.low; high+=a.high;
+  return { low, high, open };
+}
+function grandTotal(){ return state.vehicles.reduce((a,v)=>{ const t=vehicleTotal(v); return {low:a.low+t.low, high:a.high+t.high, open:a.open||t.open}; },{low:0,high:0,open:false}); }
+function rangeText(t){ if(!t.low && !t.high) return "—"; if(t.low===t.high) return money(t.low); return money(t.low)+" – "+money(t.high); }
+function anyServices(){ return state.vehicles.some(v=>v.services.length||v.addons.length); }
+function contactReady(){ const c=state.contact; return c.name.trim().length>1 && (c.phone.trim().length>=7 || /\S+@\S+\.\S+/.test(c.email)); }
+
+// Cheapest entry in a category, so a closed drawer still tells you roughly
+// what's behind it instead of just a name.
+function catFrom(v, cat){
+  const rows = SERVICES.filter(s=>s.cat===cat).map(s=>priceFor(s,v).low);
+  return rows.length ? Math.min(...rows) : 0;
+}
+
+function accordion({ open, name, meta, metaHas, count, body, act, i, val }){
+  return `<div class="acc${open?" on":""}">
+    <button class="acchead" aria-expanded="${open}" data-act="${act}"${i!==undefined?` data-i="${i}"`:""}${val?` data-v="${esc(val)}"`:""}>
+      <span class="accname">${esc(name)}</span>
+      ${count?`<span class="count">${count}</span>`:""}
+      <span class="accmeta${metaHas?" has":""}">${meta}</span>
+      <span class="chev">${CHEV}</span>
+    </button>
+    ${open?`<div class="accbody">${body}</div>`:""}
+  </div>`;
+}
+
+function vehicleBlock(v,i){
+  const multi = state.vehicles.length>1;
+  const label = [v.year,v.make,v.model].filter(Boolean).join(" ") || (multi?`Vehicle ${i+1}`:"Your vehicle");
+  const t = vehicleTotal(v);
+
+  const details = `
+    <div class="row">
+      <div class="field"><label class="f" for="y${v.id}">Year</label>
+        <input type="text" id="y${v.id}" inputmode="numeric" maxlength="4" placeholder="2021" value="${esc(v.year)}" data-veh="${i}" data-k="year"></div>
+      <div class="field"><label class="f" for="mk${v.id}">Make</label>
+        <input type="text" id="mk${v.id}" placeholder="Toyota" value="${esc(v.make)}" data-veh="${i}" data-k="make"></div>
+    </div>
+    <div class="field"><label class="f" for="md${v.id}">Model</label>
+      <input type="text" id="md${v.id}" placeholder="4Runner" value="${esc(v.model)}" data-veh="${i}" data-k="model"></div>
+    <div class="field"><label class="f">Size</label><div class="chips">${SIZES.map(s=>`
+      <button class="chip" aria-pressed="${v.size===s.id}" data-act="size" data-i="${i}" data-v="${s.id}">${s.label}<small>${s.hint}</small></button>`).join("")}</div></div>
+    <div class="field"><label class="f">How dirty is it right now?</label><div class="chips">${CONDITIONS.map(c=>`
+      <button class="chip" aria-pressed="${v.condition===c.id}" data-act="cond" data-i="${i}" data-v="${c.id}">${c.label}<small>${c.hint}</small></button>`).join("")}</div></div>
+    <div class="field" style="margin-bottom:0"><label class="f">How often does it get detailed?</label><div class="chips">${FREQUENCIES.map(f=>`
+      <button class="chip" aria-pressed="${v.frequency===f.id}" data-act="freq" data-i="${i}" data-v="${f.id}">${f.label}</button>`).join("")}</div></div>
+    ${multi?`<div style="text-align:right;margin-top:14px"><button class="remove" data-act="rmveh" data-i="${i}">Remove this vehicle</button></div>`:""}`;
+
+  const cats = CAT_ORDER.map(cat=>{
+    const ct = catTotal(v,cat), open = v.openCats.includes(cat);
+    const body = SERVICES.filter(s=>s.cat===cat).map(s=>{
+      const p=priceFor(s,v), on=v.services.includes(s.name);
+      return `<button class="svc" aria-pressed="${on}" data-act="svc" data-i="${i}" data-v="${esc(s.name)}">
+        <span class="box">${CHECK}</span>
+        <span style="flex:1;min-width:0"><span class="svcname">${esc(s.name)}</span><span class="svcdesc">${esc(s.desc)}</span></span>
+        <span class="svcprice">${p.open?"from "+money(p.low):money(p.low)+"–"+money(p.high)}</span></button>`;
+    }).join("");
+    return accordion({ open, name:cat, count:ct.n||0,
+      meta: ct.n ? rangeText(ct)+(ct.open?"+":"") : "from "+money(catFrom(v,cat)),
+      metaHas: !!ct.n, body, act:"togglecat", i, val:cat });
+  }).join("");
+
+  const at = addonTotal(v);
+  const addonBody = ADDONS.map(a=>{
+    const on=v.addons.includes(a.name);
+    return `<button class="svc" aria-pressed="${on}" data-act="addon" data-i="${i}" data-v="${esc(a.name)}">
+      <span class="box">${CHECK}</span>
+      <span style="flex:1;min-width:0"><span class="svcname">${esc(a.name)}</span></span>
+      <span class="svcprice">+${money(a.price)}</span></button>`;
+  }).join("");
+
+  return `
+    ${accordion({ open:v.detailsOpen, name:label, count:0,
+      meta: t.low ? rangeText(t)+(t.open?"+":"") : "Tap to start",
+      metaHas: !!t.low, body:details, act:"togglveh", i })}
+    ${cats}
+    ${accordion({ open:v.openCats.includes("__addons"), name:"Add-Ons", count:at.n||0,
+      meta: at.n ? "+"+money(at.low) : "from "+money(Math.min(...ADDONS.map(a=>a.price))),
+      metaHas: !!at.n, body:addonBody, act:"togglecat", i, val:"__addons" })}`;
+}
+
+// The business's own contact block, same shape as the footer on a QQP customer
+// quote: one-tap Call / Text / Email / Website, then their socials.
+function contactFooter(){
+  const p = digits(BIZ.phone);
+  const pills = [
+    p && `<a class="pill" href="tel:${esc(p)}">${ICON.phone} Call</a>`,
+    p && `<a class="pill" href="sms:${esc(p)}">${ICON.chat} Text</a>`,
+    BIZ.email && `<a class="pill" href="mailto:${esc(BIZ.email)}">${ICON.mail} Email</a>`,
+  ].filter(Boolean).join("");
+
+  const socials = Object.keys(SOCIAL).filter(k=>BIZ[k]).map(k=>
+    `<a class="soc" href="${esc(normUrl(BIZ[k]))}" target="_blank" rel="noopener" aria-label="${SOCIAL[k].label}">
+       <svg width="19" height="19" viewBox="0 0 24 24">${SOCIAL[k].icon}</svg></a>`).join("");
+
+  if (!pills && !socials) return "";
+  return `<div class="cfoot">
+    <div class="cfhead">
+      <div class="cfmark">${BIZ.logo?`<img src="${esc(BIZ.logo)}" alt="">`:PEAK}</div>
+      <div><div class="cfname">${esc(BIZ.name)}</div>
+        ${BIZ.tagline?`<div class="cftag">${esc(BIZ.tagline)}</div>`:""}</div>
+    </div>
+    ${pills?`<div class="pills">${pills}</div>`:""}
+    ${socials?`<div class="socs">${socials}</div>`:""}
+  </div>`;
+}
+
+function formScreen(){
+  const t = grandTotal(), picked = anyServices();
+  const firstCond = CONDITIONS.find(c=>c.id===state.vehicles[0].condition) || CONDITIONS[1];
+  return `
+  <h1>${esc(BIZ.headline)}</h1>
+  ${BIZ.sub?`<p class="lede">${esc(BIZ.sub)}</p>`:""}
+
+  ${picked?`<div class="hero">
+    <div class="herolabel">Your estimate</div>
+    <div class="heroval">${rangeText(t)}${t.open?"+":""}</div>
+    <div class="herosub">Based on a ${esc(firstCond.label.toLowerCase())}-condition vehicle.
+      Change the condition and this moves with it.</div>
+  </div>`:""}
+
+  <div class="secnum">1 — Pick your work</div>
+  ${state.vehicles.map(vehicleBlock).join("")}
+  <button class="ghost" data-act="addveh" style="margin-top:14px">+ Add another vehicle</button>
+
+  <div class="secnum">2 — How do we reach you?</div>
+  ${accordion({ open:state.contactOpen, name:"Your details", count:0,
+    meta: contactReady() ? esc(state.contact.name) : "Tap to fill in", metaHas: contactReady(),
+    act:"togglecontact",
+    body:`<div class="field"><label class="f" for="cname">Your name</label>
+      <input type="text" id="cname" placeholder="John Doe" value="${esc(state.contact.name)}" data-c="name"></div>
+    <div class="row">
+      <div class="field"><label class="f" for="cphone">Phone</label>
+        <input type="tel" id="cphone" placeholder="(407) 555-0123" value="${esc(state.contact.phone)}" data-c="phone"></div>
+      <div class="field"><label class="f" for="cemail">Email</label>
+        <input type="email" id="cemail" placeholder="you@email.com" value="${esc(state.contact.email)}" data-c="email"></div>
+    </div>
+    <div class="field"><label class="f" for="caddr">Where is the vehicle? <span style="color:var(--dim);font-weight:500">(optional)</span></label>
+      <input type="text" id="caddr" placeholder="Street, city" value="${esc(state.contact.address)}" data-c="address"></div>
+    <div class="field" style="margin-bottom:0"><label class="f" for="cnotes">Anything we should know? <span style="color:var(--dim);font-weight:500">(optional)</span></label>
+      <textarea id="cnotes" placeholder="Pet hair in the back, scratch on the driver door…" data-c="notes">${esc(state.contact.notes)}</textarea></div>
+    ${state.touched && !contactReady()?`<div class="err">Add your name and a phone number or email so we can reply.</div>`:""}` })}
+
+  <div class="note"><b>This is an estimate, not a final price.</b> ${esc(BIZ.name)} confirms the exact
+    number once they see the vehicle. Nothing is booked and no card is needed.</div>
+  ${contactFooter()}
+  <footer>Powered by <b>Atlas</b></footer>`;
+}
+
+function doneScreen(){
+  const t = grandTotal();
+  return `
+  <div style="text-align:center;padding:30px 0 10px">
+    <div class="tick"><svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#06100C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5.2 5.2L20 7"/></svg></div>
+    <h1 style="margin:0 0 10px">Request sent</h1>
+    <p class="lede" style="margin:0 0 22px">${esc(BIZ.name)} will get back to you ${esc(BIZ.replyWindow)}.<br>
+      Need it sooner? Call or text ${esc(BIZ.phone)}.</p>
+  </div>
+  <div class="hero">
+    <div class="herolabel">Your estimate</div>
+    <div class="heroval">${rangeText(t)}${t.open?"+":""}</div>
+    <div class="herosub">Final price confirmed once they see it in person.</div>
+  </div>
+  <div class="acc on" style="padding:18px">
+    <div class="secnum" style="margin:0 0 4px">What you asked for</div>
+    ${state.vehicles.map((v,i)=>{
+      const label=[v.year,v.make,v.model].filter(Boolean).join(" ")||("Vehicle "+(i+1));
+      const rows=[...v.services.map(n=>{const s=SERVICES.find(x=>x.name===n),p=priceFor(s,v);
+        return `<div class="line"><span>${esc(n)}</span><span>${p.open?"from "+money(p.low):money(p.low)+"–"+money(p.high)}</span></div>`;}),
+        ...v.addons.map(n=>{const a=ADDONS.find(x=>x.name===n);
+        return `<div class="line"><span>${esc(n)}</span><span>+${money(a.price)}</span></div>`;})].join("");
+      return `<div class="vlabel">${esc(label)}</div>${rows}`;
+    }).join("")}
+  </div>
+  <div class="note">Saved to ${esc(BIZ.name)}'s Atlas inbox with your vehicle details and condition
+    notes, so they already know what they're looking at before they call.</div>
+  ${contactFooter()}
+  <footer>Powered by <b>Atlas</b></footer>`;
+}
+
+// ---- brand sheet ------------------------------------------------------
+let brandOpen = false;
+
+function brandSheet(){
+  if (!brandOpen) return "";
+  return `<div class="modal" id="modalbg">
+    <div class="sheet" role="dialog" aria-label="Brand this page">
+      <div class="sheethead">
+        <div class="sheettitle">Your branding</div>
+        <button class="x" data-act="closebrand" aria-label="Close">&times;</button>
+      </div>
+
+      <div class="field">
+        <label class="f">Your logo</label>
+        <div class="logorow">
+          <div class="logoprev">${BIZ.logo?`<img src="${esc(BIZ.logo)}" alt="">`:PEAK}</div>
+          <div style="display:flex;gap:9px;flex-wrap:wrap">
+            <span class="btn filebtn">Upload<input type="file" accept="image/*" id="logofile"></span>
+            ${BIZ.logo?`<button class="btn" data-act="clearlogo">Remove</button>`:""}
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--dim);line-height:1.45">Square works best. It's resized to 256px and stored on this device only.</div>
+      </div>
+
+      <div class="field"><label class="f" for="bname">Business name</label>
+        <input type="text" id="bname" value="${esc(BIZ.name)}" data-b="name"></div>
+      <div class="field"><label class="f" for="bkick">Small line above the name</label>
+        <input type="text" id="bkick" value="${esc(BIZ.kick)}" data-b="kick" placeholder="Free Estimate"></div>
+      <div class="field"><label class="f" for="btag">Tagline</label>
+        <input type="text" id="btag" value="${esc(BIZ.tagline)}" data-b="tagline" placeholder="Mobile detailing &amp; ceramic coatings"></div>
+
+      <div class="field"><label class="f" for="bhead">Headline on the page</label>
+        <input type="text" id="bhead" value="${esc(BIZ.headline)}" data-b="headline" placeholder="Get Your Quote"></div>
+      <div class="field"><label class="f" for="bsub">Line under the headline</label>
+        <textarea id="bsub" data-b="sub" style="min-height:74px">${esc(BIZ.sub)}</textarea></div>
+
+      <div class="field"><label class="f" for="bphone">Phone</label>
+        <input type="tel" id="bphone" value="${esc(BIZ.phone)}" data-b="phone"></div>
+      <div class="field"><label class="f" for="bemail">Email</label>
+        <input type="email" id="bemail" value="${esc(BIZ.email)}" data-b="email"></div>
+      <div class="field"><label class="f" for="breply">How fast you reply</label>
+        <input type="text" id="breply" value="${esc(BIZ.replyWindow)}" data-b="replyWindow" placeholder="within 1 business hour"></div>
+
+      <div class="field"><label class="f">Social links <span style="color:var(--dim);font-weight:500">(optional)</span></label>
+        ${Object.keys(SOCIAL).map(k=>`<input type="text" style="margin-bottom:9px" value="${esc(BIZ[k])}"
+          data-b="${k}" placeholder="${SOCIAL[k].label}">`).join("")}
+      </div>
+
+      <div class="field">
+        <label class="f">Accent colour</label>
+        <div class="swatches">${ACCENTS.map(c=>`
+          <button class="sw" style="background:${c}" aria-pressed="${BIZ.accent.toLowerCase()===c.toLowerCase()}"
+            data-act="accent" data-v="${c}" aria-label="${c}"></button>`).join("")}
+        </div>
+      </div>
+
+      <div class="locked">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:none;margin-top:1px"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <div><b style="color:var(--muted)">Powered by Atlas</b> stays on the page. Everything above is yours to change.</div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button class="btn" data-act="resetbrand">Reset</button>
+        <button class="btn primary" data-act="closebrand" style="flex:1">Done</button>
+      </div>
+    </div></div>`;
+}
+
+function render(){
+  applyBrand();
+  document.getElementById("mark").innerHTML = BIZ.logo
+    ? `<img src="${esc(BIZ.logo)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+    : PEAK;
+  document.getElementById("bizkick").textContent = BIZ.kick;
+  document.getElementById("modal").innerHTML = brandSheet();
+  document.getElementById("bizname").textContent = BIZ.name;
+  document.getElementById("app").innerHTML = state.screen==="form" ? formScreen() : doneScreen();
+  const bar = document.getElementById("bar");
+  if (state.screen!=="form"){ bar.hidden = true; return; }
+  bar.hidden = false;
+  const t = grandTotal();
+  document.getElementById("totval").textContent = rangeText(t) + (t.open&&t.low?"+":"");
+  const cta = document.getElementById("cta");
+  cta.disabled = !anyServices();
+  cta.textContent = "Send request";
+}
+
+document.addEventListener("click", e=>{
+  const b = e.target.closest("[data-act]"); if(!b) return;
+  const act=b.dataset.act, i=Number(b.dataset.i), val=b.dataset.v, v=state.vehicles[i];
+  if(act==="addveh"){ state.vehicles.push(newVehicle(true)); render(); window.scrollTo({top:document.body.scrollHeight,behavior:"smooth"}); return; }
+  if(act==="rmveh"){ state.vehicles.splice(i,1); render(); return; }
+  if(act==="togglveh"){ v.detailsOpen = !v.detailsOpen; render(); return; }
+  if(act==="togglecat"){ toggle(v.openCats,val); render(); return; }
+  if(act==="togglecontact"){ state.contactOpen = !state.contactOpen; render(); return; }
+  if(act==="size"){ v.size=val; render(); return; }
+  if(act==="cond"){ v.condition=val; render(); return; }
+  if(act==="freq"){ v.frequency=val; render(); return; }
+  if(act==="svc"){ toggle(v.services,val); render(); return; }
+  if(act==="addon"){ toggle(v.addons,val); render(); return; }
+  if(act==="closebrand"){ brandOpen=false; saveBrand(); render(); return; }
+  if(act==="resetbrand"){ BIZ={...DEFAULT_BRAND}; saveBrand(); render(); return; }
+  if(act==="clearlogo"){ BIZ.logo=""; saveBrand(); render(); return; }
+  if(act==="accent"){ BIZ.accent=val; saveBrand(); render(); return; }
+});
+
+document.getElementById("gear").addEventListener("click", ()=>{ brandOpen=true; render(); });
+document.addEventListener("click", e=>{ if(e.target.id==="modalbg"){ brandOpen=false; saveBrand(); render(); } });
+
+// Logos get squared off and scaled to 256px before they're stored, so a 4MB
+// phone photo doesn't blow past what localStorage will hold.
+document.addEventListener("change", e=>{
+  if(e.target.id!=="logofile") return;
+  const file=e.target.files && e.target.files[0]; if(!file) return;
+  const fr=new FileReader();
+  fr.onload=()=>{ const img=new Image();
+    img.onload=()=>{ const S=256,c=document.createElement("canvas");c.width=c.height=S;
+      const x=c.getContext("2d"); const s=Math.min(img.width,img.height);
+      x.drawImage(img,(img.width-s)/2,(img.height-s)/2,s,s,0,0,S,S);
+      BIZ.logo=c.toDataURL("image/jpeg",.88); saveBrand(); render(); };
+    img.src=fr.result; };
+  fr.readAsDataURL(file);
+});
+function toggle(arr,val){ const i=arr.indexOf(val); if(i===-1) arr.push(val); else arr.splice(i,1); }
+
+document.addEventListener("input", e=>{
+  const el=e.target;
+  if(el.dataset.veh!==undefined){ state.vehicles[Number(el.dataset.veh)][el.dataset.k]=el.value; return; }
+  if(el.dataset.c){ state.contact[el.dataset.c]=el.value; return; }
+  if(el.dataset.b){ BIZ[el.dataset.b]=el.value; saveBrand();
+    // Update the header live without re-rendering, which would blur the field.
+    if(el.dataset.b==="name") document.getElementById("bizname").textContent=el.value;
+    if(el.dataset.b==="kick") document.getElementById("bizkick").textContent=el.value;
+  }
+});
+
+// Lets the page sit in an iframe on someone's own site and still be the right
+// height - the embed snippet listens for this and resizes to fit.
+if (window.parent !== window) document.body.classList.add("embedded");
+
+function postHeight(){
+  if (window.parent === window) return;
+  const h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+  try { window.parent.postMessage({ atlasEstimate:"height", height:h }, "*"); } catch {}
+}
+new ResizeObserver(postHeight).observe(document.body);
+window.addEventListener("load", postHeight);
+
+document.getElementById("cta").addEventListener("click", ()=>{
+  state.touched = true;
+  if(!anyServices()) return;
+  state.vehicles = state.vehicles.filter(v=>v.services.length||v.addons.length);
+  if(!contactReady()){
+    state.contactOpen = true; render();
+    const el=document.getElementById("cname");
+    if(el){ el.scrollIntoView({block:"center",behavior:"smooth"}); el.focus(); }
+    return;
+  }
+  state.screen = "done"; render(); window.scrollTo({top:0});
+});
+
+render();
+</script>
