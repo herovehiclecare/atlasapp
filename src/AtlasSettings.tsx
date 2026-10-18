@@ -2001,10 +2001,10 @@ const PANELS = {
 
 /* ---------------------------------- page ---------------------------------- */
 
-export default function AtlasSettings({ onNavigate, currentPage = "settings", onSignOut }) {
+export default function AtlasSettings({ onNavigate, currentPage = "settings", onSignOut, navParams }) {
   const { businessId, businessName, businessLogoUrl } = useBusinessId();
   const now = useLiveClock();
-  const [section, setSection] = useState("profile");
+  const [section, setSection] = useState(() => (navParams?.section && PANELS[navParams.section] ? navParams.section : "profile"));
   const [moreOpen, setMoreOpen] = useState(false);
   const ActivePanel = PANELS[section];
 

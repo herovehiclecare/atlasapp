@@ -9,6 +9,7 @@ import { BarChart, Bar, ResponsiveContainer } from "recharts";
 import { Inbox as LeadsIcon } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
+import AtlasSetupChecklist from "./AtlasSetupChecklist";
 import { resizeImageToDataUrl, svcPrice, parseDate, useLiveClock, formatDateTime, mergeBusinessJsonb } from "./lib";
 
 const P = {
@@ -727,6 +728,7 @@ export default function AtlasDashboardFinal({ onNavigate, currentPage = "dashboa
             <div style={{ padding: "16px 18px", borderRadius: 12, background: "rgba(255,107,94,0.1)", border: `1px solid ${P.danger}`, color: P.danger, fontSize: 13 }}>{error}</div>
           ) : (
             <>
+              <AtlasSetupChecklist businessId={businessId} onNavigate={onNavigate} />
               <BentoGrid kpi={kpi} earnings={weekEarnings} onNavigate={onNavigate} />
               <ProfitBanner editMode={editMode} visible={visible.profitBanner} onToggle={() => toggle("profitBanner")} jobsToday={todaysCompleted} revenueToday={todaysRevenue} />
 
