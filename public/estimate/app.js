@@ -593,6 +593,22 @@ function contactFooter(){
     ${socials?`<div class="socs">${socials}</div>`:""}</div>`;
 }
 
+function briefOf(s){
+  const incl=(Array.isArray(s.includes)?s.includes:[]).map(x=>String(x).trim()).filter(Boolean);
+  return s.desc || (incl.length?incl.slice(0,3).join(" · ")+(incl.length>3?" + "+(incl.length-3)+" more":""):"");
+}
+
+function pickedSummary(){
+  return state.items.map((v,i)=>{
+    const rows=[...v.services.map(n=>{const s=CFG.services.find(x=>x.name===n); if(!s)return"";
+        const p=priceFor(s,v), b=briefOf(s);
+        return `<div class="pk"><div class="pkh"><span>${esc(n)}</span><b>${p.open?"from "+money(p.low):money(p.low)+"–"+money(p.high)}</b></div>${b?`<div class="pkd">${esc(b)}</div>`:""}</div>`;}),
+      ...v.addons.map(n=>{const a=CFG.addons.find(x=>x.name===n); if(!a)return"";
+        return `<div class="pk"><div class="pkh"><span>${esc(n)}</span><b>+${money(a.price)}</b></div></div>`;})].join("");
+    return rows?`<div class="vlabel">${esc(itemLabel(v,i))}</div>${rows}`:"";
+  }).join("");
+}
+
 function formScreen(){
   const t = grandTotal(), picked = anyPicked(), c = CFG.copy;
   const cond = CFG.conditions.find(x=>x.id===state.items[0]?.condition);
@@ -628,6 +644,11 @@ function formScreen(){
       <span>Text me a confirmation and updates about this request. Msg &amp; data rates may apply. Reply STOP to opt out.</span></label>`:""}
     ${state.touched && !contactReady()?`<div class="err">Add your name and a phone number or email so we can reply.</div>`:""}` })}
 
+  ${picked?`<div class="acc on" style="padding:18px;margin-top:16px">
+    <div class="secnum" style="margin:0 0 2px">What you're requesting</div>
+    ${pickedSummary()}
+    <div class="pkt"><span>Estimated total</span><b>${totText(t)}</b></div></div>`:""}
+
   ${state.sendError?`<div class="err" style="margin:14px 0 0">${esc(state.sendError)}</div>`:""}
   <div class="note"><b>${esc(c.disclaimerTitle)}</b> ${esc(B().name)} ${esc(c.disclaimer)}</div>
   ${contactFooter()}
@@ -646,13 +667,7 @@ function doneScreen(){
     <div class="herosub">Final price confirmed once they see it in person.</div></div>
   <div class="acc on" style="padding:18px">
     <div class="secnum" style="margin:0 0 4px">What you asked for</div>
-    ${state.items.map((v,i)=>{
-      const rows=[...v.services.map(n=>{const s=CFG.services.find(x=>x.name===n); if(!s)return"";const p=priceFor(s,v);
-          return `<div class="line"><span>${esc(n)}</span><span>${p.open?"from "+money(p.low):money(p.low)+"–"+money(p.high)}</span></div>`;}),
-        ...v.addons.map(n=>{const a=CFG.addons.find(x=>x.name===n); if(!a)return"";
-          return `<div class="line"><span>${esc(n)}</span><span>+${money(a.price)}</span></div>`;})].join("");
-      return `<div class="vlabel">${esc(itemLabel(v,i))}</div>${rows}`;
-    }).join("")}</div>
+    ${pickedSummary()}</div>
   <div class="note">Saved to ${esc(B().name)}'s Atlas inbox with your details, so they already know
     what they're looking at before they call.</div>
   ${contactFooter()}
