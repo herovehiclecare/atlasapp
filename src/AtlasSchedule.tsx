@@ -15,8 +15,8 @@ const P = {
   accent: "#18D97A", accentHover: "#35E890", secondary: "#FF7A63",
   accentSoft: "rgba(24,217,122,0.14)", secondarySoft: "rgba(255,122,99,0.14)", danger: "#FF6B5E",
 };
-const STATUS = { scheduled: "#4C8DFF", in_progress: "#F5A623", completed: P.accent, cancelled: P.danger };
-const STATUS_LABEL = { scheduled: "Scheduled", in_progress: "In Progress", completed: "Completed", cancelled: "Cancelled" };
+const STATUS = { pending: "#A78BFA", scheduled: "#4C8DFF", in_progress: "#F5A623", completed: P.accent, cancelled: P.danger };
+const STATUS_LABEL = { pending: "Pending", scheduled: "Scheduled", in_progress: "In Progress", completed: "Completed", cancelled: "Cancelled" };
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const inputStyle = {
@@ -434,6 +434,8 @@ function DayView({ jobs, selectedDate, servicesById, onEditJob, showHolidays }) 
 
 const DEFAULT_BOOKING_SCRIPT =
   "Hi {customer_first}, this confirms your appointment with {business} for {vehicle} on {date} at {time}. See you then!";
+const PENDING_BOOKING_SCRIPT =
+  "Hi {customer_first}, thanks for approving your quote with {business}! Can we do {vehicle} on {date} at {time}? Reply YES to lock it in or tell me another day that works.";
 
 function fillJobScript(template, ctx) {
   return (template || "")
@@ -476,16 +478,16 @@ function Section({ title, children }) {
   );
 }
 
-function AddJobModal({ businessId, businessName, commApp, customers, vehicles, services, jobs, initialDate, initialCustomerId, initialVehicleId, initialServiceIds, initialPrice, job, onInvoice, onClose, onAdded, onDelete, onVehicleAdded, onCustomerSaved }) {
+function AddJobModal({ businessId, businessName, commApp, customers, vehicles, services, jobs, initialDate, initialTime, initialDescription, initialCustomerId, initialVehicleId, initialServiceIds, initialPrice, initialQuoteId, confirmFirst, job, onInvoice, onClose, onAdded, onDelete, onVehicleAdded, onCustomerSaved }) {
   const isEdit = !!job;
   const [customerId, setCustomerId] = useState(job?.customer_id || initialCustomerId || "");
   const [vehicleId, setVehicleId] = useState(job?.vehicle_id || initialVehicleId || "");
   const [serviceIds, setServiceIds] = useState(job?.service_ids || initialServiceIds || []);
   const [date, setDate] = useState(toInputDate(job ? new Date(job.scheduled_at) : (initialDate || new Date())));
-  const [time, setTime] = useState(job ? toInputTime(new Date(job.scheduled_at)) : "09:00");
-  const [status, setStatus] = useState(job?.status || "scheduled");
+  const [time, setTime] = useState(job ? toInputTime(new Date(job.scheduled_at)) : (initialTime || "09:00"));
+  const [status, setStatus] = useState(job?.status || (initialQuoteId && confirmFirst ? "pending" : "scheduled"));
   const [price, setPrice] = useState(job?.price != null ? String(job.price) : initialPrice != null ? String(initialPrice) : "");
-  const [description, setDescription] = useState(job?.description || "");
+  const [description, setDescription] = useState(job?.description || initialDescription || "");
   const [contact, setContact] = useState(EMPTY_CONTACT);
   const isNewCustomer = customerId === NEW_CUSTOMER;
   const servicesById = useMemo(() => Object.fromEntries(services.map((s) => [s.id, s])), [services]);
@@ -528,7 +530,7 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
   const draftKey = businessId ? `job-new-${businessId}` : null;
   const [draftRestored, setDraftRestored] = useState(false);
   useEffect(() => {
-    if (isEdit || !draftKey) return;
+    if (isEdit || !draftKey || initialCustomerId) return;
     const draft = readDraft(draftKey);
     if (!draft?.value) return;
     const v = draft.value;
@@ -601,7 +603,7 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
     setNewVehicleSize("car");
   }
 
-  async function handleSubmit(e) {
+  async function handleSubmit(e, statusOverride) {
     e.preventDefault();
     if (!date || !time) {
       setError("Pick a date and time.");
@@ -647,10 +649,11 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
       vehicle_id: vehicleId || null,
       service_ids: serviceIds,
       scheduled_at: scheduledAt,
-      status,
+      status: statusOverride || status,
       price: priceNum,
       description: description.trim() || null,
     };
+    if (!isEdit && initialQuoteId) payload.quote_id = initialQuoteId;
     const query = isEdit
       ? supabase.from("jobs").update(payload).eq("id", job.id)
       : supabase.from("jobs").insert(payload);
@@ -664,6 +667,7 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
       return;
     }
     onAdded(data);
+    if (!isEdit && initialQuoteId) await supabase.from("quotes").update({ job_id: data.id }).eq("id", initialQuoteId);
 
     if (isEdit) {
       onClose();
@@ -672,7 +676,7 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
 
     if (draftKey) clearDraft(draftKey);
     const { date: dLabel, time: tLabel } = formatJobDateTime(new Date(data.scheduled_at));
-    setScript(fillJobScript(DEFAULT_BOOKING_SCRIPT, {
+    setScript(fillJobScript(data.status === "pending" ? PENDING_BOOKING_SCRIPT : DEFAULT_BOOKING_SCRIPT, {
       customerFirst: data.customers?.name?.split(" ")[0] || "there",
       vehicle: data.vehicles?.label || "your vehicle",
       date: dLabel,
@@ -701,7 +705,7 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
       <div onClick={handleCloseModal} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 50 }} />
       <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", width: createdJob ? "min(460px, calc(100vw - 32px))" : "min(900px, calc(100vw - 24px))", maxHeight: "calc(100vh - 24px)", overflowY: "auto", background: P.bg, border: `1px solid ${P.border}`, borderRadius: 16, zIndex: 51, padding: 22 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: P.textPrimary }}>{createdJob ? "Job scheduled" : isEdit ? "Edit job" : "New job"}</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: P.textPrimary }}>{createdJob ? (createdJob.status === "pending" ? "Saved as pending" : "Job scheduled") : isEdit ? "Edit job" : "New job"}</span>
           <button onClick={handleCloseModal} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", display: "flex" }}><X size={18} /></button>
         </div>
         {!isEdit && !createdJob && draftRestored && (
@@ -716,7 +720,9 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
               <div style={{ width: 46, height: 46, borderRadius: "50%", background: P.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
                 <Check size={20} color={P.accent} />
               </div>
-              <p style={{ fontSize: 13, color: P.textSecondary, margin: 0 }}>This is what {createdJob.customers?.name?.split(" ")[0] || "the customer"} would get — sending is still manual for now.</p>
+              <p style={{ fontSize: 13, color: P.textSecondary, margin: 0 }}>{createdJob.status === "pending"
+                  ? `Not confirmed yet. Text ${createdJob.customers?.name?.split(" ")[0] || "the customer"} to lock in the day, then open this job and tap Confirm job.`
+                  : `This is what ${createdJob.customers?.name?.split(" ")[0] || "the customer"} would get — sending is still manual for now.`}</p>
             </div>
 
             <div>
@@ -928,6 +934,15 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
             </div>
           </div>
 
+          {isEdit && job.status === "pending" && (
+            <div style={{ marginBottom: 10, padding: "10px 12px", borderRadius: 10, background: "rgba(167,139,250,0.12)", border: "1px solid rgba(167,139,250,0.4)" }}>
+              <div style={{ fontSize: 12.5, color: P.textSecondary, marginBottom: 8 }}>Pending — check the day and time with the customer, adjust above if needed, then confirm.</div>
+              <button type="button" disabled={saving} onClick={(e) => handleSubmit(e, "scheduled")} style={{ width: "100%", background: "#A78BFA", color: "#fff", border: "none", borderRadius: 10, padding: "11px 16px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
+                Confirm job
+              </button>
+            </div>
+          )}
+
           {isEdit && job.customer_id && onInvoice && (
             <button
               type="button"
@@ -1053,7 +1068,8 @@ export default function AtlasSchedule({ onNavigate, navParams, currentPage = "sc
       const match = jobs.find((j) => j.id === navParams.editJobId);
       if (match) { setEditingJob(match); consumedNavRef.current = navParams; }
     } else if (navParams.addJobForCustomerId) {
-      setAddDate(new Date());
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(navParams.initialDate || "");
+      setAddDate(m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date());
       setAddOpen(true);
       consumedNavRef.current = navParams;
     }
@@ -1335,10 +1351,14 @@ export default function AtlasSchedule({ onNavigate, navParams, currentPage = "sc
           services={services}
           jobs={jobs}
           initialDate={addDate}
+          initialTime={navParams?.initialTime}
+          initialDescription={navParams?.initialDescription}
           initialCustomerId={navParams?.addJobForCustomerId}
           initialVehicleId={navParams?.initialVehicleId}
           initialServiceIds={navParams?.initialServiceIds}
           initialPrice={navParams?.initialPrice}
+          initialQuoteId={navParams?.quoteId}
+          confirmFirst={visible.confirmFirst !== false}
           job={editingJob}
           onInvoice={onNavigate}
           onClose={closeJobModal}

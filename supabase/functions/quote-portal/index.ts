@@ -32,7 +32,14 @@ function money(n: number): string {
   return `$${(Number(n) || 0).toLocaleString()}`;
 }
 
-async function sendApprovalAlert(businessId: string, customerName: string, chosenLabel: string, total: number) {
+const WINDOW_LABELS: Record<string, string> = { morning: "morning", afternoon: "afternoon", flexible: "any time" };
+
+function prettyDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+async function sendApprovalAlert(businessId: string, customerName: string, chosenLabel: string, total: number, whenLabel: string) {
   if (!OPENPHONE_API_KEY || !OPENPHONE_FROM_NUMBER || !OWNER_ALERT_PHONE) return;
   try {
     const time = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/New_York" }).format(new Date());
@@ -40,7 +47,7 @@ async function sendApprovalAlert(businessId: string, customerName: string, chose
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: OPENPHONE_API_KEY },
       body: JSON.stringify({
-        content: `${customerName} approved their quote at ${time}${chosenLabel ? ` (${chosenLabel})` : ""} — ${money(total)}. Get it booked!`,
+        content: `${customerName} approved their quote at ${time}${chosenLabel ? ` (${chosenLabel})` : ""} — ${money(total)}.${whenLabel ? ` Wants ${whenLabel}.` : ""} Get it booked!`,
         from: OPENPHONE_FROM_NUMBER,
         to: [OWNER_ALERT_PHONE],
       }),
@@ -204,7 +211,17 @@ Deno.serve(async (req) => {
       total += chosenAddonIds.reduce((s: number, id: string) => s + (Number(addonsById[id]?.price) || 0), 0);
     }
     total += extraServiceIds.reduce((s: number, id: string) => s + svcPrice(extrasById[id], vehicle), 0);
+    const subtotal = total;
     total *= 1 + (Number(quote.tax_rate) || 0) / 100;
+
+    const signature = String(body.signature || "").trim().slice(0, 120);
+    if (signature.length < 2) {
+      return new Response(JSON.stringify({ error: "Please type your name to approve." }), { status: 400, headers: { "Content-Type": "application/json" } });
+    }
+    const dateOk = typeof body.preferredDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.preferredDate);
+    const preferredDate = dateOk ? body.preferredDate : null;
+    const preferredWindow = Object.keys(WINDOW_LABELS).includes(body.preferredWindow) ? body.preferredWindow : null;
+    const whenLabel = [preferredDate ? prettyDate(preferredDate) : "", preferredWindow ? WINDOW_LABELS[preferredWindow] : ""].filter(Boolean).join(" ");
 
     const extraNames = extraServiceIds.map((id: string) => extrasById[id]?.name).filter(Boolean);
     if (extraNames.length) chosenLabel = [chosenLabel, `+ ${extraNames.join(", ")}`].filter(Boolean).join(" ");
@@ -218,6 +235,10 @@ Deno.serve(async (req) => {
         chosen_addon_ids: chosenAddonIds,
         extra_service_ids: extraServiceIds,
         approved_at: new Date().toISOString(),
+        approval_signature: signature,
+        preferred_date: preferredDate,
+        preferred_window: preferredWindow,
+        approved_subtotal: Math.round(subtotal * 100) / 100,
       })
       .eq("id", quote.id);
     if (updateError) {
@@ -231,7 +252,7 @@ Deno.serve(async (req) => {
       await supabase.from("follow_ups").update({ status: "done", completed_at: new Date().toISOString() }).eq("status", "pending").contains("customer_ids", [quote.customer_id]);
     }
 
-    await sendApprovalAlert(quote.business_id, quote.customers?.name || "A customer", chosenLabel, total);
+    await sendApprovalAlert(quote.business_id, quote.customers?.name || "A customer", chosenLabel, total, whenLabel);
 
     return new Response(JSON.stringify({ success: true }), { status: 200, headers: { "Content-Type": "application/json" } });
   }

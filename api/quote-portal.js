@@ -232,6 +232,14 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
   .total b { font-size: 24px; color: #EDF6F1; }
   .approve { width: 100%; margin-top: 16px; background: linear-gradient(120deg, #18D97A, #FF7A63); color: #06100C; border: none; border-radius: 12px; padding: 16px; font-size: 15px; font-weight: 800; cursor: pointer; }
   .approve:disabled { opacity: 0.6; cursor: default; }
+  .sign { margin-top: 16px; background: #0F1B15; border: 1px solid #1E2E25; border-radius: 14px; padding: 16px 18px; }
+  .sign .kicker { display: block; margin-bottom: 12px; }
+  .sign label { display: block; font-size: 12.5px; font-weight: 600; margin: 0 0 6px; color: #C7D6CD; }
+  .sign label small { color: #566B5E; font-weight: 400; }
+  .sign input, .sign select { width: 100%; background: #0A140F; border: 1px solid #1E2E25; border-radius: 10px; color: #EDF6F1; font: inherit; font-size: 16px; padding: 12px; color-scheme: dark; }
+  .sig-input { font-family: 'Snell Roundhand', 'Segoe Script', 'Brush Script MT', cursive !important; font-size: 22px !important; }
+  .sign-row { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; margin-top: 14px; }
+  .sign-hint { margin: 10px 0 0; font-size: 11.5px; color: #566B5E; }
   .note { margin-top: 14px; font-size: 11px; color: #566B5E; text-align: center; line-height: 1.6; }
   .approved-banner { margin-top: 16px; padding: 14px 16px; background: rgba(24,217,122,0.14); border: 1px solid #18D97A; border-radius: 12px; color: #18D97A; font-size: 13.5px; font-weight: 700; text-align: center; }
   .footer { margin-top: 28px; padding-top: 22px; border-top: 1px solid #1E2E25; text-align: center; display: flex; flex-direction: column; align-items: center; }
@@ -266,7 +274,17 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
 
   ${alreadyApproved
     ? `<div class="approved-banner">✓ Approved — we'll be in touch to get this scheduled.</div>`
-    : `<button class="approve" id="approveBtn" onclick="approve()"${tiered ? " disabled" : ""}>${tiered ? "Select a package above" : "Approve Selected Package"}</button>`}
+    : `<div class="sign" id="signBox">
+      <span class="kicker">Approve and pick a day</span>
+      <label for="sigName">Type your full name to approve</label>
+      <input id="sigName" class="sig-input" autocomplete="name" value="${esc(customer.name && customer.name !== "Customer" ? customer.name : "")}" oninput="updateApproveState()">
+      <div class="sign-row">
+        <div><label for="prefDate">Day you'd like <small>(optional)</small></label><input id="prefDate" type="date" min="${new Date().toISOString().slice(0, 10)}"></div>
+        <div><label for="prefWindow">Time</label><select id="prefWindow"><option value="flexible">Any time</option><option value="morning">Morning</option><option value="afternoon">Afternoon</option></select></div>
+      </div>
+      <p class="sign-hint">${esc(businessName)} will confirm your day and time.</p>
+    </div>
+    <button class="approve" id="approveBtn" onclick="approve()"${tiered ? " disabled" : ""}>${tiered ? "Select a package above" : "Approve Selected Package"}</button>`}
 
   <div class="note">Quote prepared ${esc(new Date(quote.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }))} · Valid 14 days${business.phone ? ` · Questions? ${esc(business.phone)}` : ""}</div>
 
@@ -316,9 +334,11 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
 
   function updateApproveState() {
     const btn = document.getElementById('approveBtn');
-    if (!btn || !TIERED) return;
-    btn.disabled = selectedTiers.size === 0;
-    btn.textContent = selectedTiers.size > 0 ? 'Approve Selected Package' + (selectedTiers.size > 1 ? 's' : '') : 'Select a package above';
+    if (!btn) return;
+    const named = (document.getElementById('sigName').value || '').trim().length >= 2;
+    if (TIERED && selectedTiers.size === 0) { btn.disabled = true; btn.textContent = 'Select a package above'; return; }
+    btn.disabled = !named;
+    btn.textContent = TIERED && selectedTiers.size > 1 ? 'Approve Selected Packages' : TIERED ? 'Approve Selected Package' : 'Approve Quote';
   }
 
   function updateTotal() {
@@ -354,13 +374,22 @@ ${business.logo_url ? `<meta property="og:image" content="${esc(`https://atlasap
       const res = await fetch(window.location.pathname + window.location.search, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: TOKEN, chosenTierIds: TIERED ? Array.from(selectedTiers) : [], chosenAddonIds, extraServiceIds }),
+        body: JSON.stringify({
+          token: TOKEN,
+          chosenTierIds: TIERED ? Array.from(selectedTiers) : [],
+          chosenAddonIds,
+          extraServiceIds,
+          signature: document.getElementById('sigName').value,
+          preferredDate: document.getElementById('prefDate').value || null,
+          preferredWindow: document.getElementById('prefWindow').value,
+        }),
       });
       if (!res.ok) throw new Error('failed');
-      btn.outerHTML = '<div class="approved-banner">✓ Approved — we\\'ll be in touch to get this scheduled.</div>';
+      const box = document.getElementById('signBox');
+      if (box) box.remove();
+      btn.outerHTML = '<div class="approved-banner">✓ Approved — we\\'ll confirm your day and time shortly.</div>';
     } catch {
-      btn.disabled = false;
-      btn.textContent = 'Approve Selected Package';
+      updateApproveState();
       alert('Something went wrong submitting your approval — please try again or call us directly.');
     }
   }

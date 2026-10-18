@@ -131,7 +131,17 @@ function StatCard({ label, value, sub, tone, alert }) {
   );
 }
 
-function LeadCard({ lead, now, commApp, businessName, onMove, onContact, onOpen, onQuote, onBook, onInvoice }) {
+function prettyWhen(q) {
+  const parts = [];
+  if (q.preferred_date) {
+    const [y, m, d] = q.preferred_date.split("-").map(Number);
+    parts.push(new Date(y, m - 1, d).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }));
+  }
+  if (q.preferred_window && q.preferred_window !== "flexible") parts.push(q.preferred_window);
+  return parts.join(" ");
+}
+
+function LeadCard({ lead, now, commApp, businessName, approval, onMove, onContact, onOpen, onQuote, onBook, onInvoice }) {
   const { vehicle, work } = summaryLines(lead);
   const stageSince = new Date(lead.lead_stage_at || lead.created_at).getTime();
   const waited = now.getTime() - stageSince;
@@ -146,6 +156,7 @@ function LeadCard({ lead, now, commApp, businessName, onMove, onContact, onOpen,
   } else if (lead.lead_stage === "quoted") {
     label = `Quoted ${ago(waited)} ago`;
     tone = waited > 48 * HOUR ? P.warn : P.textSecondary;
+    if (approval) { label = `Approved ${ago(now.getTime() - new Date(approval.approved_at).getTime())} ago`; tone = P.accent; }
   } else if (lead.lead_stage === "booked") {
     label = `Booked ${ago(waited)} ago`;
     tone = P.accent;
@@ -168,6 +179,11 @@ function LeadCard({ lead, now, commApp, businessName, onMove, onContact, onOpen,
       </div>
       {vehicle && <div style={{ fontSize: 12, color: P.textSecondary, marginTop: 2 }}>{vehicle}</div>}
       {work && <div style={{ fontSize: 12, color: P.textSecondary, margin: "9px 0", lineHeight: 1.4 }}>{work}</div>}
+      {lead.lead_stage === "quoted" && approval && (
+        <div style={{ margin: "9px 0", padding: "7px 10px", borderRadius: 9, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, fontSize: 12, fontWeight: 700 }}>
+          ✓ Customer approved the quote{prettyWhen(approval) ? ` · wants ${prettyWhen(approval)}` : ""}
+        </div>
+      )}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: work ? 0 : 9 }}>
         {src && <span style={{ fontSize: 10.5, fontWeight: 700, borderRadius: 99, padding: "3px 8px", background: lead.source === "estimate_request" ? P.accentSoft : "rgba(91,184,255,0.13)", color: lead.source === "estimate_request" ? P.accent : P.blue }}>{src}</span>}
         <span style={{ marginLeft: "auto", fontSize: 11.5, fontWeight: 700, color: tone }}>{label}</span>
@@ -177,7 +193,7 @@ function LeadCard({ lead, now, commApp, businessName, onMove, onContact, onOpen,
           <a href={textHref(lead.phone, msg, commApp)} onClick={() => onContact(lead, "text")} style={primary}>Text back</a>
         )}
         {lead.lead_stage === "contacted" && <button onClick={() => onQuote()} style={primary}>Make quote</button>}
-        {lead.lead_stage === "quoted" && <button onClick={() => onBook()} style={primary}>Book it</button>}
+        {lead.lead_stage === "quoted" && <button onClick={() => onBook()} style={primary}>{approval ? "Confirm booking" : "Book it"}</button>}
         {lead.lead_stage === "booked" && <button onClick={() => onInvoice()} style={primary}>Invoice it</button>}
         {lead.lead_stage === "new" && !lead.phone && <button onClick={() => onMove(lead, "contacted")} style={primary}>Mark contacted</button>}
         {lead.phone && <a href={callHref(lead.phone, commApp)} onClick={() => lead.lead_stage === "new" && onContact(lead, "call")} style={ghost}>Call</a>}
@@ -244,10 +260,18 @@ export default function AtlasLeads({ onNavigate, currentPage = "leads" }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [showClosed, setShowClosed] = useState(false);
 
+  const [approvals, setApprovals] = useState({});
+
   async function load() {
-    const { data, error } = await supabase.from("customers").select("*").eq("business_id", businessId).not("lead_stage", "is", null).order("created_at", { ascending: false });
-    if (error) setDataError(error.message);
-    else { setDataError(""); setLeads(data || []); }
+    const [custRes, quoteRes] = await Promise.all([
+      supabase.from("customers").select("*").eq("business_id", businessId).not("lead_stage", "is", null).order("created_at", { ascending: false }),
+      supabase.from("quotes").select("id, customer_id, proposal_mode, line_items, tiers, chosen_tier_ids, extra_service_ids, approved_subtotal, preferred_date, preferred_window, approved_at").eq("business_id", businessId).eq("status", "approved").is("job_id", null).order("approved_at", { ascending: false }),
+    ]);
+    if (custRes.error) setDataError(custRes.error.message);
+    else { setDataError(""); setLeads(custRes.data || []); }
+    const map = {};
+    for (const q of quoteRes.data || []) if (q.customer_id && !map[q.customer_id]) map[q.customer_id] = q;
+    setApprovals(map);
     setLoadingData(false);
   }
 
@@ -257,6 +281,7 @@ export default function AtlasLeads({ onNavigate, currentPage = "leads" }) {
     const channel = supabase
       .channel(`leads-board-${businessId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "customers", filter: `business_id=eq.${businessId}` }, () => load())
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "quotes", filter: `business_id=eq.${businessId}` }, () => load())
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [businessId]);
@@ -266,6 +291,27 @@ export default function AtlasLeads({ onNavigate, currentPage = "leads" }) {
     setLeads((list) => list.map((l) => (l.id === lead.id ? { ...l, lead_stage: stage, lead_stage_at: stamp } : l)));
     const { error } = await supabase.from("customers").update({ lead_stage: stage, lead_stage_at: stamp }).eq("id", lead.id);
     if (error) { setDataError(error.message); load(); }
+  }
+  function bookIt(lead) {
+    const q = approvals[lead.id];
+    if (!q) { onNavigate("schedule", { addJobForCustomerId: lead.id }); return; }
+    const vehicleId = q.line_items?.vehicleIds?.[0] || "";
+    const ids = new Set(q.extra_service_ids || []);
+    if (q.proposal_mode === "tiered") {
+      for (const t of q.tiers || []) if ((q.chosen_tier_ids || []).includes(t.id)) for (const id of t.packageIds || []) ids.add(id);
+    } else {
+      for (const v of q.line_items?.vehicleIds || []) for (const id of q.line_items?.byVehicle?.[v] || []) ids.add(id);
+    }
+    onNavigate("schedule", {
+      addJobForCustomerId: lead.id,
+      quoteId: q.id,
+      initialVehicleId: vehicleId,
+      initialServiceIds: [...ids],
+      initialPrice: q.approved_subtotal != null ? Number(q.approved_subtotal) : null,
+      initialDate: q.preferred_date || "",
+      initialTime: q.preferred_window === "afternoon" ? "13:00" : "09:00",
+      initialDescription: q.preferred_date ? `Customer asked for ${prettyWhen(q)}.` : "",
+    });
   }
   async function invoiceIt(lead) {
     const { data } = await supabase.from("jobs").select("vehicle_id, quote_id, service_ids, price, description").eq("customer_id", lead.id).neq("status", "cancelled").order("scheduled_at", { ascending: false }).limit(1);
@@ -308,7 +354,7 @@ export default function AtlasLeads({ onNavigate, currentPage = "leads" }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 10, background: "rgba(15,27,21,0.45)", border: `1px dashed ${P.border}`, borderRadius: 16, padding: 10, minHeight: 90 }}>
         {items.length === 0 && <div style={{ fontSize: 12.5, color: P.textMuted, textAlign: "center", padding: "22px 6px" }}>{stage.id === "new" ? "No new leads. New requests show up here." : "Nothing here."}</div>}
         {items.map((l) => (
-          <LeadCard key={l.id} lead={l} now={now} commApp={businessPreferredCommApp} businessName={businessName} onMove={move} onContact={contacted} onOpen={() => onNavigate("customers", { customerId: l.id })} onQuote={() => onNavigate("quote", { newQuoteForCustomerId: l.id })} onBook={() => onNavigate("schedule", { addJobForCustomerId: l.id })} onInvoice={() => invoiceIt(l)} />
+          <LeadCard key={l.id} lead={l} now={now} commApp={businessPreferredCommApp} businessName={businessName} onMove={move} onContact={contacted} onOpen={() => onNavigate("customers", { customerId: l.id })} onQuote={() => onNavigate("quote", { newQuoteForCustomerId: l.id })} approval={approvals[l.id]} onBook={() => bookIt(l)} onInvoice={() => invoiceIt(l)} />
         ))}
       </div>
     );
