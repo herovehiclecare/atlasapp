@@ -3,7 +3,7 @@ import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings as SettingsIcon, Sparkles,
   MoreHorizontal, Pencil, Camera, Plus, Trash2, Building2, Tag, Percent,
   UserCog, Clock, Bell, SlidersHorizontal, ChevronRight, Lock, Eye, EyeOff,
-  CalendarCheck, Globe, Copy, Check as CheckIcon, Image as ImageIcon, Plug, Loader2, ExternalLink, X, AlertCircle, ListChecks, ChevronUp, ChevronDown,
+  CalendarCheck, Globe, Copy, Check as CheckIcon, Image as ImageIcon, Plug, Loader2, ExternalLink, X, AlertCircle, ListChecks, ChevronUp, ChevronDown, MessageSquare,
 } from "lucide-react";
 import { Inbox as LeadsIcon } from "lucide-react";
 import { supabase } from "./supabaseClient";
@@ -61,6 +61,7 @@ const SECTIONS = [
   { id: "employees", label: "Employees", Icon: UserCog },
   { id: "hours", label: "Business Hours", Icon: Clock },
   { id: "notifications", label: "Notifications", Icon: Bell },
+  { id: "automations", label: "Automations", Icon: MessageSquare },
   { id: "customize", label: "Customize", Icon: SlidersHorizontal },
   { id: "account", label: "Account", Icon: Lock },
 ];
@@ -1447,6 +1448,81 @@ function NotificationsPanel() {
   );
 }
 
+/* ---------------------------------- Automations ---------------------------------- */
+
+const AUTOMATION_ROWS = [
+  { key: "jobScheduled", label: "Booking confirmation text", sub: "Texts the customer the day and time as soon as a job is Scheduled (or you tap Confirm job)." },
+  { key: "dayBefore", label: "Day-before reminder", sub: "Texts the customer about 24 hours before the job, between 8am and 8pm." },
+  { key: "review", label: "Review request", sub: "Texts your review link a couple of hours after a job is marked Completed." },
+];
+
+function AutomationsPanel() {
+  const { businessId } = useBusinessId();
+  const [prefs, setPrefs] = useState({ jobScheduled: false, dayBefore: false, review: false, reviewLink: "" });
+  const [textingOn, setTextingOn] = useState(null);
+  const [error, setError] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (!businessId) return;
+    supabase.from("businesses").select("ui_prefs, texting_enabled").eq("id", businessId).single().then(({ data }) => {
+      if (!data) return;
+      setTextingOn(!!data.texting_enabled);
+      if (data.ui_prefs?.automations) setPrefs((p) => ({ ...p, ...data.ui_prefs.automations }));
+    });
+  }, [businessId]);
+
+  async function save(next) {
+    setPrefs(next);
+    setSaved(false);
+    if (!businessId) return;
+    try {
+      const { data, error: fetchError } = await supabase.from("businesses").select("ui_prefs").eq("id", businessId).single();
+      if (fetchError) throw fetchError;
+      const { error: updateError } = await supabase.from("businesses").update({ ui_prefs: { ...(data?.ui_prefs || {}), automations: next } }).eq("id", businessId);
+      if (updateError) throw updateError;
+      setError("");
+      setSaved(true);
+    } catch (err) { setError(err.message); }
+  }
+
+  const reviewLinkMissing = prefs.review && !prefs.reviewLink.trim();
+
+  return (
+    <Panel title="Automations" sub="Texts Atlas sends your customers for you. Each one is off until you turn it on.">
+      {error && <p style={{ fontSize: 12.5, color: P.danger, margin: "0 0 12px" }}>{error}</p>}
+      {textingOn === false && (
+        <p style={{ fontSize: 12.5, color: "#F5A623", margin: "0 0 12px", lineHeight: 1.5 }}>Texting isn't connected for your account yet, so these won't send. Turning them on now saves your choice for when it is.</p>
+      )}
+      <Card>
+        {AUTOMATION_ROWS.map((row, i) => (
+          <div key={row.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 16px", borderBottom: i < AUTOMATION_ROWS.length - 1 ? `1px solid ${P.border}` : "none" }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: P.textPrimary }}>{row.label}</div>
+              <div style={{ fontSize: 11.5, color: P.textMuted, marginTop: 2 }}>{row.sub}</div>
+            </div>
+            <Toggle on={!!prefs[row.key]} onClick={() => save({ ...prefs, [row.key]: !prefs[row.key] })} />
+          </div>
+        ))}
+      </Card>
+      <div style={{ marginTop: 16 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, marginBottom: 8 }}>Google review link</div>
+        <input
+          value={prefs.reviewLink}
+          onChange={(e) => setPrefs({ ...prefs, reviewLink: e.target.value })}
+          onBlur={() => save({ ...prefs, reviewLink: prefs.reviewLink.trim() })}
+          placeholder="https://g.page/r/your-link/review"
+          style={inputStyle}
+        />
+        {reviewLinkMissing && <p style={{ fontSize: 12, color: "#F5A623", margin: "6px 0 0" }}>Add your review link or the review text won't send.</p>}
+      </div>
+      <p style={{ fontSize: 11.5, color: P.textMuted, margin: "14px 0 0", lineHeight: 1.5 }}>
+        Every text ends with "Reply STOP to opt out." You can also send any of these by hand from a job. {saved ? "Saved." : ""}
+      </p>
+    </Panel>
+  );
+}
+
 /* ---------------------------------- Customize ---------------------------------- */
 
 function CustomizePanel() {
@@ -1926,7 +2002,7 @@ function InstantQuotePanel() {
 const PANELS = {
   profile: ProfilePanel, services: ServicesPanel, instantquote: InstantQuotePanel, booking: BookingPanel, page: PublicPagePanel,
   integrations: IntegrationsPanel, taxes: TaxesPanel,
-  employees: EmployeesPanel, hours: HoursPanel, notifications: NotificationsPanel, customize: CustomizePanel,
+  employees: EmployeesPanel, hours: HoursPanel, notifications: NotificationsPanel, automations: AutomationsPanel, customize: CustomizePanel,
   account: AccountPanel,
 };
 

@@ -478,7 +478,7 @@ function Section({ title, children }) {
   );
 }
 
-function AddJobModal({ businessId, businessName, commApp, customers, vehicles, services, jobs, initialDate, initialTime, initialDescription, initialCustomerId, initialVehicleId, initialServiceIds, initialPrice, initialQuoteId, confirmFirst, job, onInvoice, onClose, onAdded, onDelete, onVehicleAdded, onCustomerSaved }) {
+function AddJobModal({ businessId, businessName, commApp, customers, vehicles, services, jobs, initialDate, initialTime, initialDescription, initialCustomerId, initialVehicleId, initialServiceIds, initialPrice, initialQuoteId, confirmFirst, autoConfirmText, job, onInvoice, onClose, onAdded, onDelete, onVehicleAdded, onCustomerSaved }) {
   const isEdit = !!job;
   const [customerId, setCustomerId] = useState(job?.customer_id || initialCustomerId || "");
   const [vehicleId, setVehicleId] = useState(job?.vehicle_id || initialVehicleId || "");
@@ -520,6 +520,25 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
   // to a "here's what the customer gets" confirmation-text preview instead
   // of just closing, since sending that text is still a manual step today.
   const [createdJob, setCreatedJob] = useState(null);
+  const [textResult, setTextResult] = useState("");
+  const [textBusy, setTextBusy] = useState(false);
+
+  async function sendJobText(jobId, type) {
+    const { data, error: fnError } = await supabase.functions.invoke("job-texts", { body: { mode: "send", jobId, type } });
+    if (fnError || data?.error) {
+      let msg = data?.error;
+      if (!msg && fnError?.context?.json) { try { msg = (await fnError.context.json())?.error; } catch { /* ignore */ } }
+      return { ok: false, error: msg || "The text didn't go through." };
+    }
+    return { ok: true };
+  }
+  async function sendManualText(type) {
+    setTextBusy(true);
+    setTextResult("");
+    const r = await sendJobText(job.id, type);
+    setTextBusy(false);
+    setTextResult(r.ok ? "✓ Text sent." : r.error);
+  }
   const [script, setScript] = useState("");
   const [copied, setCopied] = useState(false);
 
@@ -669,9 +688,16 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
     onAdded(data);
     if (!isEdit && initialQuoteId) await supabase.from("quotes").update({ job_id: data.id }).eq("id", initialQuoteId);
 
+    const becameScheduled = data.status === "scheduled" && (!isEdit || job.status === "pending");
+    const autoText = autoConfirmText && becameScheduled && data.customers?.phone;
     if (isEdit) {
+      if (autoText) sendJobText(data.id, "scheduled");
       onClose();
       return;
+    }
+    if (autoText) {
+      const r = await sendJobText(data.id, "scheduled");
+      setTextResult(r.ok ? "sent" : r.error);
     }
 
     if (draftKey) clearDraft(draftKey);
@@ -737,11 +763,12 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 10, padding: "10px 12px" }}>
               <div>
-                <div style={{ fontSize: 12.5, fontWeight: 600, color: P.textPrimary }}>Send automatically</div>
-                <div style={{ fontSize: 11, color: P.textMuted, marginTop: 2 }}>Needs a texting service connected first — coming soon.</div>
-              </div>
-              <div title="Not connected yet" style={{ width: 34, height: 20, borderRadius: 20, background: P.border, position: "relative", opacity: 0.5, flexShrink: 0 }}>
-                <div style={{ width: 16, height: 16, borderRadius: "50%", background: P.textMuted, position: "absolute", top: 2, left: 2 }} />
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: textResult === "sent" ? P.accent : P.textPrimary }}>
+                  {textResult === "sent" ? "✓ Booking text sent automatically" : textResult ? "Automatic text didn't send" : "Automatic booking text"}
+                </div>
+                <div style={{ fontSize: 11, color: P.textMuted, marginTop: 2 }}>
+                  {textResult === "sent" ? "Nothing more to do." : textResult ? textResult : createdJob.status === "pending" ? "Sends when you confirm the job." : "Off. Turn it on in Settings → Automations."}
+                </div>
               </div>
             </div>
 
@@ -940,6 +967,15 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
               <button type="button" disabled={saving} onClick={(e) => handleSubmit(e, "scheduled")} style={{ width: "100%", background: "#A78BFA", color: "#fff", border: "none", borderRadius: 10, padding: "11px 16px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>
                 Confirm job
               </button>
+            </div>
+          )}
+
+          {isEdit && (job.status === "scheduled" || job.status === "completed") && job.customers?.phone && (
+            <div style={{ marginBottom: 10 }}>
+              <button type="button" disabled={textBusy} onClick={() => sendManualText(job.status === "completed" ? "review" : "scheduled")} style={{ width: "100%", background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 10, padding: "10px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                {textBusy ? "Sending…" : job.status === "completed" ? "Text review request" : "Text booking confirmation"}
+              </button>
+              {textResult && <div style={{ fontSize: 12, marginTop: 6, color: textResult.startsWith("✓") ? P.accent : P.danger }}>{textResult}</div>}
             </div>
           )}
 
@@ -1359,6 +1395,7 @@ export default function AtlasSchedule({ onNavigate, navParams, currentPage = "sc
           initialPrice={navParams?.initialPrice}
           initialQuoteId={navParams?.quoteId}
           confirmFirst={visible.confirmFirst !== false}
+          autoConfirmText={!!businessUiPrefs?.automations?.jobScheduled}
           job={editingJob}
           onInvoice={onNavigate}
           onClose={closeJobModal}
