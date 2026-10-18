@@ -423,6 +423,48 @@ function Group({ title, items, customersById, contextById, tone, onToggle, onEdi
 
 /* ---------------------------------- page ---------------------------------- */
 
+function DueForService({ customers, contextById, upcomingIds, days, onDays, businessName, commApp, onBook }) {
+  const [showAll, setShowAll] = useState(false);
+  const cutoff = Date.now() - days * 86400000;
+  const due = customers
+    .map((c) => ({ c, last: contextById[c.id]?.lastVisit, vehicle: contextById[c.id]?.vehicleLabels?.[0] }))
+    .filter((x) => x.last && new Date(x.last).getTime() < cutoff && !upcomingIds.has(x.c.id))
+    .sort((a, b) => (a.last < b.last ? -1 : 1));
+  if (due.length === 0) return null;
+  const shown = showAll ? due : due.slice(0, 5);
+  return (
+    <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, overflow: "hidden" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "14px 18px", borderBottom: `1px solid ${P.border}` }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: P.textPrimary }}>Due for a service · {due.length}</div>
+          <div style={{ fontSize: 11.5, color: P.textMuted, marginTop: 2 }}>Past customers with no upcoming booking. Repeat work is your cheapest sale.</div>
+        </div>
+        <select value={days} onChange={(e) => onDays(Number(e.target.value))} style={{ background: P.bgTop, border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 8, padding: "6px 8px", fontSize: 12 }}>
+          {[30, 45, 60, 90, 120].map((n) => <option key={n} value={n}>{n}+ days</option>)}
+        </select>
+      </div>
+      {shown.map(({ c, last, vehicle }, i) => {
+        const first = (c.name || "").split(" ")[0] || "there";
+        const ago = Math.floor((Date.now() - new Date(last).getTime()) / 86400000);
+        const script = `Hi ${first}, it's ${businessName || "your detailer"}. It's been a little while since we did ${vehicle || "your vehicle"} - want me to get you on the schedule?`;
+        return (
+          <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 18px", borderTop: i ? `1px solid ${P.border}` : "none" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+              <div style={{ fontSize: 11.5, color: P.textMuted, marginTop: 2 }}>Last done {ago} days ago{vehicle ? ` · ${vehicle}` : ""}</div>
+            </div>
+            {c.phone && <a href={textHref(c.phone, script, commApp)} style={{ display: "flex", alignItems: "center", gap: 5, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 8, padding: "7px 11px", fontSize: 12, fontWeight: 700, textDecoration: "none", flexShrink: 0 }}><MessageSquare size={12} /> Text</a>}
+            <button onClick={() => onBook(c)} style={{ background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 8, padding: "7px 11px", fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>Book</button>
+          </div>
+        );
+      })}
+      {due.length > 5 && (
+        <button onClick={() => setShowAll((v) => !v)} style={{ width: "100%", background: "transparent", border: "none", borderTop: `1px solid ${P.border}`, color: P.textSecondary, padding: "11px", fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{showAll ? "Show fewer" : `Show all ${due.length}`}</button>
+      )}
+    </div>
+  );
+}
+
 export default function AtlasFollowUps({ onNavigate, navParams, currentPage = "followups" }) {
   const { businessId, businessName, businessLogoUrl, businessPreferredCommApp, loading: bizLoading, error: bizError } = useBusinessId();
   const now = useLiveClock();
@@ -436,6 +478,9 @@ export default function AtlasFollowUps({ onNavigate, navParams, currentPage = "f
   const [editingFollowUp, setEditingFollowUp] = useState(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [highlightId, setHighlightId] = useState(null);
+  const [upcomingIds, setUpcomingIds] = useState(new Set());
+  const [dueDays, setDueDays] = useState(() => { try { return Number(localStorage.getItem("atlas_due_days")) || 60; } catch { return 60; } });
+  function changeDueDays(n) { setDueDays(n); try { localStorage.setItem("atlas_due_days", String(n)); } catch { /* ignore */ } }
 
   useEffect(() => {
     if (!businessId) return;
@@ -446,7 +491,7 @@ export default function AtlasFollowUps({ onNavigate, navParams, currentPage = "f
         supabase.from("follow_ups").select("*").eq("business_id", businessId).order("due_date", { ascending: true, nullsFirst: false }),
         supabase.from("customers").select("id, name, phone, email, notes, source, lead_context").eq("business_id", businessId).order("name", { ascending: true }),
         supabase.from("vehicles").select("customer_id, label").eq("business_id", businessId),
-        supabase.from("jobs").select("customer_id, status, scheduled_at").eq("business_id", businessId).eq("status", "completed"),
+        supabase.from("jobs").select("customer_id, status, scheduled_at").eq("business_id", businessId).in("status", ["completed", "scheduled", "pending", "in_progress"]),
         supabase.from("invoices").select("customer_id, amount, status").eq("business_id", businessId).eq("status", "paid"),
       ]);
       if (cancelled) return;
@@ -462,7 +507,9 @@ export default function AtlasFollowUps({ onNavigate, navParams, currentPage = "f
       for (const v of vehiclesResult.data || []) {
         (ctx[v.customer_id] ||= { vehicleLabels: [], lastVisit: null, totalSpent: 0 }).vehicleLabels.push(v.label);
       }
+      const upcoming = new Set();
       for (const j of jobsResult.data || []) {
+        if (j.status !== "completed") { if (j.scheduled_at && j.scheduled_at >= new Date().toISOString()) upcoming.add(j.customer_id); continue; }
         const c = (ctx[j.customer_id] ||= { vehicleLabels: [], lastVisit: null, totalSpent: 0 });
         if (j.scheduled_at && (!c.lastVisit || j.scheduled_at > c.lastVisit)) c.lastVisit = j.scheduled_at;
       }
@@ -470,6 +517,7 @@ export default function AtlasFollowUps({ onNavigate, navParams, currentPage = "f
         (ctx[inv.customer_id] ||= { vehicleLabels: [], lastVisit: null, totalSpent: 0 }).totalSpent += Number(inv.amount) || 0;
       }
       setContextById(ctx);
+      setUpcomingIds(upcoming);
       setLoadingData(false);
     })();
     return () => { cancelled = true; };
@@ -568,6 +616,10 @@ export default function AtlasFollowUps({ onNavigate, navParams, currentPage = "f
             <StatCard label="Due Today" value={buckets.today.length} tone={buckets.today.length > 0 ? P.accent : undefined} />
             <StatCard label="Open" value={openCount} sub="total pending" />
           </div>
+
+          {!loading && !error && (
+            <DueForService customers={customers} contextById={contextById} upcomingIds={upcomingIds} days={dueDays} onDays={changeDueDays} businessName={businessName} commApp={businessPreferredCommApp} onBook={(c) => onNavigate("schedule", { addJobForCustomerId: c.id })} />
+          )}
 
           {loading ? (
             <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, padding: "40px 18px", textAlign: "center", fontSize: 13, color: P.textMuted, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
