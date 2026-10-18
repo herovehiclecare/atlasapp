@@ -131,7 +131,7 @@ function StatCard({ label, value, sub, tone, alert }) {
   );
 }
 
-function LeadCard({ lead, now, commApp, businessName, onMove, onContact, onOpen }) {
+function LeadCard({ lead, now, commApp, businessName, onMove, onContact, onOpen, onQuote, onBook }) {
   const { vehicle, work } = summaryLines(lead);
   const stageSince = new Date(lead.lead_stage_at || lead.created_at).getTime();
   const waited = now.getTime() - stageSince;
@@ -176,8 +176,8 @@ function LeadCard({ lead, now, commApp, businessName, onMove, onContact, onOpen 
         {lead.phone && lead.lead_stage === "new" && (
           <a href={textHref(lead.phone, msg, commApp)} onClick={() => onContact(lead, "text")} style={primary}>Text back</a>
         )}
-        {lead.lead_stage === "contacted" && <button onClick={() => onOpen()} style={primary}>Make quote</button>}
-        {lead.lead_stage === "quoted" && <button onClick={() => onMove(lead, "booked")} style={primary}>Mark booked</button>}
+        {lead.lead_stage === "contacted" && <button onClick={() => onQuote()} style={primary}>Make quote</button>}
+        {lead.lead_stage === "quoted" && <button onClick={() => onBook()} style={primary}>Book it</button>}
         {lead.lead_stage === "booked" && <button onClick={() => onMove(lead, "done")} style={primary}>Job done</button>}
         {lead.lead_stage === "new" && !lead.phone && <button onClick={() => onMove(lead, "contacted")} style={primary}>Mark contacted</button>}
         {lead.phone && <a href={callHref(lead.phone, commApp)} onClick={() => lead.lead_stage === "new" && onContact(lead, "call")} style={ghost}>Call</a>}
@@ -296,7 +296,7 @@ export default function AtlasLeads({ onNavigate, currentPage = "leads" }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 10, background: "rgba(15,27,21,0.45)", border: `1px dashed ${P.border}`, borderRadius: 16, padding: 10, minHeight: 90 }}>
         {items.length === 0 && <div style={{ fontSize: 12.5, color: P.textMuted, textAlign: "center", padding: "22px 6px" }}>{stage.id === "new" ? "No new leads. New requests show up here." : "Nothing here."}</div>}
         {items.map((l) => (
-          <LeadCard key={l.id} lead={l} now={now} commApp={businessPreferredCommApp} businessName={businessName} onMove={move} onContact={contacted} onOpen={() => onNavigate("customers", { customerId: l.id })} />
+          <LeadCard key={l.id} lead={l} now={now} commApp={businessPreferredCommApp} businessName={businessName} onMove={move} onContact={contacted} onOpen={() => onNavigate("customers", { customerId: l.id })} onQuote={() => onNavigate("quote", { newQuoteForCustomerId: l.id })} onBook={() => onNavigate("schedule", { addJobForCustomerId: l.id })} />
         ))}
       </div>
     );
