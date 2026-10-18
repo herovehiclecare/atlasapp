@@ -618,6 +618,8 @@ function formScreen(){
       <input type="text" id="caddr" placeholder="Street, city" value="${esc(state.contact.address)}" data-c="address"></div>
     <div class="field" style="margin-bottom:0"><label class="f" for="cnotes">Anything we should know? <span style="color:var(--dim);font-weight:500">(optional)</span></label>
       <textarea id="cnotes" placeholder="Anything that helps us price it right…" data-c="notes">${esc(state.contact.notes)}</textarea></div>
+    ${CFG.autoReply && CFG.autoReply.sms ? `<label class="consent"><input type="checkbox" data-consent="1"${state.smsConsent?" checked":""}>
+      <span>Text me a confirmation and updates about this request. Msg &amp; data rates may apply. Reply STOP to opt out.</span></label>`:""}
     ${state.touched && !contactReady()?`<div class="err">Add your name and a phone number or email so we can reply.</div>`:""}` })}
 
   ${state.sendError?`<div class="err" style="margin:14px 0 0">${esc(state.sendError)}</div>`:""}
@@ -957,6 +959,7 @@ document.addEventListener("input", e=>{
   const el=e.target;
   if(el.dataset.item!==undefined){ state.items[Number(el.dataset.item)].vals[el.dataset.k]=el.value; return; }
   if(el.dataset.c){ state.contact[el.dataset.c]=el.value; return; }
+  if(el.dataset.consent!==undefined){ state.smsConsent=el.checked; return; }
   if(el.dataset.e){
     const path=el.dataset.e;
     // Prices and the frequency % are numbers; a blank high price means "from $X".
@@ -1012,7 +1015,7 @@ document.getElementById("cta").addEventListener("click", ()=>{
 });
 
 function hostedPayload(){
-  return { slug:SLUG, contact:state.contact,
+  return { slug:SLUG, contact:state.contact, sms_consent:!!state.smsConsent,
     items: state.items.map(v=>({ vals:v.vals, size:v.size, condition:v.condition, frequency:v.frequency,
       services:v.services, addons:v.addons })) };
 }

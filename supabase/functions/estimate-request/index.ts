@@ -92,6 +92,24 @@ async function sendRequestAlert(to: string, name: string, phone: string, summary
   }
 }
 
+async function sendCustomerConfirmation(to: string, firstName: string, businessName: string, range: string, replyWindow: string) {
+  if (!OPENPHONE_API_KEY || !OPENPHONE_FROM_NUMBER || !to) return;
+  try {
+    const res = await fetch("https://api.openphone.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: OPENPHONE_API_KEY },
+      body: JSON.stringify({
+        content: `Hi ${firstName}, this is ${businessName}. We got your quote request (${range}). We'll text you ${replyWindow}. Reply STOP to opt out.`,
+        from: OPENPHONE_FROM_NUMBER,
+        to: [to],
+      }),
+    });
+    if (!res.ok) console.error("Instant Quote customer text failed", res.status, await res.text());
+  } catch (err) {
+    console.error("Instant Quote customer text threw", err);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -284,6 +302,22 @@ Deno.serve(async (req) => {
           .eq("business_id", business.id).eq("source", "estimate_request").gte("created_at", hourAgo);
         if ((lastHour ?? 0) <= MAX_ALERTS_PER_HOUR) {
           await sendRequestAlert(alertTo, name.slice(0, 40), phone, itemsOut.map((i) => i.label).join(", "), range);
+        }
+      }
+
+      // Customer confirmation text: only with their ticked consent, only when the owner turned
+      // it on, and only for the Atlas number's own business (other shops need their own texting).
+      const customerTo = toE164(phone);
+      if (body?.sms_consent === true && customerTo && cfg.autoReply?.sms && business.id === ALERT_BUSINESS_ID) {
+        await supabase.from("customers").update({ sms_consent_at: new Date().toISOString() }).eq("id", customerId);
+        const hourAgo = new Date(Date.now() - 3_600_000).toISOString();
+        const { count: sentHour } = await supabase
+          .from("customers").select("id", { count: "exact", head: true })
+          .eq("business_id", business.id).not("sms_consent_at", "is", null).gte("sms_consent_at", hourAgo);
+        if ((sentHour ?? 0) <= MAX_ALERTS_PER_HOUR) {
+          const first = name.split(/\s+/)[0].slice(0, 30);
+          const when = clean(cfg.brand?.replyWindow, 60) || "within 1 business hour";
+          await sendCustomerConfirmation(customerTo, first, clean(business.name, 60), range, when.startsWith("within") || when.startsWith("in ") ? when : `within ${when}`);
         }
       }
     }
