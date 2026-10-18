@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Atlas Instant Quote Setup</title>
+<meta name="robots" content="noindex">
+<style>
+:root{--bg:#06100C;--panel:#0F1B15;--line:#1E2E25;--text:#EDF6F1;--muted:#92AA9D;--dim:#566B5E;--accent:#18D97A;--warn:#FF7A63}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:560px;margin:0 auto;padding:28px max(16px,env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+.brand{font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+h1{font-size:28px;line-height:1.15;margin:0 0 10px;letter-spacing:-.02em}
+.lede{color:var(--muted);font-size:16px;line-height:1.5;margin:0 0 26px}
+.sec{font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:30px 0 12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
+.field{margin-bottom:16px}.field:last-child{margin-bottom:0}
+label{display:block;font-size:14px;font-weight:700;margin-bottom:6px}
+label small{font-weight:500;color:var(--dim)}
+.hint{font-size:13px;color:var(--dim);margin:6px 0 0;line-height:1.4}
+input,select,textarea{width:100%;background:#0A140F;border:1px solid var(--line);border-radius:12px;color:var(--text);font:inherit;font-size:16px;padding:13px 14px;outline:none}
+textarea{min-height:130px;resize:vertical;line-height:1.45}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:16px 12px;margin-bottom:16px}
+.row .field{margin-bottom:0}
+@media(max-width:420px){.row{grid-template-columns:1fr}}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+button{width:100%;margin-top:26px;background:var(--accent);color:#04120B;border:0;border-radius:14px;font:inherit;font-size:17px;font-weight:800;padding:16px;cursor:pointer}
+button[disabled]{opacity:.5}
+.err{color:var(--warn);font-size:14px;font-weight:600;margin-top:14px}
+.done{text-align:center;padding:40px 0}
+.tick{width:72px;height:72px;border-radius:50%;background:rgba(24,217,122,.14);color:var(--accent);display:grid;place-items:center;margin:0 auto 20px}
+.steps{text-align:left;margin:22px 0 0;padding-left:20px;color:var(--muted);line-height:1.6}
+.steps b{color:var(--text)}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <div class="brand">Atlas Instant Quote</div>
+  <h1>Let's get your quote tool ready</h1>
+  <p class="lede">Fill this out once and we'll build your page from it. It takes about 10 minutes. Anything you're not sure about, skip it and we'll sort it out together.</p>
+
+  <form id="f" novalidate>
+    <div class="sec">About you</div>
+    <div class="card">
+      <div class="field"><label for="business_name">Business name</label><input id="business_name" name="business_name" autocomplete="organization"></div>
+      <div class="row">
+        <div class="field"><label for="contact_name">Your name</label><input id="contact_name" name="contact_name" autocomplete="name"></div>
+        <div class="field"><label for="phone">Your phone</label><input id="phone" name="phone" type="tel" autocomplete="tel"></div>
+      </div>
+      <div class="field"><label for="email">Email</label><input id="email" name="email" type="email" autocomplete="email"></div>
+      <div class="field"><label for="trade">What do you do?</label>
+        <select id="trade" name="trade"><option value="">Choose one</option><option>Auto detailing</option><option>Ceramic coating / PPF</option><option>Window tinting</option><option>Pressure washing</option><option>Lawn care</option><option>Cleaning</option><option>Other</option></select></div>
+      <div class="field"><label for="service_area">Where do you work? <small>(city or area)</small></label><input id="service_area" name="service_area"></div>
+    </div>
+
+    <div class="sec">Your prices</div>
+    <div class="card">
+      <div class="field"><label for="services">Your services and prices</label>
+        <textarea id="services" name="services" placeholder="Full interior detail - car $150, SUV $200&#10;Exterior wash and wax - car $100, SUV $140&#10;Ceramic coating - from $800"></textarea>
+        <p class="hint">One service per line. If a price changes with the size of the vehicle, give both. You can also paste your whole price list.</p></div>
+      <div class="field"><label for="add_ons">Add-ons <small>(optional)</small></label>
+        <textarea id="add_ons" name="add_ons" style="min-height:90px" placeholder="Pet hair removal $40&#10;Headlight restoration $60"></textarea></div>
+    </div>
+
+    <div class="sec">How it should work</div>
+    <div class="card">
+      <div class="field"><label for="reply_window">How fast do you reply to a request?</label>
+        <select id="reply_window" name="reply_window"><option value="within 1 business hour">Within 1 business hour</option><option value="within 2 hours">Within 2 hours</option><option value="the same day">The same day</option><option value="within 24 hours">Within 24 hours</option></select></div>
+      <div class="field"><label for="alert_phone">Phone number to text when a request comes in</label><input id="alert_phone" name="alert_phone" type="tel"></div>
+      <div class="field"><label for="brand_color">Brand color <small>(optional)</small></label><input id="brand_color" name="brand_color" placeholder="Like blue, or #1B6FEA"><p class="hint">Your logo comes later. See the last step.</p></div>
+    </div>
+
+    <div class="sec">Your website</div>
+    <div class="card">
+      <div class="field"><label for="website_platform">What is your website built on?</label>
+        <select id="website_platform" name="website_platform"><option value="">Not sure</option><option>Wix</option><option>Squarespace</option><option>WordPress</option><option>GoDaddy</option><option>Shopify</option><option>Bluehost</option><option>Other</option><option>I don't have a website</option></select></div>
+      <div class="field"><label for="website">Website address <small>(optional)</small></label><input id="website" name="website" inputmode="url" placeholder="yourshop.com"></div>
+      <div class="field"><label for="socials">Instagram or Facebook page <small>(optional)</small></label><input id="socials" name="socials"></div>
+      <div class="field"><label for="notes">Anything else we should know? <small>(optional)</small></label><textarea id="notes" name="notes" style="min-height:90px"></textarea></div>
+    </div>
+
+    <div class="hp" aria-hidden="true"><label>Leave this empty<input name="website_url_hp" tabindex="-1" autocomplete="off"></label></div>
+    <div class="err" id="err" hidden></div>
+    <button type="submit" id="go">Send my setup form</button>
+  </form>
+</div>
+
+<script>
+const API="https://fqggnekepfzxrkuazpiy.supabase.co/functions/v1/setup-intake";
+const f=document.getElementById("f"),err=document.getElementById("err"),go=document.getElementById("go");
+f.addEventListener("submit",async e=>{
+  e.preventDefault();
+  err.hidden=true;
+  const body=Object.fromEntries(new FormData(f).entries());
+  if((body.business_name||"").trim().length<2||(body.contact_name||"").trim().length<2||!((body.phone||"").trim()||(body.email||"").trim())){
+    err.textContent="Add your business name, your name, and a phone number or email.";err.hidden=false;return;
+  }
+  go.disabled=true;go.textContent="Sending...";
+  try{
+    const r=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error||"Could not send. Please try again.");
+    document.getElementById("app").innerHTML=`<div class="brand">Atlas Instant Quote</div><div class="done"><div class="tick"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5.2 5.2L20 7"/></svg></div>
+      <h1>Got it, thank you</h1><p class="lede" style="margin-bottom:0">We'll build your page and reach out soon to finish setup.</p>
+      <ol class="steps"><li><b>Send your logo.</b> Email it to <a href="mailto:herovehiclecare@gmail.com">herovehiclecare@gmail.com</a>. A picture from your phone works too.</li><li><b>Watch for our message.</b> We'll text or email you your quote link to test.</li></ol></div>`;
+    window.scrollTo(0,0);
+  }catch(x){
+    err.textContent=x.message;err.hidden=false;go.disabled=false;go.textContent="Send my setup form";
+  }
+});
+</script>
+</body>
+</html>
