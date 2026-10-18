@@ -131,6 +131,54 @@ function StatCard({ label, value, sub, tone, alert }) {
   );
 }
 
+function SourceBoard({ leads, jobs, now }) {
+  const cutoff = now.getTime() - 30 * 24 * HOUR;
+  const bySource = {};
+  const slot = (src) => (bySource[src || "other"] ||= { leads: 0, won: 0, revenue: 0 });
+  const sourceOf = Object.fromEntries(leads.map((l) => [l.id, l.source || "other"]));
+  for (const l of leads) {
+    if (new Date(l.created_at).getTime() < cutoff) continue;
+    const s = slot(l.source);
+    s.leads += 1;
+    if (["booked", "done"].includes(l.lead_stage)) s.won += 1;
+  }
+  for (const j of jobs) {
+    const src = sourceOf[j.customer_id];
+    const when = new Date(j.completed_at || j.scheduled_at || 0).getTime();
+    if (!src || when < cutoff) continue;
+    slot(src === "other" ? null : src).revenue += Number(j.price) || 0;
+  }
+  const rows = Object.entries(bySource).filter(([, v]) => v.leads || v.revenue).sort((a, b) => b[1].revenue - a[1].revenue || b[1].leads - a[1].leads);
+  if (rows.length === 0) return null;
+  const total = rows.reduce((t, [, v]) => ({ leads: t.leads + v.leads, won: t.won + v.won, revenue: t.revenue + v.revenue }), { leads: 0, won: 0, revenue: 0 });
+  const cell = { fontSize: 13, fontVariantNumeric: "tabular-nums", textAlign: "right", color: P.textSecondary };
+  const head = { fontSize: 10.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, textAlign: "right" };
+  const grid = { display: "grid", gridTemplateColumns: "minmax(0,1.4fr) repeat(3, minmax(0,1fr))", gap: 8, alignItems: "center" };
+  return (
+    <div style={{ background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, padding: "14px 18px" }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: P.textPrimary }}>Last 30 days: where your money comes from</div>
+      <div style={{ fontSize: 11.5, color: P.textMuted, margin: "2px 0 12px" }}>Revenue counts finished jobs that have a price entered.</div>
+      <div style={{ ...grid, paddingBottom: 6 }}>
+        <span style={{ ...head, textAlign: "left" }}>Source</span><span style={head}>Leads</span><span style={head}>Booked</span><span style={head}>Revenue</span>
+      </div>
+      {rows.map(([src, v]) => (
+        <div key={src} style={{ ...grid, padding: "9px 0", borderTop: `1px solid ${P.border}` }}>
+          <span style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>{SOURCE_LABEL[src] || "Other"}</span>
+          <span style={cell}>{v.leads}</span><span style={cell}>{v.won}</span>
+          <span style={{ ...cell, color: v.revenue ? P.accent : P.textMuted, fontWeight: 700 }}>{money(v.revenue)}</span>
+        </div>
+      ))}
+      {rows.length > 1 && (
+        <div style={{ ...grid, padding: "9px 0 0", borderTop: `1px solid ${P.border}` }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: P.textPrimary }}>Total</span>
+          <span style={{ ...cell, color: P.textPrimary }}>{total.leads}</span><span style={{ ...cell, color: P.textPrimary }}>{total.won}</span>
+          <span style={{ ...cell, color: P.accent, fontWeight: 800 }}>{money(total.revenue)}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function prettyWhen(q) {
   const parts = [];
   if (q.preferred_date) {
@@ -261,12 +309,15 @@ export default function AtlasLeads({ onNavigate, currentPage = "leads" }) {
   const [showClosed, setShowClosed] = useState(false);
 
   const [approvals, setApprovals] = useState({});
+  const [jobs, setJobs] = useState([]);
 
   async function load() {
-    const [custRes, quoteRes] = await Promise.all([
+    const [custRes, quoteRes, jobRes] = await Promise.all([
       supabase.from("customers").select("*").eq("business_id", businessId).not("lead_stage", "is", null).order("created_at", { ascending: false }),
       supabase.from("quotes").select("id, customer_id, proposal_mode, line_items, tiers, chosen_tier_ids, extra_service_ids, approved_subtotal, preferred_date, preferred_window, approved_at").eq("business_id", businessId).eq("status", "approved").is("job_id", null).order("approved_at", { ascending: false }),
+      supabase.from("jobs").select("customer_id, price, completed_at, scheduled_at").eq("business_id", businessId).eq("status", "completed"),
     ]);
+    setJobs(jobRes.data || []);
     if (custRes.error) setDataError(custRes.error.message);
     else { setDataError(""); setLeads(custRes.data || []); }
     const map = {};
@@ -432,6 +483,8 @@ export default function AtlasLeads({ onNavigate, currentPage = "leads" }) {
                   </div>
                 ))}
               </div>
+
+              <SourceBoard leads={leads} jobs={jobs} now={now} />
 
               {closed.length > 0 && (
                 <div>
