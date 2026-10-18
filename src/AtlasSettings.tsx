@@ -90,14 +90,6 @@ const INITIAL_CONDITIONS = [
   { id: "biohazard", label: "Biohazard (bodily fluids, mold, pests)", ask: true, surcharge: 0, forceReview: true },
 ];
 
-const INTEGRATIONS = [
-  { id: "stripe", name: "Stripe", desc: "Accept card payments on invoices and online bookings.", category: "Payments" },
-  { id: "quickbooks", name: "QuickBooks", desc: "Sync invoices and expenses for bookkeeping.", category: "Accounting" },
-  { id: "gcal", name: "Google Calendar", desc: "Two-way sync with your Schedule.", category: "Calendar" },
-  { id: "twilio", name: "Twilio", desc: "Send SMS quote links, reminders, and receipts.", category: "Messaging" },
-  { id: "whatsapp", name: "WhatsApp Business", desc: "Free alternative to SMS for customer messaging.", category: "Messaging" },
-  { id: "resend", name: "Resend", desc: "Deliver quote, invoice, and receipt emails.", category: "Email" },
-];
 
 function hue(i) { return HUES[i % HUES.length]; }
 function initials(name) { return name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase(); }
@@ -1178,8 +1170,9 @@ function PublicPagePanel() {
 
 /* ---------------------------------- Integrations ---------------------------------- */
 
-function IntegrationRow({ item, state, onConnect, onDisconnect }) {
-  const status = state?.status || "idle";
+function IntegrationRow({ item, status }) {
+  const live = status === "on";
+  const soon = status === "soon";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 16px" }}>
       <div style={{ width: 36, height: 36, borderRadius: 10, background: P.accentSoft, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 13, fontWeight: 700, color: P.accent }}>
@@ -1192,45 +1185,42 @@ function IntegrationRow({ item, state, onConnect, onDisconnect }) {
         </div>
         <div style={{ fontSize: 11.5, color: P.textMuted, marginTop: 2 }}>{item.desc}</div>
       </div>
-      {status === "connected" ? (
-        <button onClick={() => onDisconnect(item.id)} style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 8, padding: "7px 12px", fontSize: 11.5, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
-          <CheckIcon size={12} color={P.accent} /> Connected
-        </button>
-      ) : status === "connecting" ? (
-        <button disabled style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: `1px solid ${P.border}`, color: P.textMuted, borderRadius: 8, padding: "7px 12px", fontSize: 11.5, fontWeight: 600, flexShrink: 0 }}>
-          <Loader2 size={12} className="animate-spin" /> Connecting…
-        </button>
-      ) : (
-        <button onClick={() => onConnect(item.id)} style={{ display: "flex", alignItems: "center", gap: 5, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 8, padding: "7px 12px", fontSize: 11.5, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
-          <ExternalLink size={12} /> Connect
-        </button>
-      )}
+      <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, fontWeight: 700, color: live ? P.accent : P.textMuted, flexShrink: 0 }}>
+        {live && <CheckIcon size={12} color={P.accent} />} {live ? "On" : soon ? "Coming later" : "Not set up"}
+      </span>
     </div>
   );
 }
 
 function IntegrationsPanel() {
-  const [connections, setConnections] = useState({ stripe: { status: "connected" } });
+  const { businessId } = useBusinessId();
+  const [flags, setFlags] = useState({ texting: false, payments: false });
 
-  function connect(id) {
-    setConnections((c) => ({ ...c, [id]: { status: "connecting" } }));
-    setTimeout(() => setConnections((c) => ({ ...c, [id]: { status: "connected" } })), 1000);
-  }
-  function disconnect(id) {
-    setConnections((c) => ({ ...c, [id]: { status: "idle" } }));
-  }
+  useEffect(() => {
+    if (!businessId) return;
+    supabase.from("businesses").select("*").eq("id", businessId).single().then(({ data }) => {
+      if (data) setFlags({ texting: !!data.texting_enabled, payments: !!data.online_payments_enabled });
+    });
+  }, [businessId]);
+
+  const rows = [
+    { item: { name: "Text messages", desc: "Booking confirmations, reminders, and review requests.", category: "Messaging" }, status: flags.texting ? "on" : "off" },
+    { item: { name: "Card payments", desc: "Customers pay invoices online through Stripe.", category: "Payments" }, status: flags.payments ? "on" : "off" },
+    { item: { name: "Google Calendar", desc: "Two-way sync with your Schedule.", category: "Calendar" }, status: "soon" },
+    { item: { name: "QuickBooks", desc: "Sync invoices and expenses for bookkeeping.", category: "Accounting" }, status: "soon" },
+  ];
 
   return (
-    <Panel title="Integrations" sub="Connect the tools Atlas uses to actually send, charge, and sync things.">
+    <Panel title="Integrations" sub="What is switched on for your account right now.">
       <Card>
-        {INTEGRATIONS.map((item, i) => (
-          <div key={item.id} style={{ borderBottom: i < INTEGRATIONS.length - 1 ? `1px solid ${P.border}` : "none" }}>
-            <IntegrationRow item={item} state={connections[item.id]} onConnect={connect} onDisconnect={disconnect} />
+        {rows.map((r, i) => (
+          <div key={r.item.name} style={{ borderBottom: i < rows.length - 1 ? `1px solid ${P.border}` : "none" }}>
+            <IntegrationRow item={r.item} status={r.status} />
           </div>
         ))}
       </Card>
       <p style={{ fontSize: 11.5, color: P.textMuted, marginTop: 14 }}>
-        These connect buttons are simulated in this preview. In the live app, each one opens that provider's real authorization flow.
+        Texting and card payments are turned on for each account by Atlas. Message us if you want them enabled for yours.
       </p>
     </Panel>
   );
