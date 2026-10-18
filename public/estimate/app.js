@@ -1031,6 +1031,7 @@ function payload(){
 }
 
 if (window.parent !== window) document.body.classList.add("embedded");
+if (/[?&]bare=1/.test(location.search) && window.parent !== window) document.body.classList.add("bare");
 function postHeight(){
   if (window.parent === window) return;
   const h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
