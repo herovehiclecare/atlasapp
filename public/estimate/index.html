@@ -136,7 +136,18 @@ textarea{min-height:92px;resize:vertical;font-weight:500}
    fixed bar would hang in the middle of their layout. Let it sit at the end
    of the content instead; standalone it stays pinned to the screen. */
 body.embedded{padding-bottom:0}
-body.bare .band{display:none}
+/* Bare mode: dropped into a page that already has its own look. No header,
+   no print, no glow, transparent ground, and the bar blends into the page. */
+html:has(body.bare),body.bare{background:transparent}
+body.bare{font-family:var(--ff,inherit);padding-bottom:0}
+body.bare .band,body.bare .print,body.bare .bloom{display:none}
+body.bare .wrap{max-width:none;padding-left:0;padding-right:0}
+body.bare h1,body.bare .accname,body.bare .svcname,body.bare .heroval,body.bare .totval,body.bare .secnum{font-family:var(--fh,inherit)}
+body.bare h1{font-size:38px;letter-spacing:.01em;text-transform:uppercase}
+body.bare .lede{max-width:46ch}
+body.bare .bar{background:transparent;backdrop-filter:none;border-top:1px solid var(--line);
+  margin-top:22px;border-radius:0;padding-left:0;padding-right:0}
+body.bare .acc,body.bare .svc,body.bare .chip,body.bare input,body.bare textarea{border-radius:10px}
 body.embedded .bar{position:static;margin-top:22px;border-radius:0 0 18px 18px}
 .bar{position:fixed;left:0;right:0;bottom:0;background:var(--barbg);
   backdrop-filter:blur(14px);border-top:2px solid var(--accent);z-index:40;

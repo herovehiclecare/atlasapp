@@ -456,7 +456,8 @@ function priceFor(svc, v){
   const f = CFG.frequencies.find(x=>x.id===v.frequency) || { uplift:0 };
   const up = (Number(f.uplift)||0)/100;
   if (rawHigh == null || rawHigh === "") {
-    return { low:round5(low), high:round5(low + low*((Number(c.hi)||0)*0.18 + up)), open:true };
+    const ch = CFG.conditions.length ? (Number(c.hi)||0) : 0;
+    return { low:round5(low), high:round5(low + low*(ch*0.18 + up)), open:true };
   }
   const high = Number(rawHigh) || low, spread = Math.max(0, high-low);
   return { low:round5(low + spread*(Number(c.lo)||0)),
@@ -485,6 +486,7 @@ function itemTotal(v){
 const grandTotal = () => state.items.reduce((a,v)=>{ const t=itemTotal(v);
   return { low:a.low+t.low, high:a.high+t.high, open:a.open||t.open }; }, {low:0,high:0,open:false});
 function rangeText(t){ if(!t.low && !t.high) return "—"; if(t.low===t.high) return money(t.low); return money(t.low)+" – "+money(t.high); }
+function totText(t){ if(!t.low && !t.high) return "—"; if(t.open && t.high<=t.low) return "from "+money(t.low); return rangeText(t)+(t.open?"+":""); }
 const catFrom = (v,cat) => { const r=CFG.services.filter(s=>s.cat===cat).map(s=>priceFor(s,v).low); return r.length?Math.min(...r):0; };
 
 // ---------------------------------------------------------------- state
@@ -547,7 +549,7 @@ function itemBlock(v,i){
         <span class="svcprice">${p.open?"from "+money(p.low):money(p.low)+"–"+money(p.high)}</span></button>`;
     }).join("");
     return accordion({ open, name:cat, count:ct.n||0,
-      meta: ct.n ? rangeText(ct)+(ct.open?"+":"") : "from "+money(catFrom(v,cat)),
+      meta: ct.n ? totText(ct) : "from "+money(catFrom(v,cat)),
       metaHas:!!ct.n, body, act:"togglecat", i, val:cat });
   }).join("");
 
@@ -561,7 +563,7 @@ function itemBlock(v,i){
   }).join("");
 
   return `${accordion({ open:v.detailsOpen, name:itemLabel(v,i), count:0,
-      meta: t.low ? rangeText(t)+(t.open?"+":"") : "Tap to start", metaHas:!!t.low,
+      meta: t.low ? totText(t) : "Tap to start", metaHas:!!t.low,
       body:details, act:"toggleitem", i })}
     ${cats}
     ${CFG.addons.length?accordion({ open:v.openCats.includes("__addons"), name:"Add-Ons", count:at.n||0,
@@ -595,7 +597,7 @@ function formScreen(){
   ${c.sub?`<p class="lede">${esc(c.sub)}</p>`:""}
   ${picked?`<div class="hero">
     <div class="herolabel">Your estimate</div>
-    <div class="heroval">${rangeText(t)}${t.open?"+":""}</div>
+    <div class="heroval">${totText(t)}</div>
     ${cond?`<div class="herosub">Based on a ${esc(cond.label.toLowerCase())} job. Change that and this moves with it.</div>`:""}
   </div>`:""}
 
@@ -636,7 +638,7 @@ function doneScreen(){
     <p class="lede" style="margin:0 0 22px">${esc(B().name)} will get back to you ${esc(B().replyWindow)}.<br>
       Need it sooner? Call or text ${esc(B().phone)}.</p></div>
   <div class="hero"><div class="herolabel">Your estimate</div>
-    <div class="heroval">${rangeText(t)}${t.open?"+":""}</div>
+    <div class="heroval">${totText(t)}</div>
     <div class="herosub">Final price confirmed once they see it in person.</div></div>
   <div class="acc on" style="padding:18px">
     <div class="secnum" style="margin:0 0 4px">What you asked for</div>
@@ -860,7 +862,7 @@ function render(){
   if (state.screen!=="form"){ bar.hidden = true; return; }
   bar.hidden = false;
   const t = grandTotal();
-  document.getElementById("totval").textContent = rangeText(t) + (t.open&&t.low?"+":"");
+  document.getElementById("totval").textContent = totText(t);
   const cta = document.getElementById("cta");
   cta.disabled = !anyPicked();
   cta.textContent = "Send request";
@@ -932,9 +934,9 @@ document.addEventListener("click", e=>{
     state.items.forEach(x=>{ const j=x.addons.indexOf(gone); if(j>-1) x.addons.splice(j,1); });
     saveConfig(); render(); return; }
   if(act==="addcond"){ CFG.conditions.push({ id:"c"+Date.now().toString(36), label:"New level", hint:"", lo:.5, hi:1 }); saveConfig(); render(); return; }
-  if(act==="rmcond"){ if(CFG.conditions.length>1){ CFG.conditions.splice(i,1); normaliseBands(); saveConfig(); render(); } return; }
+  if(act==="rmcond"){ if(CFG.conditions.length>0){ CFG.conditions.splice(i,1); normaliseBands(); saveConfig(); render(); } return; }
   if(act==="addfreq"){ CFG.frequencies.push({ id:"f"+Date.now().toString(36), label:"New option", uplift:0 }); saveConfig(); render(); return; }
-  if(act==="rmfreq"){ if(CFG.frequencies.length>1){ CFG.frequencies.splice(i,1); saveConfig(); render(); } return; }
+  if(act==="rmfreq"){ if(CFG.frequencies.length>0){ CFG.frequencies.splice(i,1); saveConfig(); render(); } return; }
   if(act==="addfield"){ CFG.fields.push({ k:"f"+Date.now().toString(36), label:"New question", ph:"" }); saveConfig(); render(); return; }
   if(act==="rmfield"){ if(CFG.fields.length>1){ CFG.fields.splice(i,1); saveConfig(); render(); } return; }
   if(act==="trade"){ const keepBrand=structuredClone(CFG.brand);
@@ -969,7 +971,7 @@ document.addEventListener("input", e=>{
     // Repaint only what the customer sees, so the field being typed in keeps focus.
     if (state.screen==="form") {
       const t=grandTotal();
-      document.getElementById("totval").textContent = rangeText(t)+(t.open&&t.low?"+":"");
+      document.getElementById("totval").textContent = totText(t);
       if (path==="brand.name") document.getElementById("bizname").textContent = el.value;
       if (path==="brand.kick") document.getElementById("bizkick").textContent = el.value;
     }
@@ -1031,7 +1033,20 @@ function payload(){
 }
 
 if (window.parent !== window) document.body.classList.add("embedded");
-if (/[?&]bare=1/.test(location.search) && window.parent !== window) document.body.classList.add("bare");
+if (/[?&]bare=1/.test(location.search) && window.parent !== window) {
+  document.body.classList.add("bare");
+  const q = new URLSearchParams(location.search), fam = k => (q.get(k)||"").replace(/[^A-Za-z0-9 ]/g,"").trim();
+  const body = fam("font"), head = fam("head") || body;
+  const fams = [...new Set([body && body+":wght@500;600;700;800", head && head+":wght@600;700;800"].filter(Boolean))];
+  if (fams.length) {
+    const l = document.createElement("link"); l.rel = "stylesheet";
+    l.href = "https://fonts.googleapis.com/css2?" + fams.map(f => "family=" + f.replace(/ /g,"+")).join("&") + "&display=swap";
+    document.head.appendChild(l);
+    if (body) document.body.style.setProperty("--ff", `"${body}",sans-serif`);
+    if (head) document.body.style.setProperty("--fh", `"${head}",sans-serif`);
+  }
+  if (/^[0-9a-fA-F]{6}$/.test(q.get("ink")||"")) document.body.style.setProperty("--onaccent", "#"+q.get("ink"));
+}
 function postHeight(){
   if (window.parent === window) return;
   const h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
