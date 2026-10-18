@@ -11,6 +11,7 @@ import AtlasInvoices from "./AtlasInvoices";
 import AtlasSettings from "./AtlasSettings";
 import AtlasQuickQuotePro from "./AtlasQuickQuotePro";
 import AtlasFollowUps from "./AtlasFollowUps";
+import AtlasLeads from "./AtlasLeads";
 
 // Single source of truth for which page is showing. Every page reads
 // `currentPage` to highlight its own nav item, and calls `onNavigate(id)`
@@ -23,6 +24,7 @@ const PAGES = {
   quote: AtlasQuickQuotePro,
   schedule: AtlasSchedule,
   followups: AtlasFollowUps,
+  leads: AtlasLeads,
   invoices: AtlasInvoices,
   settings: AtlasSettings,
 };

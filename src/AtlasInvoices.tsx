@@ -6,6 +6,7 @@ import {
   MoreHorizontal, Pencil, Camera, Plus, Search, Download,
   CreditCard, X, Loader2, Image as ImageIcon, FileText, ListChecks, Trash2,
 } from "lucide-react";
+import { Inbox as LeadsIcon } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
 import { formatDate, downloadCsv, shortId, uploadImages, parseDate, findService, svcPrice, resizeImageToDataUrl, useLiveClock, formatDateTime, urlToDataUri, readDraft, clearDraft, useDraftAutosave, completeOpenFollowUps } from "./lib";
@@ -44,7 +45,7 @@ function AtlasMark({ size = 24 }) {
 }
 
 const NAV = [
-  { id: "dashboard", label: "Dashboard", Icon: LayoutGrid }, { id: "customers", label: "Customers", Icon: Users },
+  { id: "dashboard", label: "Dashboard", Icon: LayoutGrid }, { id: "leads", label: "Leads", Icon: LeadsIcon }, { id: "customers", label: "Customers", Icon: Users },
   { id: "vehicles", label: "Vehicles", Icon: Car }, { id: "quote", label: "Atlas QuickQuote", Icon: Sparkles },
   { id: "schedule", label: "Schedule", Icon: Calendar }, { id: "followups", label: "Follow-ups", Icon: ListChecks },
   { id: "invoices", label: "Invoices", Icon: Receipt },
@@ -52,11 +53,12 @@ const NAV = [
 ];
 const MOBILE_NAV = [
   { id: "dashboard", label: "Home", Icon: LayoutGrid }, { id: "schedule", label: "Schedule", Icon: Calendar },
-  { id: "customers", label: "Clients", Icon: Users }, { id: "invoices", label: "Invoices", Icon: Receipt },
+  { id: "leads", label: "Leads", Icon: LeadsIcon }, { id: "invoices", label: "Invoices", Icon: Receipt },
   { id: "more", label: "More", Icon: MoreHorizontal },
 ];
 // Pages that don't fit in the 5-slot mobile bottom bar — "More" opens a sheet listing these.
 const MORE_PAGES = [
+  { id: "customers", label: "Customers", Icon: Users },
   { id: "vehicles", label: "Vehicles", Icon: Car }, { id: "quote", label: "Atlas QuickQuote", Icon: Sparkles },
   { id: "followups", label: "Follow-ups", Icon: ListChecks }, { id: "settings", label: "Settings", Icon: Settings },
 ];
