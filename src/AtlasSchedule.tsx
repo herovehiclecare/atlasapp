@@ -476,7 +476,7 @@ function Section({ title, children }) {
   );
 }
 
-function AddJobModal({ businessId, businessName, commApp, customers, vehicles, services, jobs, initialDate, initialCustomerId, initialVehicleId, initialServiceIds, initialPrice, job, onClose, onAdded, onDelete, onVehicleAdded, onCustomerSaved }) {
+function AddJobModal({ businessId, businessName, commApp, customers, vehicles, services, jobs, initialDate, initialCustomerId, initialVehicleId, initialServiceIds, initialPrice, job, onInvoice, onClose, onAdded, onDelete, onVehicleAdded, onCustomerSaved }) {
   const isEdit = !!job;
   const [customerId, setCustomerId] = useState(job?.customer_id || initialCustomerId || "");
   const [vehicleId, setVehicleId] = useState(job?.vehicle_id || initialVehicleId || "");
@@ -928,6 +928,26 @@ function AddJobModal({ businessId, businessName, commApp, customers, vehicles, s
             </div>
           </div>
 
+          {isEdit && job.customer_id && onInvoice && (
+            <button
+              type="button"
+              onClick={() => {
+                const finalPrice = price.trim() !== "" ? Number(price) : estimate;
+                onInvoice("invoices", {
+                  newInvoiceForCustomerId: job.customer_id,
+                  vehicleId: job.vehicle_id || "",
+                  quoteId: job.quote_id || "",
+                  serviceIds: job.service_ids || [],
+                  price: finalPrice != null && finalPrice > 0 ? finalPrice : null,
+                  notes: "",
+                });
+              }}
+              style={{ width: "100%", marginBottom: 10, background: "transparent", border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 10, padding: "11px 16px", fontSize: 14, fontWeight: 700, cursor: "pointer" }}
+            >
+              Invoice this job
+            </button>
+          )}
+
           <div style={{ display: "flex", gap: 10 }}>
             {isEdit && (
               <button type="button" onClick={handleDelete} disabled={deleting || saving} title="Delete job" style={{ display: "flex", alignItems: "center", justifyContent: "center", background: "transparent", border: `1px solid ${P.border}`, color: P.danger, borderRadius: 10, padding: "0 16px", cursor: deleting ? "default" : "pointer", opacity: deleting ? 0.6 : 1 }}>
@@ -1320,6 +1340,7 @@ export default function AtlasSchedule({ onNavigate, navParams, currentPage = "sc
           initialServiceIds={navParams?.initialServiceIds}
           initialPrice={navParams?.initialPrice}
           job={editingJob}
+          onInvoice={onNavigate}
           onClose={closeJobModal}
           onAdded={handleAdded}
           onDelete={handleDeleteJob}

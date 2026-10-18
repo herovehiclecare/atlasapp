@@ -131,7 +131,7 @@ function StatCard({ label, value, sub, tone, alert }) {
   );
 }
 
-function LeadCard({ lead, now, commApp, businessName, onMove, onContact, onOpen, onQuote, onBook }) {
+function LeadCard({ lead, now, commApp, businessName, onMove, onContact, onOpen, onQuote, onBook, onInvoice }) {
   const { vehicle, work } = summaryLines(lead);
   const stageSince = new Date(lead.lead_stage_at || lead.created_at).getTime();
   const waited = now.getTime() - stageSince;
@@ -178,7 +178,7 @@ function LeadCard({ lead, now, commApp, businessName, onMove, onContact, onOpen,
         )}
         {lead.lead_stage === "contacted" && <button onClick={() => onQuote()} style={primary}>Make quote</button>}
         {lead.lead_stage === "quoted" && <button onClick={() => onBook()} style={primary}>Book it</button>}
-        {lead.lead_stage === "booked" && <button onClick={() => onMove(lead, "done")} style={primary}>Job done</button>}
+        {lead.lead_stage === "booked" && <button onClick={() => onInvoice()} style={primary}>Invoice it</button>}
         {lead.lead_stage === "new" && !lead.phone && <button onClick={() => onMove(lead, "contacted")} style={primary}>Mark contacted</button>}
         {lead.phone && <a href={callHref(lead.phone, commApp)} onClick={() => lead.lead_stage === "new" && onContact(lead, "call")} style={ghost}>Call</a>}
         <select value="" onChange={(e) => e.target.value && onMove(lead, e.target.value)} aria-label="Move lead" style={{ ...ghost, flex: "0 0 52px", appearance: "none", background: "#132018", textAlignLast: "center", padding: 0 }}>
@@ -267,6 +267,18 @@ export default function AtlasLeads({ onNavigate, currentPage = "leads" }) {
     const { error } = await supabase.from("customers").update({ lead_stage: stage, lead_stage_at: stamp }).eq("id", lead.id);
     if (error) { setDataError(error.message); load(); }
   }
+  async function invoiceIt(lead) {
+    const { data } = await supabase.from("jobs").select("vehicle_id, quote_id, service_ids, price, description").eq("customer_id", lead.id).neq("status", "cancelled").order("scheduled_at", { ascending: false }).limit(1);
+    const job = data?.[0];
+    onNavigate("invoices", {
+      newInvoiceForCustomerId: lead.id,
+      vehicleId: job?.vehicle_id || "",
+      quoteId: job?.quote_id || "",
+      serviceIds: job?.service_ids || [],
+      price: job?.price != null && Number(job.price) > 0 ? Number(job.price) : null,
+      notes: "",
+    });
+  }
   async function contacted(lead, method) {
     const stamp = new Date().toISOString();
     setLeads((list) => list.map((l) => (l.id === lead.id ? { ...l, lead_stage: "contacted", lead_stage_at: stamp, last_contacted_at: stamp } : l)));
@@ -296,7 +308,7 @@ export default function AtlasLeads({ onNavigate, currentPage = "leads" }) {
       <div style={{ display: "flex", flexDirection: "column", gap: 10, background: "rgba(15,27,21,0.45)", border: `1px dashed ${P.border}`, borderRadius: 16, padding: 10, minHeight: 90 }}>
         {items.length === 0 && <div style={{ fontSize: 12.5, color: P.textMuted, textAlign: "center", padding: "22px 6px" }}>{stage.id === "new" ? "No new leads. New requests show up here." : "Nothing here."}</div>}
         {items.map((l) => (
-          <LeadCard key={l.id} lead={l} now={now} commApp={businessPreferredCommApp} businessName={businessName} onMove={move} onContact={contacted} onOpen={() => onNavigate("customers", { customerId: l.id })} onQuote={() => onNavigate("quote", { newQuoteForCustomerId: l.id })} onBook={() => onNavigate("schedule", { addJobForCustomerId: l.id })} />
+          <LeadCard key={l.id} lead={l} now={now} commApp={businessPreferredCommApp} businessName={businessName} onMove={move} onContact={contacted} onOpen={() => onNavigate("customers", { customerId: l.id })} onQuote={() => onNavigate("quote", { newQuoteForCustomerId: l.id })} onBook={() => onNavigate("schedule", { addJobForCustomerId: l.id })} onInvoice={() => invoiceIt(l)} />
         ))}
       </div>
     );

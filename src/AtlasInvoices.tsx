@@ -209,13 +209,13 @@ function InvoiceRow({ inv, i, onMarkPaid, onPreview, onEdit, marking }) {
 
 /* ---------------------------------- Invoice modal (create + edit) ---------------------------------- */
 
-function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoice, taxEnabled, defaultTaxRate, onClose, onSaved, onDeleted }) {
+function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoice, prefill, taxEnabled, defaultTaxRate, onClose, onSaved, onDeleted }) {
   const isEdit = !!invoice;
   const [deleting, setDeleting] = useState(false);
-  const [customerId, setCustomerId] = useState(invoice?.customer_id || "");
-  const [quoteId, setQuoteId] = useState(invoice?.quote_id || "");
-  const [vehicleId, setVehicleId] = useState(invoice?.vehicle_id || "");
-  const [serviceIds, setServiceIds] = useState(invoice?.service_ids || []);
+  const [customerId, setCustomerId] = useState(invoice?.customer_id || prefill?.customerId || "");
+  const [quoteId, setQuoteId] = useState(invoice?.quote_id || prefill?.quoteId || "");
+  const [vehicleId, setVehicleId] = useState(invoice?.vehicle_id || prefill?.vehicleId || "");
+  const [serviceIds, setServiceIds] = useState(invoice?.service_ids || prefill?.serviceIds || []);
   const [taxRate, setTaxRate] = useState(invoice?.tax_rate != null ? String(invoice.tax_rate) : String(taxEnabled ? defaultTaxRate : 0));
   // For a non-itemized invoice, this field represents the pre-tax price the
   // owner types in — tax is added on top at submit time, same mental model
@@ -223,7 +223,17 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
   // tax-inclusive total, so editing an existing manual invoice needs to back
   // out the pre-tax price from that stored total to show in this field.
   const [amount, setAmount] = useState(() => {
-    if (!invoice) return "";
+    if (!invoice) {
+      if (prefill?.price != null) return String(prefill.price);
+      const q = prefill?.quoteId ? quotes.find((x) => x.id === prefill.quoteId) : null;
+      const t = q?.totals ? (q.totals.isRange ? q.totals.rangeHigh : q.totals.total) : null;
+      if (t != null && !(prefill?.serviceIds || []).length) {
+        const rate = taxEnabled ? Number(defaultTaxRate) || 0 : 0;
+        const preTax = rate > 0 ? t / (1 + rate / 100) : t;
+        return String(Math.round(preTax * 100) / 100);
+      }
+      return "";
+    }
     if ((invoice.service_ids || []).length > 0) return String(invoice.amount);
     const rate = Number(invoice.tax_rate) || 0;
     const total = Number(invoice.amount) || 0;
@@ -232,7 +242,7 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
   });
   const [dueDate, setDueDate] = useState(invoice?.due_date || "");
   const [status, setStatus] = useState(invoice?.status || "unpaid");
-  const [notes, setNotes] = useState(invoice?.notes || "");
+  const [notes, setNotes] = useState(invoice?.notes || prefill?.notes || "");
   const [existingPhotos, setExistingPhotos] = useState(invoice?.photos || []);
   const [photoFiles, setPhotoFiles] = useState([]);
   const [photoPreviews, setPhotoPreviews] = useState([]);
@@ -248,7 +258,7 @@ function InvoiceModal({ businessId, customers, quotes, vehicles, services, invoi
   const draftKey = businessId ? `invoice-new-${businessId}` : null;
   const [draftRestored, setDraftRestored] = useState(false);
   useEffect(() => {
-    if (isEdit || !draftKey) return;
+    if (isEdit || !draftKey || prefill) return;
     const draft = readDraft(draftKey);
     if (!draft?.value) return;
     const v = draft.value;
@@ -699,7 +709,7 @@ async function buildInvoicePdfDoc(inv, services, business) {
 
 /* ---------------------------------- page ---------------------------------- */
 
-export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) {
+export default function AtlasInvoices({ onNavigate, navParams, currentPage = "invoices" }) {
   const { businessId, businessName, businessLogoUrl, businessTagline, businessInvoiceLabel, businessPhone, businessEmail, businessAddress, businessDefaultTaxRate, businessTaxEnabled, loading: bizLoading, error: bizError } = useBusinessId();
   const now = useLiveClock();
   const [invoices, setInvoices] = useState([]);
@@ -711,6 +721,8 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
   const [invoicesError, setInvoicesError] = useState("");
   const [markingId, setMarkingId] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [prefill, setPrefill] = useState(null);
+  const consumedNavRef = useRef(null);
   const [moreOpen, setMoreOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [downloadingPdfId, setDownloadingPdfId] = useState(null);
@@ -762,6 +774,20 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
 
   const loading = bizLoading || (!!businessId && loadingInvoices);
   const error = bizError || invoicesError;
+
+  useEffect(() => {
+    if (!navParams?.newInvoiceForCustomerId || loadingInvoices || !businessId || consumedNavRef.current === navParams) return;
+    consumedNavRef.current = navParams;
+    setPrefill({
+      customerId: navParams.newInvoiceForCustomerId,
+      vehicleId: navParams.vehicleId || "",
+      quoteId: navParams.quoteId || "",
+      serviceIds: navParams.price == null ? (navParams.serviceIds || []) : [],
+      price: navParams.price ?? null,
+      notes: navParams.notes || "",
+    });
+    setAddOpen(true);
+  }, [navParams, loadingInvoices, businessId]);
 
   async function markPaid(id) {
     const previous = invoices;
@@ -925,7 +951,8 @@ export default function AtlasInvoices({ onNavigate, currentPage = "invoices" }) 
           taxEnabled={businessTaxEnabled}
           defaultTaxRate={businessDefaultTaxRate}
           invoice={editingInvoice}
-          onClose={() => { setAddOpen(false); setEditingInvoice(null); }}
+          prefill={editingInvoice ? null : prefill}
+          onClose={() => { setAddOpen(false); setEditingInvoice(null); setPrefill(null); }}
           onSaved={handleSaved}
           onDeleted={handleDeleted}
         />
