@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/pay/:token",
+      "destination": "/api/pay?token=:token"
+    },
+    {
       "source": "/quote/:token",
       "destination": "/api/quote-portal?token=:token"
     },

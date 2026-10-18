@@ -4,7 +4,7 @@ import pdfFonts from "pdfmake/build/vfs_fonts";
 import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings, Sparkles,
   MoreHorizontal, Pencil, Camera, Plus, Search, Download,
-  CreditCard, X, Loader2, Image as ImageIcon, FileText, ListChecks, Trash2,
+  CreditCard, X, Loader2, Image as ImageIcon, FileText, ListChecks, Trash2, Link2, Check,
 } from "lucide-react";
 import { Inbox as LeadsIcon } from "lucide-react";
 import { supabase } from "./supabaseClient";
@@ -166,6 +166,13 @@ function StatusBadge({ status }) {
 }
 
 function InvoiceRow({ inv, i, onMarkPaid, onPreview, onEdit, marking }) {
+  const [copied, setCopied] = useState(false);
+  const copyPayLink = async () => {
+    const link = `${window.location.origin}/pay/${inv.pay_token}`;
+    try { await navigator.clipboard.writeText(link); } catch { window.prompt("Copy this pay link:", link); }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
   const status = effectiveStatus(inv);
   const overdueDays = status === "overdue" && inv.due_date ? daysBetween(new Date(), parseDate(inv.due_date)) : null;
   return (
@@ -178,7 +185,7 @@ function InvoiceRow({ inv, i, onMarkPaid, onPreview, onEdit, marking }) {
             <span style={{ fontSize: 11, color: P.textMuted, fontFamily: "'JetBrains Mono', monospace" }}>INV-{shortId(inv.id)}</span>
             {inv.quote_id && <span style={{ fontSize: 9.5, fontWeight: 700, color: P.accent, background: P.accentSoft, borderRadius: 20, padding: "1px 7px" }}>from quote</span>}
           </div>
-          {status === "paid" && <div style={{ fontSize: 11, color: P.textMuted, marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}><CreditCard size={11} /> Marked paid · {formatDate(inv.paid_at || inv.created_at)}</div>}
+          {status === "paid" && <div style={{ fontSize: 11, color: P.textMuted, marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}><CreditCard size={11} /> {inv.paid_online ? "Paid online" : "Marked paid"} · {formatDate(inv.paid_at || inv.created_at)}{Number(inv.tip_amount) > 0 ? ` · ${Number(inv.tip_amount).toFixed(2)} tip` : ""}</div>}
           {status === "overdue" && <div style={{ fontSize: 11, color: P.danger, marginTop: 3 }}>{overdueDays > 0 ? `${overdueDays} days overdue · ` : ""}was due {formatDate(inv.due_date)}</div>}
           {status === "unpaid" && <div style={{ fontSize: 11, color: P.textMuted, marginTop: 3 }}>{inv.due_date ? `Due ${formatDate(inv.due_date)}` : "No due date set"}</div>}
         </div>
@@ -196,6 +203,11 @@ function InvoiceRow({ inv, i, onMarkPaid, onPreview, onEdit, marking }) {
           <button onClick={() => onPreview(inv)} style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 8, padding: "6px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>
             <FileText size={12} /> PDF
           </button>
+          {(status === "unpaid" || status === "overdue") && inv.pay_token && (
+            <button onClick={copyPayLink} title="Copy the link your customer pays through" style={{ display: "flex", alignItems: "center", gap: 5, background: "transparent", border: `1px solid ${P.border}`, color: copied ? P.accent : P.textSecondary, borderRadius: 8, padding: "6px 10px", fontSize: 11.5, fontWeight: 600, cursor: "pointer" }}>
+              {copied ? <Check size={12} /> : <Link2 size={12} />} {copied ? "Copied" : "Pay link"}
+            </button>
+          )}
           {(status === "unpaid" || status === "overdue") && (
             <button onClick={() => onMarkPaid(inv.id)} disabled={marking} style={{ display: "flex", alignItems: "center", gap: 5, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 8, padding: "6px 10px", fontSize: 11.5, fontWeight: 700, cursor: marking ? "default" : "pointer", opacity: marking ? 0.7 : 1 }}>
               {marking ? <Loader2 size={12} className="animate-spin" /> : <CreditCard size={12} />} Mark paid
