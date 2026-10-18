@@ -1831,7 +1831,7 @@ function InstantQuotePanel() {
         car: [Number(s.car[0]), s.car[1] == null ? null : Number(s.car[1])],
         suv: [s.suv?.[0] == null ? Number(s.car[0]) : Number(s.suv[0]), s.suv?.[1] == null ? null : Number(s.suv[1])],
       })),
-      addons: cfg.addons.filter((a) => (a.name || "").trim()).map((a) => ({ name: a.name.trim(), price: Number(a.price) || 0 })),
+      addons: cfg.addons.filter((a) => (a.name || "").trim()).map((a) => ({ name: a.name.trim(), price: Number(a.price) || 0, desc: (a.desc || "").trim() })),
     };
     setSaving(true);
     const { error: e } = await supabase.from("businesses").update({ estimate_slug: clean, estimate_enabled: enabled, estimate_config: fixed }).eq("id", businessId).select().single();
@@ -1924,13 +1924,16 @@ function InstantQuotePanel() {
       <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Add-ons (flat price)</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {cfg.addons.map((a, i) => (
-          <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input value={a.name} onChange={(e) => setAddon(i, { name: e.target.value })} placeholder="Add-on name" style={{ ...inputStyle, flex: 1, minWidth: 0 }} />
-            <div style={{ width: 110 }}><IqPrice value={a.price} onChange={(v) => setAddon(i, { price: v })} /></div>
-            <button onClick={() => touch({ ...cfg, addons: cfg.addons.filter((_, idx) => idx !== i) })} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer" }}><Trash2 size={15} /></button>
+          <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input value={a.name} onChange={(e) => setAddon(i, { name: e.target.value })} placeholder="Add-on name" style={{ ...inputStyle, flex: 1, minWidth: 0 }} />
+              <div style={{ width: 110 }}><IqPrice value={a.price} onChange={(v) => setAddon(i, { price: v })} /></div>
+              <button onClick={() => touch({ ...cfg, addons: cfg.addons.filter((_, idx) => idx !== i) })} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer" }}><Trash2 size={15} /></button>
+            </div>
+            <textarea value={a.desc || ""} onChange={(e) => setAddon(i, { desc: e.target.value })} placeholder="Full description customers see for this add-on" rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
           </div>
         ))}
-        <button onClick={() => touch({ ...cfg, addons: [...cfg.addons, { name: "", price: null }] })} style={ghostBtn}><Plus size={12} /> Add add-on</button>
+        <button onClick={() => touch({ ...cfg, addons: [...cfg.addons, { name: "", price: null, desc: "" }] })} style={ghostBtn}><Plus size={12} /> Add add-on</button>
       </div>
 
       <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Text me new requests</div>

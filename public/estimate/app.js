@@ -562,7 +562,7 @@ function itemBlock(v,i){
     const on=v.addons.includes(a.name);
     return `<button class="svc" aria-pressed="${on}" data-act="addon" data-i="${i}" data-v="${esc(a.name)}">
       <span class="box">${CHECK}</span>
-      <span style="flex:1;min-width:0"><span class="svcname">${esc(a.name)}</span></span>
+      <span style="flex:1;min-width:0"><span class="svcname">${esc(a.name)}</span>${a.desc?`<span class="svcdesc">${esc(a.desc)}</span>`:""}</span>
       <span class="svcprice">+${money(a.price)}</span></button>`;
   }).join("");
 
@@ -601,10 +601,10 @@ function briefOf(s){
 function pickedSummary(){
   return state.items.map((v,i)=>{
     const rows=[...v.services.map(n=>{const s=CFG.services.find(x=>x.name===n); if(!s)return"";
-        const p=priceFor(s,v), b=briefOf(s);
-        return `<div class="pk"><div class="pkh"><span>${esc(n)}</span><b>${p.open?"from "+money(p.low):money(p.low)+"–"+money(p.high)}</b></div>${b?`<div class="pkd">${esc(b)}</div>`:""}</div>`;}),
+        const p=priceFor(s,v), incl=(Array.isArray(s.includes)?s.includes:[]).map(x=>String(x).trim()).filter(Boolean);
+        return `<div class="pk"><div class="pkh"><span>${esc(n)}</span><b>${p.open?"from "+money(p.low):money(p.low)+"–"+money(p.high)}</b></div>${s.desc?`<div class="pkd">${esc(s.desc)}</div>`:""}${incl.length?`<ul class="pkl">${incl.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}</div>`;}),
       ...v.addons.map(n=>{const a=CFG.addons.find(x=>x.name===n); if(!a)return"";
-        return `<div class="pk"><div class="pkh"><span>${esc(n)}</span><b>+${money(a.price)}</b></div></div>`;})].join("");
+        return `<div class="pk"><div class="pkh"><span>${esc(n)}</span><b>+${money(a.price)}</b></div>${a.desc?`<div class="pkd">${esc(a.desc)}</div>`:""}</div>`;})].join("");
     return rows?`<div class="vlabel">${esc(itemLabel(v,i))}</div>${rows}`:"";
   }).join("");
 }
@@ -772,7 +772,8 @@ function servicesTab(){
   const addons = CFG.addons.map((a,i)=>`<div class="arow">
       <input type="text" value="${esc(a.name)}" data-e="addons.${i}.name" placeholder="Add-on name">
       <input type="text" inputmode="decimal" value="${esc(a.price)}" data-e="addons.${i}.price" placeholder="0" style="max-width:92px">
-      ${arrows("mvaddon", i, i===0, i===CFG.addons.length-1)}<button class="iconbtn" data-act="rmaddon" data-i="${i}" aria-label="Delete">${ICON.trash}</button></div>`).join("");
+      ${arrows("mvaddon", i, i===0, i===CFG.addons.length-1)}<button class="iconbtn" data-act="rmaddon" data-i="${i}" aria-label="Delete">${ICON.trash}</button></div>
+      <textarea data-e="addons.${i}.desc" placeholder="Full description customers see for this add-on" style="min-height:62px;margin:-2px 0 14px">${esc(a.desc||"")}</textarea>`).join("");
 
   // Grouped the same way the customer sees them, so adding a service puts it
   // in a category instead of dropping it at the bottom of one long list.
@@ -949,7 +950,7 @@ document.addEventListener("click", e=>{
   if(act==="rmsvc"){ const gone=CFG.services[i].name; CFG.services.splice(i,1);
     state.items.forEach(x=>{ const j=x.services.indexOf(gone); if(j>-1) x.services.splice(j,1); });
     editor.openSvc=null; saveConfig(); render(); return; }
-  if(act==="addaddon"){ CFG.addons.push({ name:"New add-on", price:50 }); saveConfig(); render(); return; }
+  if(act==="addaddon"){ CFG.addons.push({ name:"New add-on", price:50, desc:"" }); saveConfig(); render(); return; }
   if(act==="rmaddon"){ const gone=CFG.addons[i].name; CFG.addons.splice(i,1);
     state.items.forEach(x=>{ const j=x.addons.indexOf(gone); if(j>-1) x.addons.splice(j,1); });
     saveConfig(); render(); return; }
