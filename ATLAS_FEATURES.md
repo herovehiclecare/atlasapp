@@ -8,6 +8,7 @@ Status: LIVE, BUILT (not yet switched on), PLANNED.
 - LIVE - Shop sets its own prices, add-ons, vehicle sizes, condition and timing (customers can't change prices).
 - LIVE - Fixed-price services: a service with no range shows one exact price (no range, no "+"). Services with a range show the range.
 - LIVE - Customer's year / make / model captured on every request.
+- LIVE - "Something else?" on the quote page: customers can ask about another vehicle or a custom question. It arrives as a lead with no price, with the same phone alert and text.
 - LIVE - Messenger + Instagram auto-reply that sends people to the instant quote page (set up in Meta Business Suite).
 
 ## Never miss a lead
@@ -40,7 +41,6 @@ Come back to these after the design look and style is settled.
 - Settings screen for the "popular" flag and service photos on the quote page.
 - Test Team Logins end to end with a real second login (invite, sign up, land in shop at right level).
 - Data-level lockdown: Manager/Staff are blocked in the app screens today. Later, also lock invoices/quotes at the database so a tech-savvy staffer can't read them through the API.
-- "Something else" option on the quote page: an open request for another vehicle or a custom question, sent as a lead with no price (proposed by Andre, awaiting go-ahead).
 - Messenger auto-reply set-up check in Meta Business Suite.
 - Shopify $39 Done-For-You Setup offer.
 - Delete the "John Doe TEST" lead after Andre confirms the new text format.
