@@ -1,3 +1,4 @@
+import { allowNav, canSeeSetting, ROLE_LABEL } from "./permissions";
 import { useState, useRef, useEffect } from "react";
 import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings as SettingsIcon, Sparkles,
@@ -1358,6 +1359,7 @@ function TeamPanel() {
   const [invites, setInvites] = useState([]);
   const [me, setMe] = useState("");
   const [email, setEmail] = useState("");
+  const [newRole, setNewRole] = useState("employee");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1373,7 +1375,7 @@ function TeamPanel() {
     setMe(user?.id || "");
     const [m, i] = await Promise.all([
       supabase.rpc("list_team", { target: businessId }),
-      supabase.from("team_invites").select("id, email, created_at").eq("business_id", businessId).is("accepted_at", null).order("created_at", { ascending: true }),
+      supabase.from("team_invites").select("id, email, role, created_at").eq("business_id", businessId).is("accepted_at", null).order("created_at", { ascending: true }),
     ]);
     if (m.error) setError(m.error.message); else setMembers(m.data || []);
     setInvites(i.data || []);
@@ -1387,10 +1389,16 @@ function TeamPanel() {
     if (!/^\S+@\S+\.\S+$/.test(clean)) { setError("That email address doesn't look right."); return; }
     if (members.some((m) => (m.email || "").toLowerCase() === clean)) { setError("That person already has a login."); return; }
     setBusy(true); setError("");
-    const { error: insertError } = await supabase.from("team_invites").insert({ business_id: businessId, email: clean, role: "employee" });
+    const { error: insertError } = await supabase.from("team_invites").insert({ business_id: businessId, email: clean, role: newRole });
     setBusy(false);
     if (insertError) { setError(insertError.code === "23505" ? "That email is already invited." : insertError.message); return; }
     setEmail("");
+    load();
+  }
+  async function changeRole(userId, role) {
+    setMembers((l) => l.map((m) => (m.user_id === userId ? { ...m, role } : m)));
+    const { error: upError } = await supabase.from("business_members").update({ role }).eq("business_id", businessId).eq("user_id", userId);
+    if (upError) setError(upError.message);
     load();
   }
   async function revoke(id) {
@@ -1411,7 +1419,7 @@ function TeamPanel() {
 
   const pill = { fontSize: 10.5, fontWeight: 700, borderRadius: 99, padding: "3px 8px" };
   return (
-    <Panel title="Team Logins" sub="Give your staff their own login to Atlas. They see the same customers, leads and schedule as you.">
+    <Panel title="Team Logins" sub="Give your team their own login. Manager: leads, customers, follow-ups, schedule, employees and hours. Staff: leads, customers, follow-ups and schedule. Neither sees prices, invoices, revenue or Team Logins.">
       {error && <p style={{ fontSize: 12.5, color: P.danger, margin: "0 0 12px" }}>{error}</p>}
       {loading ? (
         <p style={{ fontSize: 13, color: P.textMuted }}>Loading…</p>
@@ -1422,7 +1430,14 @@ function TeamPanel() {
               <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: P.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {m.email}{m.user_id === me ? " (you)" : ""}
               </div>
-              <span style={{ ...pill, background: m.role === "owner" ? P.accentSoft : "rgba(91,184,255,0.13)", color: m.role === "owner" ? P.accent : "#5BB8FF" }}>{m.role === "owner" ? "Owner" : "Staff"}</span>
+              {isOwner && m.role !== "owner" ? (
+                <select value={m.role} onChange={(e) => changeRole(m.user_id, e.target.value)} aria-label="Access level" style={{ ...inputStyle, width: "auto", padding: "5px 8px", fontSize: 12 }}>
+                  <option value="manager">Manager</option>
+                  <option value="employee">Staff</option>
+                </select>
+              ) : (
+                <span style={{ ...pill, background: m.role === "owner" ? P.accentSoft : "rgba(91,184,255,0.13)", color: m.role === "owner" ? P.accent : "#5BB8FF" }}>{ROLE_LABEL[m.role] || "Staff"}</span>
+              )}
               {isOwner && m.role !== "owner" && (
                 <button onClick={() => removeMember(m.user_id)} aria-label="Remove access" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", flexShrink: 0 }}><Trash2 size={15} /></button>
               )}
@@ -1432,7 +1447,7 @@ function TeamPanel() {
             <Card key={v.id} style={{ padding: "12px 14px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: P.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.email}</div>
-                <span style={{ ...pill, background: "rgba(245,166,35,0.14)", color: "#F5A623" }}>Invited</span>
+                <span style={{ ...pill, background: "rgba(245,166,35,0.14)", color: "#F5A623" }}>Invited · {ROLE_LABEL[v.role] || "Staff"}</span>
                 {isOwner && <button onClick={() => revoke(v.id)} aria-label="Cancel invite" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", flexShrink: 0 }}><Trash2 size={15} /></button>}
               </div>
               <button onClick={() => copyMessage(v.email)} style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
@@ -1442,7 +1457,11 @@ function TeamPanel() {
           ))}
           {isOwner ? (
             <form onSubmit={invite} style={{ display: "flex", gap: 8, marginTop: 6 }}>
-              <input type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Their email address" style={{ ...inputStyle, flex: 1 }} />
+              <input type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Their email address" style={{ ...inputStyle, flex: 1, minWidth: 0 }} />
+              <select value={newRole} onChange={(e) => setNewRole(e.target.value)} aria-label="Access level" style={{ ...inputStyle, width: "auto" }}>
+                <option value="employee">Staff</option>
+                <option value="manager">Manager</option>
+              </select>
               <button type="submit" disabled={busy || !email.trim()} style={{ display: "flex", alignItems: "center", gap: 6, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 9, padding: "0 14px", fontSize: 13, fontWeight: 700, cursor: busy || !email.trim() ? "default" : "pointer", opacity: busy || !email.trim() ? 0.6 : 1, whiteSpace: "nowrap" }}>
                 <Plus size={14} /> Invite
               </button>
@@ -1451,7 +1470,7 @@ function TeamPanel() {
             <p style={{ fontSize: 12.5, color: P.textMuted, margin: "6px 0 0" }}>Only the owner can invite or remove people.</p>
           )}
           <p style={{ fontSize: 12, color: P.textMuted, margin: "6px 0 0", lineHeight: 1.5 }}>
-            After you invite someone, send them the sign-up steps. They create their account with that exact email and land in your Atlas. Staff can't change business settings.
+            After you invite someone, send them the sign-up steps. They create their account with that exact email and land in your Atlas at the level you picked. You can change their level any time.
           </p>
         </div>
       )}
@@ -2159,7 +2178,7 @@ const PANELS = {
 export default function AtlasSettings({ onNavigate, currentPage = "settings", onSignOut, navParams }) {
   const { businessId, businessName, businessLogoUrl } = useBusinessId();
   const now = useLiveClock();
-  const [section, setSection] = useState(() => (navParams?.section && PANELS[navParams.section] ? navParams.section : "profile"));
+  const [section, setSection] = useState(() => (navParams?.section && PANELS[navParams.section] && canSeeSetting(navParams.section) ? navParams.section : (canSeeSetting("profile") ? "profile" : "account")));
   const [moreOpen, setMoreOpen] = useState(false);
   const ActivePanel = PANELS[section];
 
@@ -2173,7 +2192,7 @@ export default function AtlasSettings({ onNavigate, currentPage = "settings", on
           <AtlasMark size={24} /><span style={{ fontSize: 16, fontWeight: 700, color: P.textPrimary }}>Atlas</span>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          {NAV.map((item) => <NavItem key={item.id} item={item} active={currentPage === item.id} onClick={() => onNavigate(item.id)} />)}
+          {allowNav(NAV).map((item) => <NavItem key={item.id} item={item} active={currentPage === item.id} onClick={() => onNavigate(item.id)} />)}
         </div>
         <div style={{ marginTop: "auto", padding: "10px 8px", borderTop: `1px solid ${P.border}`, paddingTop: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
@@ -2202,7 +2221,7 @@ export default function AtlasSettings({ onNavigate, currentPage = "settings", on
         <div style={{ display: "flex", gap: 24, padding: "22px 24px", maxWidth: 980, margin: "0 auto" }}>
           {/* sub-nav */}
           <div className="hidden md:flex" style={{ flexDirection: "column", gap: 2, width: 200, flexShrink: 0 }}>
-            {SECTIONS.map((s) => (
+            {SECTIONS.filter((s) => canSeeSetting(s.id)).map((s) => (
               <button key={s.id} onClick={() => setSection(s.id)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", borderRadius: 9, border: "none", background: section === s.id ? P.surfaceHover : "transparent", color: section === s.id ? P.textPrimary : P.textSecondary, cursor: "pointer", textAlign: "left" }}>
                 <s.Icon size={15} color={section === s.id ? P.accent : P.textMuted} />
                 <span style={{ fontSize: 13, fontWeight: section === s.id ? 600 : 500 }}>{s.label}</span>
@@ -2212,7 +2231,7 @@ export default function AtlasSettings({ onNavigate, currentPage = "settings", on
 
           {/* mobile section picker */}
           <div className="flex md:hidden" style={{ position: "fixed", top: 62, left: 0, right: 0, background: P.bg, borderBottom: `1px solid ${P.border}`, padding: "8px 16px", gap: 6, overflowX: "auto", zIndex: 9 }}>
-            {SECTIONS.map((s) => (
+            {SECTIONS.filter((s) => canSeeSetting(s.id)).map((s) => (
               <button key={s.id} onClick={() => setSection(s.id)} style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, padding: "6px 12px", borderRadius: 20, border: `1px solid ${section === s.id ? P.accent : P.border}`, background: section === s.id ? P.accentSoft : "transparent", color: section === s.id ? P.accent : P.textSecondary, cursor: "pointer" }}>
                 {s.label}
               </button>
@@ -2226,7 +2245,7 @@ export default function AtlasSettings({ onNavigate, currentPage = "settings", on
       </div>
 
       <div className="flex lg:hidden" style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: P.bgTop, borderTop: `1px solid ${P.border}`, padding: "10px 6px 18px", justifyContent: "space-around", zIndex: 20 }}>
-        {MOBILE_NAV.map((item) => {
+        {allowNav(MOBILE_NAV).map((item) => {
           const isActive = item.id === "more" ? moreOpen : currentPage === item.id;
           return (
             <button key={item.id} onClick={() => (item.id === "more" ? setMoreOpen((v) => !v) : onNavigate(item.id))} style={{ background: "transparent", border: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", color: isActive ? P.accent : P.textMuted }}>
@@ -2239,7 +2258,7 @@ export default function AtlasSettings({ onNavigate, currentPage = "settings", on
         <>
           <div className="flex lg:hidden" onClick={() => setMoreOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 21 }} />
           <div className="flex lg:hidden" style={{ position: "fixed", bottom: 84, left: 12, right: 12, background: P.surface, border: `1px solid ${P.border}`, borderRadius: 14, padding: 8, zIndex: 22, flexDirection: "column", gap: 2 }}>
-            {MORE_PAGES.map((p) => (
+            {allowNav(MORE_PAGES).map((p) => (
               <button key={p.id} onClick={() => { onNavigate(p.id); setMoreOpen(false); }} style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 12px", borderRadius: 9, border: "none", background: currentPage === p.id ? P.surfaceHover : "transparent", color: currentPage === p.id ? P.textPrimary : P.textSecondary, cursor: "pointer", textAlign: "left" }}>
                 <p.Icon size={16} color={currentPage === p.id ? P.accent : P.textMuted} />
                 <span style={{ fontSize: 13.5, fontWeight: currentPage === p.id ? 600 : 500 }}>{p.label}</span>

@@ -12,6 +12,7 @@ import AtlasSettings from "./AtlasSettings";
 import AtlasQuickQuotePro from "./AtlasQuickQuotePro";
 import AtlasFollowUps from "./AtlasFollowUps";
 import AtlasLeads from "./AtlasLeads";
+import { setCurrentRole, canSeePage, firstPage } from "./permissions";
 
 // Single source of truth for which page is showing. Every page reads
 // `currentPage` to highlight its own nav item, and calls `onNavigate(id)`
@@ -134,6 +135,24 @@ export default function App() {
   const [leadToast, setLeadToast] = useState(null);
   const [quoteToast, setQuoteToast] = useState(null);
   const { businessId } = useBusinessId();
+  const [role, setRole] = useState(undefined);
+
+  // Which team level this login has decides which pages show up. Unknown or
+  // missing role falls back to the most limited level.
+  useEffect(() => {
+    const uid = session?.user?.id;
+    if (!uid) { setRole(undefined); return; }
+    let cancelled = false;
+    supabase.from("business_members").select("role").eq("user_id", uid).order("created_at", { ascending: true }).limit(1).maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return;
+        const r = data?.role || "employee";
+        setCurrentRole(r);
+        setRole(r);
+        setPage((p) => (canSeePage(p, r) ? p : firstPage(r)));
+      });
+    return () => { cancelled = true; };
+  }, [session?.user?.id]);
 
   // Lets a row on one page ("this quote", "this customer's job") jump
   // straight to the relevant record on another page, instead of just
@@ -234,6 +253,7 @@ export default function App() {
   function handleSignOut() {
     supabase.auth.signOut();
     setPage("dashboard");
+    setRole(undefined);
   }
 
   if (loading) return null;
@@ -246,7 +266,9 @@ export default function App() {
     return <AtlasLogin />;
   }
 
-  const Page = PAGES[page] || AtlasDashboardFinal;
+  if (role === undefined) return null;
+
+  const Page = canSeePage(page) ? (PAGES[page] || AtlasDashboardFinal) : PAGES[firstPage(role)];
 
   return (
     <>
