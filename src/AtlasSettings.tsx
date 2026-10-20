@@ -1798,6 +1798,7 @@ function InstantQuotePanel() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState("");
+  const [previewOpen, setPreviewOpen] = useState(false);
   const logoRef = useRef(null);
 
   useEffect(() => {
@@ -1924,7 +1925,7 @@ function InstantQuotePanel() {
         {link && !dirty && enabled && (
           <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
             <button onClick={() => copy("link", link)} style={smallBtn}>{copied === "link" ? <CheckIcon size={13} /> : <Copy size={13} />} Copy link</button>
-            <a href={link} target="_blank" rel="noreferrer" style={{ ...smallBtn, textDecoration: "none" }}><ExternalLink size={13} /> Open page</a>
+            <button onClick={() => setPreviewOpen(true)} style={smallBtn}><ExternalLink size={13} /> Open page</button>
             <button onClick={() => copy("embed", embed)} style={smallBtn}>{copied === "embed" ? <CheckIcon size={13} /> : <Copy size={13} />} Copy website code</button>
           </div>
         )}
@@ -1970,6 +1971,15 @@ function InstantQuotePanel() {
 
       <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Tell me about new requests</div>
       <PhoneNotificationsCard businessId={businessId} />
+      {previewOpen && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: P.bg || "#0b1210", display: "flex", flexDirection: "column" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "calc(env(safe-area-inset-top, 0px) + 12px) 16px 12px", borderBottom: `1px solid ${P.border}` }}>
+            <span style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>Your quote page</span>
+            <button onClick={() => setPreviewOpen(false)} style={{ ...smallBtn, fontSize: 14, padding: "8px 16px" }}>Close</button>
+          </div>
+          <iframe src={link} title="Quote page preview" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
+        </div>
+      )}
       <Card style={{ padding: 16 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div>
