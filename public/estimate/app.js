@@ -550,7 +550,7 @@ function itemBlock(v,i){
       return `<button class="svc${s.popular?" hasflag":""}" aria-pressed="${on}" data-act="svc" data-i="${i}" data-v="${esc(s.name)}">
         ${flag}${pic}
         <span class="pkgtop"><span class="box">${CHECK}</span>
-        <span class="pkgmain"><span class="svcname">${esc(s.name)}</span><span class="svcprice">${p.open?"<small>from</small>"+money(p.low):money(p.low)+"–"+money(p.high)}</span>${brief?`<span class="svcdesc">${esc(brief)}</span>`:""}${incl.length?`<span class="svcmore" data-act="info" data-i="${i}" data-v="${esc(s.name)}">${info?"Hide details":"What's included"} <span class="svcchev${info?" up":""}">▾</span></span>`:""}${info?`<span class="svcincl">${incl.map(x=>`<span class="svcli">${esc(x)}</span>`).join("")}<span class="svcwhy">Price depends on your vehicle's size and condition. We confirm the final price after reviewing your request.</span></span>`:""}</span></span></button>`;
+        <span class="pkgmain"><span class="svcname">${esc(s.name)}</span><span class="svcprice">${p.open?"<small>from</small>"+money(p.low):(p.low===p.high?money(p.low):money(p.low)+"–"+money(p.high))}</span>${brief?`<span class="svcdesc">${esc(brief)}</span>`:""}${incl.length?`<span class="svcmore" data-act="info" data-i="${i}" data-v="${esc(s.name)}">${info?"Hide details":"What's included"} <span class="svcchev${info?" up":""}">▾</span></span>`:""}${info?`<span class="svcincl">${incl.map(x=>`<span class="svcli">${esc(x)}</span>`).join("")}<span class="svcwhy">Price depends on your vehicle's size and condition. We confirm the final price after reviewing your request.</span></span>`:""}</span></span></button>`;
     }).join("");
     return accordion({ open, name:cat, count:ct.n||0,
       meta: ct.n ? totText(ct) : "from "+money(catFrom(v,cat)),
@@ -612,7 +612,7 @@ function pickedSummary(){
   return state.items.map((v,i)=>{
     const rows=[...v.services.map(n=>{const s=CFG.services.find(x=>x.name===n); if(!s)return"";
         const p=priceFor(s,v), incl=(Array.isArray(s.includes)?s.includes:[]).map(x=>String(x).trim()).filter(Boolean);
-        return `<div class="pk"><div class="pkh"><span>${esc(n)}</span><b>${p.open?"from "+money(p.low):money(p.low)+"–"+money(p.high)}</b></div>${s.desc?`<div class="pkd">${esc(s.desc)}</div>`:""}${incl.length?`<ul class="pkl">${incl.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}</div>`;}),
+        return `<div class="pk"><div class="pkh"><span>${esc(n)}</span><b>${p.open?"from "+money(p.low):(p.low===p.high?money(p.low):money(p.low)+"–"+money(p.high))}</b></div>${s.desc?`<div class="pkd">${esc(s.desc)}</div>`:""}${incl.length?`<ul class="pkl">${incl.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}</div>`;}),
       ...v.addons.map(n=>{const a=CFG.addons.find(x=>x.name===n); if(!a)return"";
         return `<div class="pk"><div class="pkh"><span>${esc(n)}</span><b>+${money(a.price)}</b></div>${a.desc?`<div class="pkd">${esc(a.desc)}</div>`:""}</div>`;})].join("");
     return rows?`<div class="vlabel">${esc(itemLabel(v,i))}</div>${rows}`:"";
