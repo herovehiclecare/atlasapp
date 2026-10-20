@@ -8,6 +8,7 @@ import {
 import { Inbox as LeadsIcon } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
+import { pushSupport, currentSubscription, enablePush, disablePush } from "./push";
 import { resizeImageToDataUrl, useLiveClock, formatDateTime } from "./lib";
 
 const P = {
@@ -1754,6 +1755,36 @@ function IqPrice({ value, onChange, placeholder }) {
   );
 }
 
+function PhoneNotificationsCard({ businessId }) {
+  const support = pushSupport();
+  const [on, setOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  useEffect(() => { currentSubscription().then((s) => setOn(!!s)).catch(() => {}); }, []);
+  async function flip() {
+    setBusy(true); setMsg("");
+    try {
+      if (on) { await disablePush(); setOn(false); }
+      else { await enablePush(businessId); setOn(true); setMsg("On. New requests will now pop up on this phone."); }
+    } catch (e) { setMsg(e.message || "Couldn't turn notifications on."); }
+    setBusy(false);
+  }
+  return (
+    <Card style={{ padding: 16, marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>Notifications on this phone</div>
+          <div style={{ fontSize: 11.5, color: P.textMuted, marginTop: 2, lineHeight: 1.45 }}>A banner with sound and vibration the moment a request comes in, plus a red number on the Atlas icon for leads you haven't opened.</div>
+        </div>
+        {support === "ok" && <Toggle on={on} onClick={busy ? () => {} : flip} />}
+      </div>
+      {support === "needs-install" && <p style={{ fontSize: 12, color: P.secondary, margin: "10px 0 0", lineHeight: 1.5 }}>On iPhone, first tap the Share button in Safari or Chrome, choose "Add to Home Screen", then open Atlas from the new icon and come back here.</p>}
+      {support === "unsupported" && <p style={{ fontSize: 12, color: P.textMuted, margin: "10px 0 0" }}>This browser can't show notifications. Try Safari or Chrome on your phone.</p>}
+      {msg && <p style={{ fontSize: 12, color: P.textSecondary, margin: "10px 0 0" }}>{msg}</p>}
+    </Card>
+  );
+}
+
 function InstantQuotePanel() {
   const { businessId } = useBusinessId();
   const [loading, setLoading] = useState(true);
@@ -1936,7 +1967,8 @@ function InstantQuotePanel() {
         <button onClick={() => touch({ ...cfg, addons: [...cfg.addons, { name: "", price: null, desc: "" }] })} style={ghostBtn}><Plus size={12} /> Add add-on</button>
       </div>
 
-      <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Text me new requests</div>
+      <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Tell me about new requests</div>
+      <PhoneNotificationsCard businessId={businessId} />
       <Card style={{ padding: 16 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div>

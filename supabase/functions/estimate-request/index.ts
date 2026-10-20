@@ -303,6 +303,23 @@ Deno.serve(async (req) => {
       });
       if (fuErr) console.error("estimate-request: follow-up insert failed", fuErr.message);
 
+      // Phone notification (banner + sound + icon badge) for devices that turned it on in Atlas.
+      try {
+        await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/notify-push`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
+          body: JSON.stringify({
+            business_id: business.id,
+            title: `New quote request: ${name.slice(0, 40)}`,
+            body: `${itemsOut.map((i) => i.services.concat(i.addons).join(" + ")).join("; ")} - ${range}${phone ? ` - ${phone}` : ""}`,
+            url: "/",
+            tag: "estimate-request",
+          }),
+        });
+      } catch (err) {
+        console.error("estimate-request: push notify failed", err);
+      }
+
       const alertTo = cfg.alerts?.sms
         ? toE164(cfg.alerts.phone)
         : business.id === ALERT_BUSINESS_ID ? OWNER_ALERT_PHONE : "";
