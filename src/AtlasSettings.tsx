@@ -1424,6 +1424,7 @@ function NotificationsPanel() {
   return (
     <Panel title="Notifications" sub="Controls the notification bell in the top-right corner of every page.">
       {error && <p style={{ fontSize: 12.5, color: P.danger, margin: "0 0 12px" }}>{error}</p>}
+      <div style={{ marginBottom: 14 }}><PhoneNotificationsCard businessId={businessId} /></div>
       <Card>
         {items.map((n, i) => (
           <div key={n.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "13px 16px", borderBottom: i < items.length - 1 ? `1px solid ${P.border}` : "none" }}>
