@@ -497,7 +497,10 @@ function HeaderStaggered({ editMode, setEditMode, businessId, businessName, busi
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 24px", borderBottom: `1px solid ${P.border}`, position: "sticky", top: 0, background: P.bg, zIndex: 10 }}>
       <div>
         <BrandLockup size={32} businessId={businessId} realName={businessName} realLogoUrl={businessLogoUrl} />
-        <div style={{ fontSize: 12, color: P.textMuted, marginTop: 4, marginLeft: 42 }}>Dashboard · {formatDateTime(now)}</div>
+        <div style={{ fontSize: 12, color: P.textMuted, marginTop: 4, marginLeft: 42, whiteSpace: "nowrap" }}>
+          <div>Dashboard</div>
+          <div>{formatDateTime(now).replace(/ (AM|PM)$/, " $1")}</div>
+        </div>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <NotificationBell dueFollowUps={dueFollowUps} onNavigate={onNavigate} />
