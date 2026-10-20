@@ -677,7 +677,7 @@ function formScreen(){
       <textarea id="cnotes" placeholder="Anything that helps us price it right…" data-c="notes">${esc(state.contact.notes)}</textarea></div>
     ${CFG.autoReply && CFG.autoReply.sms ? `<label class="consent"><input type="checkbox" data-consent="1"${state.smsConsent?" checked":""}>
       <span>Text me a confirmation and updates about this request. Msg &amp; data rates may apply. Reply STOP to opt out.</span></label>`:""}
-    ${state.touched && !contactReady()?`<div class="err">Add your name and a phone number or email so we can reply.</div>`:""}` })}
+    ${state.touched && !contactReady()?`<div class="err">${state.contact.name.trim().length<2?"Add your name and a phone number or email so we can reply.":"That phone number or email looks incomplete. Check it so we can reach you."}</div>`:""}` })}
 
   ${picked?`<div class="acc on" style="padding:18px;margin-top:16px">
     <div class="secnum" style="margin:0 0 2px">What you're requesting</div>
