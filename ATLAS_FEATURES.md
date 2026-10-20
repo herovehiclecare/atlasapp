@@ -19,7 +19,8 @@ Status: LIVE, BUILT (not yet switched on), PLANNED.
 - LIVE - Every request lands in Leads and creates a follow-up for today automatically.
 - LIVE - Duplicate-tap protection: same customer sending twice is one lead.
 - BUILT - Optional "we got your request" text to the customer (with their consent).
-- PLANNED - Email alert (needs email service key, see To-Do).
+- LIVE - Texts through the Atlas number are blocked for every business except Andre's own (server rule). Other accounts get phone notifications plus the Requests list. No email alerts (decided: no Resend account).
+- LIVE - Faster quote page: logo served separately and cached, config is about 4KB instead of 78KB, loading starts earlier.
 
 ## Run the shop
 - LIVE - Leads board, Customers list, Follow-ups, Schedule, Vehicles.
@@ -37,7 +38,6 @@ Status: LIVE, BUILT (not yet switched on), PLANNED.
 
 ## To-Do: make it a fuller live CRM
 Come back to these after the design look and style is settled.
-- Email alerts and customer emails via Resend (needs Andre's Resend account + API key).
 - Wire the same instant alert (push + text) into the Facebook lead webhook.
 - Dashboard phone-first design pass (design look and style first).
 - Settings screen for the "popular" flag and service photos on the quote page.
@@ -48,6 +48,5 @@ Come back to these after the design look and style is settled.
 - Shopify $39 Done-For-You Setup offer.
 - Delete the "John Doe TEST" lead after Andre confirms the new text format.
 - Upgrade path from Instant Quote only to the full CRM (today Andre removes ui_prefs.mode in the database by hand).
-- Decide the one-time price for Atlas Instant Quote.
-- Email alert to the customer's own email for quote-only accounts (needs Andre's Resend key). Also add a server rule so only Andre's own business can send texts through the Atlas number.
-- Test the quote-only sign-up once with a real email on the live site (local test passed).
+- Decide the Instant Quote price. Recommended: $147 one-time self-serve, $247 with done-for-you setup. Selling guide: Desktop Atlas Plan 06-Atlas-Instant-Quote-How-To-Sell.md. Ask before creating the Shopify product.
+- Andre does one real quote-only sign-up on the live site with a different email (local test passed; the browser tool cannot create real accounts).
