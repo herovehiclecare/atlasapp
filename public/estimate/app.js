@@ -474,7 +474,7 @@ function applySpecials(){
   CFG.services = [...specials, ...CFG.services.filter(s=>!s.special)];
 }
 const isSpecialCat = cat => CFG.services.some(s=>s.special && s.cat===cat);
-const untilText = u => { const m=/^(d{4})-(d{2})-(d{2})$/.exec(u||""); if(!m) return "";
+const untilText = u => { const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(u||""); if(!m) return "";
   return new Date(+m[1],+m[2]-1,+m[3]).toLocaleDateString("en-US",{month:"short",day:"numeric"}); };
 const categories = () => [...new Set(CFG.services.map(s=>s.cat).filter(Boolean))];
 function catTotal(v, cat){
