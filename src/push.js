@@ -8,8 +8,15 @@ function keyBytes(b64) {
   return Uint8Array.from(raw, (c) => c.charCodeAt(0));
 }
 
+function clearBadgeAndBanners() {
+  try { navigator.clearAppBadge?.().catch(() => {}); } catch (_e) { /* unsupported */ }
+  navigator.serviceWorker?.getRegistration?.().then((reg) => reg?.getNotifications?.().then((list) => list.forEach((n) => n.close()))).catch(() => {});
+}
+
 export function registerServiceWorker() {
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+  clearBadgeAndBanners();
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") clearBadgeAndBanners(); });
 }
 
 // "unsupported" on iPhone until Atlas is added to the Home Screen.
