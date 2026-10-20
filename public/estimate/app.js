@@ -496,7 +496,7 @@ function newItem(open){
     size:(CFG.sizes[0]||{}).id || "car",
     condition:(CFG.conditions[1]||CFG.conditions[0]||{}).id || "moderate",
     frequency:(CFG.frequencies[1]||CFG.frequencies[0]||{}).id || "few",
-    services:[], addons:[], detailsOpen:!!open, openCats:[] };
+    services:[], addons:[], detailsOpen:!!open, openCats:categories().slice(0,1) };
 }
 function prefill(){
   const q = new URLSearchParams(location.search), pick = k => (q.get(k)||"").slice(0,160);
@@ -532,8 +532,6 @@ function itemBlock(v,i){
   const details = `
     ${half.length?`<div class="row">${half.map(fieldInput).join("")}</div>`:""}
     ${rest.map(fieldInput).join("")}
-    ${CFG.sizes.length>1?`<div class="field"><label class="f">Size</label><div class="chips">${CFG.sizes.map(s=>`
-      <button class="chip" aria-pressed="${v.size===s.id}" data-act="size" data-i="${i}" data-v="${esc(s.id)}">${esc(s.label)}${s.hint?`<small>${esc(s.hint)}</small>`:""}</button>`).join("")}</div></div>`:""}
     ${CFG.conditions.length?`<div class="field"><label class="f">${esc(CFG.conditionQ)}</label><div class="chips">${CFG.conditions.map(c=>`
       <button class="chip" aria-pressed="${v.condition===c.id}" data-act="cond" data-i="${i}" data-v="${esc(c.id)}">${esc(c.label)}${c.hint?`<small>${esc(c.hint)}</small>`:""}</button>`).join("")}</div></div>`:""}
     ${CFG.frequencies.length?`<div class="field" style="margin-bottom:0"><label class="f">${esc(CFG.frequencyQ)}</label><div class="chips">${CFG.frequencies.map(f=>`
@@ -547,10 +545,12 @@ function itemBlock(v,i){
       const incl=(Array.isArray(s.includes)?s.includes:[]).map(x=>String(x).trim()).filter(Boolean);
       const brief=s.desc || (incl.length?incl.slice(0,3).join(" · ")+(incl.length>3?" + "+(incl.length-3)+" more":""):"");
       const info=openInfo.has(s.name);
-      return `<button class="svc" aria-pressed="${on}" data-act="svc" data-i="${i}" data-v="${esc(s.name)}">
-        <span class="box">${CHECK}</span>
-        <span style="flex:1;min-width:0"><span class="svcname">${esc(s.name)}</span>${brief?`<span class="svcdesc">${esc(brief)}</span>`:""}${incl.length?`<span class="svcmore" data-act="info" data-i="${i}" data-v="${esc(s.name)}">${info?"Hide details":"What's included"} <span class="svcchev${info?" up":""}">▾</span></span>`:""}${info?`<span class="svcincl">${incl.map(x=>`<span class="svcli">${esc(x)}</span>`).join("")}<span class="svcwhy">Price depends on your vehicle's size and condition. We confirm the final price after reviewing your request.</span></span>`:""}</span>
-        <span class="svcprice">${p.open?"from "+money(p.low):money(p.low)+"–"+money(p.high)}</span></button>`;
+      const pic=/^https:\/\//i.test(s.photo||"")?`<span class="svcpic"><img src="${esc(s.photo)}" alt="" loading="lazy"></span>`:"";
+      const flag=s.popular?`<span class="pop">Most popular</span>`:"";
+      return `<button class="svc${s.popular?" hasflag":""}" aria-pressed="${on}" data-act="svc" data-i="${i}" data-v="${esc(s.name)}">
+        ${flag}${pic}
+        <span class="pkgtop"><span class="box">${CHECK}</span>
+        <span class="pkgmain"><span class="svcname">${esc(s.name)}</span><span class="svcprice">${p.open?"<small>from</small>"+money(p.low):money(p.low)+"–"+money(p.high)}</span>${brief?`<span class="svcdesc">${esc(brief)}</span>`:""}${incl.length?`<span class="svcmore" data-act="info" data-i="${i}" data-v="${esc(s.name)}">${info?"Hide details":"What's included"} <span class="svcchev${info?" up":""}">▾</span></span>`:""}${info?`<span class="svcincl">${incl.map(x=>`<span class="svcli">${esc(x)}</span>`).join("")}<span class="svcwhy">Price depends on your vehicle's size and condition. We confirm the final price after reviewing your request.</span></span>`:""}</span></span></button>`;
     }).join("");
     return accordion({ open, name:cat, count:ct.n||0,
       meta: ct.n ? totText(ct) : "from "+money(catFrom(v,cat)),
@@ -566,9 +566,19 @@ function itemBlock(v,i){
       <span class="svcprice">+${money(a.price)}</span></button>`;
   }).join("");
 
-  return `${accordion({ open:v.detailsOpen, name:itemLabel(v,i), count:0,
-      meta: t.low ? totText(t) : "Tap to start", metaHas:!!t.low,
+  const veh = CFG.trade==="detailing";
+  const sizePick = CFG.sizes.length>1 ? `<div class="qhead" style="margin-top:${i?26:6}px">${veh?"What are you driving?":"Pick your size"}${multi?` <span style="color:var(--muted);font-weight:700;font-size:15px">· ${esc(itemLabel(v,i))}</span>`:""}</div>
+    <div class="vpick">${CFG.sizes.map((s,n)=>`
+      <button class="vcard plain" aria-pressed="${v.size===s.id}" data-act="size" data-i="${i}" data-v="${esc(s.id)}">
+        <span><b>${esc(s.label)}</b>${s.hint?`<small>${esc(s.hint)}</small>`:""}</span></button>`).join("")}</div>` : "";
+
+  return `${sizePick}
+    <div style="height:14px"></div>
+    ${accordion({ open:v.detailsOpen, name:itemLabel(v,i), count:0,
+      meta: t.low ? totText(t) : "Add details", metaHas:!!t.low,
       body:details, act:"toggleitem", i })}
+    <div class="qhead">Choose your package</div>
+    <p class="qsub">Tap a package to add it. Your price updates as you go.</p>
     ${cats}
     ${CFG.addons.length?accordion({ open:v.openCats.includes("__addons"), name:"Add-Ons", count:at.n||0,
       meta: at.n ? "+"+money(at.low) : "from "+money(Math.min(...CFG.addons.map(a=>Number(a.price)||0))),
@@ -609,6 +619,12 @@ function pickedSummary(){
   }).join("");
 }
 
+function stepsBar(picked){
+  const now = !picked ? 0 : !contactReady() ? 1 : 2;
+  return `<div class="steps" aria-label="Progress">${[CFG.copy.step1, "Your details", "Send"].map((l,n)=>
+    `<div class="stp${n<now?" done":n===now?" now":""}"><i></i><span>${esc(l)}</span></div>`).join("")}</div>`;
+}
+
 function formScreen(){
   const t = grandTotal(), picked = anyPicked(), c = CFG.copy;
   const cond = CFG.conditions.find(x=>x.id===state.items[0]?.condition);
@@ -621,11 +637,11 @@ function formScreen(){
     ${cond?`<div class="herosub">Based on a ${esc(cond.label.toLowerCase())} job. Change that and this moves with it.</div>`:""}
   </div>`:""}
 
-  <div class="secnum">1 — ${esc(c.step1)}</div>
+  ${stepsBar(picked)}
   ${state.items.map(itemBlock).join("")}
   <button class="ghost" data-act="additem" style="margin-top:14px">+ Add another ${esc(TRADES[CFG.trade]?.item||"item")}</button>
 
-  <div class="secnum">2 — ${esc(c.step2)}</div>
+  <div class="qhead">${esc(c.step2)}</div>
   ${accordion({ open:state.contactOpen, name:"Your details", count:0,
     meta: contactReady()?esc(state.contact.name):"Tap to fill in", metaHas:contactReady(), act:"togglecontact",
     body:`<div class="field"><label class="f" for="cname">Your name</label>
