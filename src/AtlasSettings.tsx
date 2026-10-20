@@ -1942,6 +1942,7 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [specialsOpen, setSpecialsOpen] = useState(false);
   const logoRef = useRef(null);
 
   useEffect(() => {
@@ -2172,6 +2173,9 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
         <Toggle on={!!cfg.specialsOn} onClick={() => touch({ ...cfg, specialsOn: !cfg.specialsOn })} />
       </Card>
       {cfg.specialsOn && (
+        <button onClick={() => setSpecialsOpen((v) => !v)} style={{ ...ghostBtn, marginBottom: 10 }}>{specialsOpen ? "Hide my specials" : `Show my specials (${cfg.services.filter((s) => s.special).length})`}</button>
+      )}
+      {cfg.specialsOn && specialsOpen && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <Field label="Section title"><input value={cfg.specialsTitle || ""} onChange={(e) => touch({ ...cfg, specialsTitle: e.target.value })} placeholder="Current Specials" style={inputStyle} /></Field>
           {cfg.services.map((s, i) => !s.special ? null : (
