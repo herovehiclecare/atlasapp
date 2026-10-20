@@ -68,7 +68,7 @@ function summaryLines(c) {
   if (ctx?.items?.length) {
     const first = ctx.items[0];
     const work = [...(first.services || []), ...(first.addons || [])].join(", ");
-    return { vehicle: first.label && first.label !== "Job" ? `${first.label}${first.size ? ` · ${first.size}` : ""}` : (first.size || ""), work: ctx.items.length > 1 ? `${work} (+${ctx.items.length - 1} more vehicle${ctx.items.length > 2 ? "s" : ""})` : work };
+    return { vehicle: first.label && first.label !== "Job" ? first.label : (first.size || ""), work: ctx.items.length > 1 ? `${work} (+${ctx.items.length - 1} more vehicle${ctx.items.length > 2 ? "s" : ""})` : work };
   }
   const answers = ctx?.answers ? Object.values(ctx.answers).filter(Boolean) : [];
   return { vehicle: "", work: answers.slice(0, 2).join(" · ") || c.notes || "" };
