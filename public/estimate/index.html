@@ -3,6 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fqggnekepfzxrkuazpiy.supabase.co">
+<script>
+  (function(){ var m = location.pathname.match(/\/e\/([a-z0-9-]+)/i) || location.search.match(/[?&]slug=([a-z0-9-]+)/i);
+    window.ATLAS_SLUG = m ? m[1].toLowerCase() : "";
+    if (window.ATLAS_SLUG) { try { window.ATLAS_CFG = fetch("https://fqggnekepfzxrkuazpiy.supabase.co/functions/v1/estimate-request?slug=" + encodeURIComponent(window.ATLAS_SLUG)); } catch (e) {} } })();
+</script>
 <title>Get Your Estimate — Detail Hero</title>
 <style>
 :root{
@@ -393,10 +399,6 @@ body.light .gear{background:rgba(0,0,0,.04)}
   </div>
 </div>
 
-<script>
-  (function(){ var m = location.pathname.match(/\/e\/([a-z0-9-]+)/i) || location.search.match(/[?&]slug=([a-z0-9-]+)/i);
-    window.ATLAS_SLUG = m ? m[1].toLowerCase() : ""; })();
-</script>
 <script src="/estimate/app.js"></script>
 </body>
 </html>

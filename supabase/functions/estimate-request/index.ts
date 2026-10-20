@@ -4,6 +4,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // Atlas Instant Quote - the public page a business links from its website.
 //
 // GET  ?slug=<estimate_slug>  -> that business's saved quote-tool setup (businesses.estimate_config)
+// GET  ?slug=<slug>&logo=1    -> that business's logo image (cacheable)
 // POST                        -> records one request as a lead (customer + follow-up)
 //
 // The page itself is static and served by Vercel (public/estimate). This function only speaks JSON.
@@ -17,8 +18,7 @@ const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPAB
 const OPENPHONE_API_KEY = Deno.env.get("QUO_API_KEY") || "";
 const OPENPHONE_FROM_NUMBER = Deno.env.get("QUO_FROM_NUMBER") || "";
 const OWNER_ALERT_PHONE = Deno.env.get("OWNER_ALERT_PHONE") || "";
-// Alert texts go out from the Atlas number. Andre's business falls back to his own phone;
-// any other business gets them only if its owner turned alerts on and entered a phone.
+// Texts go out from the Atlas number, so only Andre's own business (ATLAS_BUSINESS_ID) may send them.
 const ALERT_BUSINESS_ID = Deno.env.get("ATLAS_BUSINESS_ID") || "";
 const MAX_ALERTS_PER_HOUR = 10;
 
@@ -27,11 +27,22 @@ const MAX_ITEMS = 6;
 const MAX_PICKS = 20;
 const MAX_PER_MINUTE = 20;
 
-const json = (body: unknown, status = 200) =>
+const json = (body: unknown, status = 200, extra: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", ...extra },
   });
+
+// The logo is stored inside the setup as a big base64 image. Sending it with every page load made
+// the config ~78KB, so the page serves it from its own cacheable address instead.
+const hashStr = (s: string) => {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(36);
+};
+
+// Warm instances answer repeat page loads from memory for 30 seconds, so edits still show up quickly.
+const cfgCache = new Map<string, { t: number; body: string }>();
 
 const round5 = (n: number) => Math.round(n / 5) * 5;
 const money = (n: number) => `$${Math.round(Number(n) || 0).toLocaleString("en-US")}`;
@@ -130,8 +141,23 @@ Deno.serve(async (req) => {
     if (req.method === "GET") {
       const slug = clean(url.searchParams.get("slug"), 60);
       if (!slug) return json({ error: "Missing slug" }, 400);
+      const hit = url.searchParams.get("logo") ? null : cfgCache.get(slug);
+      if (hit && Date.now() - hit.t < 30_000) {
+        return new Response(hit.body, {
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=30" },
+        });
+      }
       const business = await loadBusiness(slug);
       if (!business) return json({ error: "Not found" }, 404);
+      const logoData = String(business.estimate_config?.brand?.logo || "");
+      if (url.searchParams.get("logo")) {
+        const m = logoData.match(/^data:(image\/[a-z0-9.+-]+);base64,(.+)$/i);
+        if (!m) return json({ error: "Not found" }, 404);
+        const bin = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
+        return new Response(bin, {
+          headers: { "Content-Type": m[1], "Cache-Control": "public, max-age=86400", "Access-Control-Allow-Origin": "*" },
+        });
+      }
       // alerts holds the owner's private phone number - never send it to the public page.
       const { alerts: _alerts, ...publicConfig } = business.estimate_config;
       // Show what each service includes: read it live from the services table, matched by name.
@@ -145,7 +171,17 @@ Deno.serve(async (req) => {
           });
         }
       } catch (_e) { /* descriptions are optional */ }
-      return json({ config: publicConfig });
+      if (logoData.startsWith("data:") && publicConfig.brand) {
+        publicConfig.brand = {
+          ...publicConfig.brand,
+          logo: `${Deno.env.get("SUPABASE_URL")}/functions/v1/estimate-request?slug=${encodeURIComponent(slug)}&logo=1&v=${hashStr(logoData)}`,
+        };
+      }
+      const out = JSON.stringify({ config: publicConfig });
+      cfgCache.set(slug, { t: Date.now(), body: out });
+      return new Response(out, {
+        headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "public, max-age=30" },
+      });
     }
 
     if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -342,9 +378,10 @@ Deno.serve(async (req) => {
         console.error("estimate-request: push notify failed", err);
       }
 
-      const alertTo = cfg.alerts?.sms
-        ? toE164(cfg.alerts.phone)
-        : business.id === ALERT_BUSINESS_ID ? OWNER_ALERT_PHONE : "";
+      // Only the Atlas number's own business may text; every other shop uses phone notifications.
+      const alertTo = business.id === ALERT_BUSINESS_ID
+        ? (cfg.alerts?.sms ? toE164(cfg.alerts.phone) : OWNER_ALERT_PHONE)
+        : "";
       if (alertTo) {
         const hourAgo = new Date(Date.now() - 3_600_000).toISOString();
         const { count: lastHour } = await supabase

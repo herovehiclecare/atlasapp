@@ -1128,7 +1128,7 @@ async function boot(){
   app.innerHTML = '<p class="lede" style="text-align:center;padding:60px 0">Loading…</p>';
   document.getElementById("bar").hidden = true;
   try {
-    const r = await fetch(API + "?slug=" + encodeURIComponent(SLUG));
+    const r = await (window.ATLAS_CFG || fetch(API + "?slug=" + encodeURIComponent(SLUG)));
     const j = JSON.parse(await r.text());
     if (!r.ok || !j.config) throw new Error("nf");
     const c = j.config, base = seedFromTrade(c.trade && TRADES[c.trade] ? c.trade : DEFAULTS.trade);
