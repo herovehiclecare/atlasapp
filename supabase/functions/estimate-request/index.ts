@@ -331,10 +331,10 @@ Deno.serve(async (req) => {
         if ((lastHour ?? 0) <= MAX_ALERTS_PER_HOUR) {
           const jobs = itemsOut.map((i) => {
             const det = Object.values(i.details || {}).join(" ");
-            const head = [det || "Vehicle not given", i.size, i.condition && `Condition: ${i.condition}`, i.timing && `Timing: ${i.timing}`]
+            const head = [det || i.size, i.condition && `Condition: ${i.condition}`, i.timing && `Timing: ${i.timing}`]
               .filter(Boolean).join(" | ");
             const picks = i.services.map((s: string) => `  - ${s}`).concat(i.addons.map((a: string) => `  - Add-on: ${a}`)).join("\n");
-            return `${head}\n${picks}\n  Est: ${rangeText(i.low, i.high, anyOpen)}`;
+            return itemsOut.length > 1 ? `${head}\n${picks}\n  Est: ${rangeText(i.low, i.high, anyOpen)}` : `${head}\n${picks}`;
           }).join("\n");
           const msg = [
             `NEW QUOTE REQUEST - ${name.slice(0, 60)}`,
