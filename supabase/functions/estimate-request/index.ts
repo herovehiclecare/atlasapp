@@ -74,14 +74,14 @@ function toE164(raw: unknown): string {
   return "";
 }
 
-async function sendRequestAlert(to: string, name: string, phone: string, summary: string, range: string) {
+async function sendRequestAlert(to: string, message: string) {
   if (!OPENPHONE_API_KEY || !OPENPHONE_FROM_NUMBER || !to) return;
   try {
     const res = await fetch("https://api.openphone.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: OPENPHONE_API_KEY },
       body: JSON.stringify({
-        content: `New Instant Quote request: ${name}${phone ? ` ${phone}` : ""} - ${range}${summary ? ` (${summary})` : ""}. They're waiting on you.`,
+        content: message,
         from: OPENPHONE_FROM_NUMBER,
         to: [to],
       }),
@@ -283,7 +283,7 @@ Deno.serve(async (req) => {
           phone: phone || null,
           address: address || null,
           source: "estimate_request",
-          source_ref: slug,
+          source_ref: `${slug}:${crypto.randomUUID()}`,
           lead_context: leadContext,
         })
         .select("id")
@@ -312,7 +312,21 @@ Deno.serve(async (req) => {
           .from("customers").select("id", { count: "exact", head: true })
           .eq("business_id", business.id).eq("source", "estimate_request").gte("created_at", hourAgo);
         if ((lastHour ?? 0) <= MAX_ALERTS_PER_HOUR) {
-          await sendRequestAlert(alertTo, name.slice(0, 40), phone, itemsOut.map((i) => i.label).join(", "), range);
+          const jobs = itemsOut.map((i) => {
+            const det = Object.values(i.details || {}).join(" ");
+            return `${det ? `${det} (${i.size})` : i.size}: ${i.services.concat(i.addons).join(" + ")}`;
+          }).join("; ");
+          const msg = [
+            `NEW QUOTE REQUEST - ${name.slice(0, 60)}`,
+            phone && `Phone: ${phone}`,
+            email && `Email: ${email}`,
+            `Wants: ${jobs}`,
+            `Estimate shown: ${range}`,
+            address && `Address: ${address}`,
+            notes && `Notes: ${notes.slice(0, 300)}`,
+            "Reply fast - they're waiting.",
+          ].filter(Boolean).join("\n").slice(0, 900);
+          await sendRequestAlert(alertTo, msg);
         }
       }
 
