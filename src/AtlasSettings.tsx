@@ -1986,12 +1986,12 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
     const name = soloName.trim();
     const digits = soloPhone.replace(/\D/g, "");
     if (!name) { setError("Enter your business name."); return; }
-    if (!(digits.length === 10 || (digits.length === 11 && digits.startsWith("1")))) { setError("Enter your 10-digit mobile number so we can text you new requests."); return; }
+    if (soloPhone.trim() && !(digits.length === 10 || (digits.length === 11 && digits.startsWith("1")))) { setError("That phone number looks incomplete. Enter 10 digits, or leave it blank."); return; }
     setSaving(true);
     const next = {
       ...iqDefaultConfig({ ...biz, name, phone: soloPhone.trim() }, IQ_STARTER_SERVICES),
       addons: IQ_STARTER_ADDONS,
-      alerts: { sms: true, phone: soloPhone.trim() },
+      alerts: { sms: false },
     };
     const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "my-detailing";
     let lastErr = null;
@@ -2068,8 +2068,8 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
         {error && <p style={{ fontSize: 12.5, color: P.danger, margin: "0 0 12px" }}>{error}</p>}
         <Card style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
           <Field label="Business name"><input value={soloName} onChange={(e) => setSoloName(e.target.value)} placeholder="Example: Sunrise Mobile Detailing" style={inputStyle} /></Field>
-          <Field label="Your mobile number (we text you every new request)"><input type="tel" inputMode="tel" value={soloPhone} onChange={(e) => setSoloPhone(e.target.value)} placeholder="(555) 555-5555" style={inputStyle} /></Field>
-          <p style={{ fontSize: 11.5, color: P.textMuted, margin: 0, lineHeight: 1.5 }}>US numbers only. Message and data rates may apply. Never shown to customers.</p>
+          <Field label="Business phone shown on your page (optional)"><input type="tel" inputMode="tel" value={soloPhone} onChange={(e) => setSoloPhone(e.target.value)} placeholder="(555) 555-5555" style={inputStyle} /></Field>
+          <p style={{ fontSize: 11.5, color: P.textMuted, margin: 0, lineHeight: 1.5 }}>Customers see this number on your quote page so they can call you. You can change it later.</p>
           <button onClick={soloSetup} disabled={saving} style={{ ...smallBtn, justifyContent: "center", padding: "12px 14px", fontSize: 14, opacity: saving ? 0.6 : 1 }}>{saving ? "Creating…" : "Create my quote page"}</button>
         </Card>
       </Panel>
@@ -2187,6 +2187,9 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
           <iframe src={link} title="Quote page preview" style={{ flex: 1, width: "100%", border: "none", background: "#fff" }} />
         </div>
       )}
+      {solo ? (
+        <p style={{ fontSize: 12, color: P.textMuted, margin: "10px 0 0", lineHeight: 1.5 }}>Every request is also saved under Requests, so you can open it any time.</p>
+      ) : (
       <Card style={{ padding: 16 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div>
@@ -2202,6 +2205,7 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
           </div>
         )}
       </Card>
+      )}
 
       <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Look and wording</div>
       <Card style={{ padding: 16 }}>

@@ -10,7 +10,7 @@ Status: LIVE, BUILT (not yet switched on), PLANNED.
 - LIVE - Customer's year / make / model captured on every request.
 - LIVE - "Something Else" tile (Motorcycle, Boat, RV) at the top of the quote page: tap it, pick Motorcycle / Boat / RV / Something Else, then describe the job. It arrives as a lead with no price, with the same phone alert and text.
 - LIVE - Price groups (like Mobile Maintenance) start closed on the quote page; the customer taps to open.
-- LIVE - Standalone Atlas Instant Quote (one-time purchase, quote page only): customer signs up at https://atlasapp-two.vercel.app/?signup=quote, enters business name + mobile number, edits the example prices, presses Copy website code, pastes it into their site. Edits later happen in the same screen and the site updates itself. Requests arrive as a text plus a Requests list. The full CRM stays an optional upgrade.
+- LIVE - Standalone Atlas Instant Quote (one-time purchase, quote page only): customer signs up at https://atlasapp-two.vercel.app/?signup=quote, enters business name (phone optional, shown on their page), edits the example prices, presses Copy website code, pastes it into their site. Edits later happen in the same screen and the site updates itself. Requests arrive as a phone notification (free) plus a Requests list; customers do NOT use Atlas's text number. The full CRM stays an optional upgrade.
 - LIVE - Messenger + Instagram auto-reply that sends people to the instant quote page (set up in Meta Business Suite).
 
 ## Never miss a lead
@@ -49,5 +49,5 @@ Come back to these after the design look and style is settled.
 - Delete the "John Doe TEST" lead after Andre confirms the new text format.
 - Upgrade path from Instant Quote only to the full CRM (today Andre removes ui_prefs.mode in the database by hand).
 - Decide the one-time price for Atlas Instant Quote.
-- Texts to each customer-owner go out through Atlas's Quo number: watch the cost as customers are added.
+- Email alert to the customer's own email for quote-only accounts (needs Andre's Resend key). Also add a server rule so only Andre's own business can send texts through the Atlas number.
 - Test the quote-only sign-up once with a real email on the live site (local test passed).
