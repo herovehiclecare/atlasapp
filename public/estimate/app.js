@@ -502,10 +502,12 @@ function prefill(){
   const q = new URLSearchParams(location.search), pick = k => (q.get(k)||"").slice(0,160);
   return { name:pick("name"), phone:pick("phone"), email:pick("email"), address:pick("address"), notes:pick("notes") };
 }
-let state = { screen:"form", items:[newItem(false)], contact:prefill(), contactOpen:false, touched:false };
+let state = { screen:"form", items:[newItem(false)], contact:prefill(), contactOpen:false, touched:false, openReq:"", openOpen:false };
 let editor = { open:false, tab:"brand", openSvc:null };
 
 const anyPicked = () => state.items.some(v=>v.services.length||v.addons.length);
+const hasOpen = () => state.openReq.trim().length >= 3;
+const canSend = () => anyPicked() || hasOpen();
 const contactReady = () => { const c=state.contact;
   return c.name.trim().length>1 && (c.phone.trim().length>=7 || /\S+@\S+\.\S+/.test(c.email)); };
 const itemLabel = (v,i) => CFG.fields.map(f=>v.vals[f.k]).filter(Boolean).join(" ")
@@ -620,7 +622,7 @@ function pickedSummary(){
 }
 
 function stepsBar(picked){
-  const now = !picked ? 0 : !contactReady() ? 1 : 2;
+  const now = !(picked || hasOpen()) ? 0 : !contactReady() ? 1 : 2;
   return `<div class="steps" aria-label="Progress">${[CFG.copy.step1, "Your details", "Send"].map((l,n)=>
     `<div class="stp${n<now?" done":n===now?" now":""}"><i></i><span>${esc(l)}</span></div>`).join("")}</div>`;
 }
@@ -640,6 +642,12 @@ function formScreen(){
   ${stepsBar(picked)}
   ${state.items.map(itemBlock).join("")}
   <button class="ghost" data-act="additem" style="margin-top:14px">+ Add another ${esc(TRADES[CFG.trade]?.item||"item")}</button>
+
+  <div style="margin-top:14px">${accordion({ open:state.openOpen, name:"Something else?", count:0,
+    meta: hasOpen() ? "Added" : "Ask us", metaHas:hasOpen(), act:"toggleopen",
+    body:`<div class="field" style="margin-bottom:0"><label class="f" for="copen">Another vehicle, a different service, or a question</label>
+      <textarea id="copen" placeholder="Example: I also have a boat and want a price on a full detail." data-open="1">${esc(state.openReq)}</textarea>
+      <div class="hint" style="margin-top:8px">No price needed. Add your details below and we'll reply with a quote.</div></div>` })}</div>
 
   <div class="qhead">${esc(c.step2)}</div>
   ${accordion({ open:state.contactOpen, name:"Your details", count:0,
@@ -678,12 +686,13 @@ function doneScreen(){
     <h1 style="margin:0 0 10px">Request sent</h1>
     <p class="lede" style="margin:0 0 22px">${esc(B().name)} will get back to you ${esc(B().replyWindow)}.<br>
       Need it sooner? Call or text ${esc(B().phone)}.</p></div>
-  <div class="hero"><div class="herolabel">Your estimate</div>
+  ${anyPicked()?`<div class="hero"><div class="herolabel">Your estimate</div>
     <div class="heroval">${totText(t)}</div>
-    <div class="herosub">Final price confirmed once they see it in person.</div></div>
+    <div class="herosub">Final price confirmed once they see it in person.</div></div>`:""}
   <div class="acc on" style="padding:18px">
     <div class="secnum" style="margin:0 0 4px">What you asked for</div>
-    ${pickedSummary()}</div>
+    ${pickedSummary()}
+    ${hasOpen()?`<div class="vlabel">Your question</div><div class="pkd" style="white-space:pre-wrap">${esc(state.openReq.trim())}</div>`:""}</div>
   <div class="note">Saved to ${esc(B().name)}'s Atlas inbox with your details, so they already know
     what they're looking at before they call.</div>
   ${contactFooter()}
@@ -898,9 +907,9 @@ function render(){
   if (state.screen!=="form"){ bar.hidden = true; return; }
   bar.hidden = false;
   const t = grandTotal();
-  document.getElementById("totval").textContent = totText(t);
+  document.getElementById("totval").textContent = !anyPicked() && hasOpen() ? "We'll quote it" : totText(t);
   const cta = document.getElementById("cta");
-  cta.disabled = !anyPicked();
+  cta.disabled = !canSend();
   cta.textContent = "Send request";
 }
 
@@ -923,6 +932,7 @@ document.addEventListener("click", e=>{
   if(act==="toggleitem"){ v.detailsOpen=!v.detailsOpen; render(); return; }
   if(act==="togglecat"){ toggle(v.openCats,val); render(); return; }
   if(act==="togglecontact"){ state.contactOpen=!state.contactOpen; render(); return; }
+  if(act==="toggleopen"){ state.openOpen=!state.openOpen; render(); return; }
   if(act==="size"){ v.size=val; render(); return; }
   if(act==="cond"){ v.condition=val; render(); return; }
   if(act==="freq"){ v.frequency=val; render(); return; }
@@ -998,6 +1008,11 @@ document.addEventListener("input", e=>{
   const el=e.target;
   if(el.dataset.item!==undefined){ state.items[Number(el.dataset.item)].vals[el.dataset.k]=el.value; return; }
   if(el.dataset.c){ state.contact[el.dataset.c]=el.value; return; }
+  if(el.dataset.open!==undefined){
+    state.openReq=el.value;
+    document.getElementById("cta").disabled = !canSend();
+    document.getElementById("totval").textContent = !anyPicked() && hasOpen() ? "We'll quote it" : totText(grandTotal());
+    return; }
   if(el.dataset.consent!==undefined){ state.smsConsent=el.checked; return; }
   if(el.dataset.e){
     const path=el.dataset.e;
@@ -1036,8 +1051,8 @@ document.addEventListener("change", e=>{
 
 document.getElementById("cta").addEventListener("click", ()=>{
   state.touched = true;
-  if(!anyPicked()) return;
-  state.items = state.items.filter(v=>v.services.length||v.addons.length);
+  if(!canSend()) return;
+  if(anyPicked()) state.items = state.items.filter(v=>v.services.length||v.addons.length);
   if(!contactReady()){ state.contactOpen=true; render();    const el=document.getElementById("cname");
     if(el){ el.scrollIntoView({block:"center",behavior:"smooth"}); el.focus(); } return; }
   if(!SLUG){ console.log("ESTIMATE REQUEST", JSON.stringify(payload(), null, 2));
@@ -1054,7 +1069,7 @@ document.getElementById("cta").addEventListener("click", ()=>{
 });
 
 function hostedPayload(){
-  return { slug:SLUG, contact:state.contact, sms_consent:!!state.smsConsent,
+  return { slug:SLUG, contact:state.contact, sms_consent:!!state.smsConsent, request:state.openReq.trim(),
     items: state.items.map(v=>({ vals:v.vals, size:v.size, condition:v.condition, frequency:v.frequency,
       services:v.services, addons:v.addons })) };
 }

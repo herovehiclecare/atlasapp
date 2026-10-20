@@ -102,7 +102,7 @@ async function sendCustomerConfirmation(to: string, firstName: string, businessN
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: OPENPHONE_API_KEY },
       body: JSON.stringify({
-        content: `Hi ${firstName}, this is ${businessName}. We got your quote request (${range}). We'll text you ${replyWindow}. Reply STOP to opt out.`,
+        content: `Hi ${firstName}, this is ${businessName}. We got your quote request${range ? ` (${range})` : ""}. We'll text you ${replyWindow}. Reply STOP to opt out.`,
         from: OPENPHONE_FROM_NUMBER,
         to: [to],
       }),
@@ -167,6 +167,8 @@ Deno.serve(async (req) => {
     const email = clean(body?.contact?.email, 160);
     const address = clean(body?.contact?.address, 240);
     const notes = clean(body?.contact?.notes, 1000);
+    // "Something else": another vehicle or a custom question, sent with no price.
+    const openRequest = clean(body?.request, 1000);
 
     if (name.length < 2) return json({ error: "Please add your name." }, 422);
     if (!phone && !email) return json({ error: "Please add a phone number or an email." }, 422);
@@ -244,24 +246,37 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!itemsOut.length) return json({ error: "Please choose at least one service." }, 422);
+    const openOnly = !itemsOut.length;
+    if (openOnly && !openRequest) return json({ error: "Please choose a package or tell us what you need." }, 422);
 
-    const range = rangeText(totalLow, totalHigh, anyOpen);
+    const range = openOnly ? "" : rangeText(totalLow, totalHigh, anyOpen);
 
-    const leadContext = {
-      kind: "instant_quote",
-      submitted_at: new Date().toISOString(),
-      estimate_low: totalLow,
-      estimate_high: totalHigh,
-      open_ended: anyOpen,
-      items: itemsOut,
-      answers: {
-        estimate_shown: range,
-        requested_work: lines.join(" | "),
-        ...(address ? { address } : {}),
-        ...(notes ? { notes } : {}),
-      },
-    };
+    const leadContext = openOnly
+      ? {
+        kind: "open_request",
+        submitted_at: new Date().toISOString(),
+        items: [],
+        answers: {
+          open_request: openRequest,
+          ...(address ? { address } : {}),
+          ...(notes ? { notes } : {}),
+        },
+      }
+      : {
+        kind: "instant_quote",
+        submitted_at: new Date().toISOString(),
+        estimate_low: totalLow,
+        estimate_high: totalHigh,
+        open_ended: anyOpen,
+        items: itemsOut,
+        answers: {
+          estimate_shown: range,
+          requested_work: lines.join(" | "),
+          ...(openRequest ? { open_request: openRequest } : {}),
+          ...(address ? { address } : {}),
+          ...(notes ? { notes } : {}),
+        },
+      };
 
     // Same person double-tapping Send, or tweaking and resending, is one lead.
     const since = new Date(Date.now() - DEDUPE_WINDOW_MINUTES * 60_000).toISOString();
@@ -299,7 +314,9 @@ Deno.serve(async (req) => {
 
       const { error: fuErr } = await supabase.from("follow_ups").insert({
         business_id: business.id,
-        note: `New Instant Quote request: ${name} - ${range}. ${itemsOut.map((i) => `${i.label}: ${i.services.concat(i.addons).join(", ")}`).join("; ")}`.slice(0, 500),
+        note: (openOnly
+          ? `New open request (needs a price): ${name} - ${openRequest}`
+          : `New Instant Quote request: ${name} - ${range}. ${itemsOut.map((i) => `${i.label}: ${i.services.concat(i.addons).join(", ")}`).join("; ")}${openRequest ? ` | Also asked: ${openRequest}` : ""}`).slice(0, 500),
         due_date: new Date().toISOString().slice(0, 10),
         method: phone ? "text" : "email",
         customer_ids: [customerId],
@@ -313,8 +330,10 @@ Deno.serve(async (req) => {
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}` },
           body: JSON.stringify({
             business_id: business.id,
-            title: `New quote request: ${name.slice(0, 40)}`,
-            body: `${itemsOut.map((i) => `${i.label !== "Job" ? `${i.label}: ` : ""}${i.services.concat(i.addons).join(" + ")}`).join("; ")} - ${ownerRange(totalLow, totalHigh)}${phone ? ` - ${phone}` : ""}`,
+            title: openOnly ? `Open request: ${name.slice(0, 40)}` : `New quote request: ${name.slice(0, 40)}`,
+            body: openOnly
+              ? `${openRequest.slice(0, 160)}${phone ? ` - ${phone}` : ""}`
+              : `${itemsOut.map((i) => `${i.label !== "Job" ? `${i.label}: ` : ""}${i.services.concat(i.addons).join(" + ")}`).join("; ")} - ${ownerRange(totalLow, totalHigh)}${phone ? ` - ${phone}` : ""}${openRequest ? ` - Also: ${openRequest.slice(0, 100)}` : ""}`,
             url: "/",
             tag: "estimate-request",
           }),
@@ -340,11 +359,12 @@ Deno.serve(async (req) => {
             return itemsOut.length > 1 ? `${head}\n${picks}\n  Est: ${ownerRange(i.low, i.high)}` : `${head}\n${picks}`;
           }).join("\n");
           const msg = [
-            `NEW QUOTE REQUEST - ${name.slice(0, 60)}`,
+            openOnly ? `NEW OPEN REQUEST (no price yet) - ${name.slice(0, 60)}` : `NEW QUOTE REQUEST - ${name.slice(0, 60)}`,
             phone && `Phone: ${phone}`,
             email && `Email: ${email}`,
-            `Wants:\n${jobs}`,
-            `Estimate: ${ownerRange(totalLow, totalHigh)}`,
+            openOnly ? `Asked:\n${openRequest.slice(0, 500)}` : `Wants:\n${jobs}`,
+            !openOnly && openRequest && `Also asked: ${openRequest.slice(0, 300)}`,
+            !openOnly && `Estimate: ${ownerRange(totalLow, totalHigh)}`,
             address && `Address: ${address}`,
             notes && `Notes: ${notes.slice(0, 300)}`,
             "Reply fast - they're waiting.",
@@ -370,7 +390,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    return json({ ok: true, estimate_low: totalLow, estimate_high: totalHigh, open_ended: anyOpen });
+    return json({ ok: true, open_request: openOnly, estimate_low: totalLow, estimate_high: totalHigh, open_ended: anyOpen });
   } catch (err) {
     console.error("estimate-request failed", err);
     return json({ error: "Something went wrong. Please call us instead." }, 500);
