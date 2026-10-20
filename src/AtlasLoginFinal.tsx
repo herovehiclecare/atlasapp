@@ -34,7 +34,8 @@ function AtlasMark({ size = 34 }) {
 }
 
 export default function AtlasLogin() {
-  const [mode, setMode] = useState("signin"); // "signin" | "signup" | "reset"
+  const quoteSignup = typeof window !== "undefined" && new URLSearchParams(window.location.search).get("signup") === "quote";
+  const [mode, setMode] = useState(quoteSignup ? "signup" : "signin"); // "signin" | "signup" | "reset"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -82,7 +83,7 @@ export default function AtlasLogin() {
 
     const { data, error } =
       mode === "signup"
-        ? await supabase.auth.signUp({ email, password })
+        ? await supabase.auth.signUp({ email, password, options: quoteSignup ? { data: { product: "quote" } } : undefined })
         : await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
@@ -223,10 +224,10 @@ export default function AtlasLogin() {
         ) : (
           <>
             <h1 style={{ fontSize: 28, fontWeight: 800, color: P.textPrimary, margin: "0 0 6px", letterSpacing: "-0.01em" }}>
-              {mode === "signup" ? "Create your Atlas account" : "Sign in to Atlas"}
+              {mode === "signup" ? (quoteSignup ? "Create your Instant Quote account" : "Create your Atlas account") : "Sign in to Atlas"}
             </h1>
             <p style={{ fontSize: 15, color: P.textSecondary, margin: "0 0 30px" }}>
-              {mode === "signup" ? "Get started — it only takes a minute." : "Welcome back. Enter your details to continue."}
+              {mode === "signup" ? (quoteSignup ? "Set your prices and get the code for your website in about 5 minutes." : "Get started — it only takes a minute.") : "Welcome back. Enter your details to continue."}
             </p>
 
             <form onSubmit={handleSubmit} noValidate>

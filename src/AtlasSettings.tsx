@@ -1887,6 +1887,16 @@ function IqPrice({ value, onChange, placeholder }) {
   );
 }
 
+const IQ_STARTER_SERVICES = [
+  { name: "Exterior Wash & Wax", category: "Exterior", description: "Hand wash, clay bar and a coat of wax.", price_car_low: 60, price_car_high: 90, price_suv_low: 80, price_suv_high: 120 },
+  { name: "Interior Detail", category: "Interior", description: "Vacuum, wipe-down, steam clean seats and carpets.", price_car_low: 90, price_car_high: 140, price_suv_low: 120, price_suv_high: 180 },
+  { name: "Full Detail", category: "Packages", description: "Complete inside and out.", price_car_low: 150, price_car_high: 250, price_suv_low: 200, price_suv_high: 320 },
+];
+const IQ_STARTER_ADDONS = [
+  { name: "Pet hair removal", price: 40, desc: "Deep removal of pet hair from seats and carpets." },
+  { name: "Headlight restoration", price: 60, desc: "Restore cloudy, yellowed headlights." },
+];
+
 function PhoneNotificationsCard({ businessId }) {
   const support = pushSupport();
   const [on, setOn] = useState(false);
@@ -1917,8 +1927,10 @@ function PhoneNotificationsCard({ businessId }) {
   );
 }
 
-function InstantQuotePanel() {
+function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
   const { businessId } = useBusinessId();
+  const [soloName, setSoloName] = useState("");
+  const [soloPhone, setSoloPhone] = useState("");
   const [loading, setLoading] = useState(true);
   const [biz, setBiz] = useState(null);
   const [slug, setSlug] = useState("");
@@ -1967,6 +1979,35 @@ function InstantQuotePanel() {
     const next = iqDefaultConfig(biz, data || []);
     if (!slug) setSlug((biz.name || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, ""));
     touch(next);
+  }
+
+  async function soloSetup() {
+    setError("");
+    const name = soloName.trim();
+    const digits = soloPhone.replace(/\D/g, "");
+    if (!name) { setError("Enter your business name."); return; }
+    if (!(digits.length === 10 || (digits.length === 11 && digits.startsWith("1")))) { setError("Enter your 10-digit mobile number so we can text you new requests."); return; }
+    setSaving(true);
+    const next = {
+      ...iqDefaultConfig({ ...biz, name, phone: soloPhone.trim() }, IQ_STARTER_SERVICES),
+      addons: IQ_STARTER_ADDONS,
+      alerts: { sms: true, phone: soloPhone.trim() },
+    };
+    const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "my-detailing";
+    let lastErr = null;
+    for (let i = 0; i < 6; i++) {
+      const tryslug = i === 0 ? base : `${base}-${Math.floor(100 + Math.random() * 900)}`;
+      const { error: e } = await supabase.from("businesses").update({ name, phone: soloPhone.trim(), estimate_slug: tryslug, estimate_enabled: true, estimate_config: next }).eq("id", businessId).select().single();
+      if (!e) {
+        setBiz({ ...biz, name, phone: soloPhone.trim() }); setSlug(tryslug); setEnabled(true); setCfg(next); setDirty(false);
+        setSaving(false);
+        return;
+      }
+      lastErr = e;
+      if (e.code !== "23505") break;
+    }
+    setSaving(false);
+    setError(lastErr?.message || "Couldn't create your page. Try again.");
   }
 
   async function onLogo(e) {
@@ -2021,6 +2062,20 @@ function InstantQuotePanel() {
 
   if (loading) return <Panel title="Instant Quote" sub="Loading…"><span /></Panel>;
 
+  if (!cfg && solo) {
+    return (
+      <Panel title="Set up your quote page" sub="Two quick details, then you get a page with example prices that you can change to yours.">
+        {error && <p style={{ fontSize: 12.5, color: P.danger, margin: "0 0 12px" }}>{error}</p>}
+        <Card style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+          <Field label="Business name"><input value={soloName} onChange={(e) => setSoloName(e.target.value)} placeholder="Example: Sunrise Mobile Detailing" style={inputStyle} /></Field>
+          <Field label="Your mobile number (we text you every new request)"><input type="tel" inputMode="tel" value={soloPhone} onChange={(e) => setSoloPhone(e.target.value)} placeholder="(555) 555-5555" style={inputStyle} /></Field>
+          <p style={{ fontSize: 11.5, color: P.textMuted, margin: 0, lineHeight: 1.5 }}>US numbers only. Message and data rates may apply. Never shown to customers.</p>
+          <button onClick={soloSetup} disabled={saving} style={{ ...smallBtn, justifyContent: "center", padding: "12px 14px", fontSize: 14, opacity: saving ? 0.6 : 1 }}>{saving ? "Creating…" : "Create my quote page"}</button>
+        </Card>
+      </Panel>
+    );
+  }
+
   if (!cfg) {
     return (
       <Panel title="Instant Quote" sub="A page on your website where customers pick their work, see a price range right away, and send you the request. Every request lands in Customers and Follow-ups.">
@@ -2035,8 +2090,29 @@ function InstantQuotePanel() {
   }
 
   return (
-    <Panel title="Instant Quote" sub="A page on your website where customers pick their work, see a price range right away, and send you the request. Every request lands in Customers and Follow-ups.">
+    <Panel title={solo ? "Your quote page" : "Instant Quote"} sub={solo ? "Set your prices, copy the code, paste it into your website. Change anything here later and your website updates by itself." : "A page on your website where customers pick their work, see a price range right away, and send you the request. Every request lands in Customers and Follow-ups."}>
       {error && <p style={{ fontSize: 12.5, color: P.danger, margin: "0 0 12px" }}>{error}</p>}
+
+      {solo && (
+        <Card style={{ padding: 16, marginBottom: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: P.textPrimary, marginBottom: 8 }}>Put it on your website</div>
+          <ol style={{ margin: "0 0 12px", paddingLeft: 20, fontSize: 12.5, color: P.textSecondary, lineHeight: 1.7 }}>
+            <li>Change the example services and prices below to yours, then press <b>Save changes</b>.</li>
+            <li>Press <b>Copy website code</b>.</li>
+            <li>On your website, add an <b>HTML</b> or <b>Embed</b> block (Wix, Squarespace, WordPress, GoDaddy, Shopify) and paste.</li>
+            <li>Publish your site. Done. Later changes here show up on your site on their own, no re-pasting.</li>
+          </ol>
+          {link && !dirty && enabled ? (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button onClick={() => copy("embed", embed)} style={{ ...smallBtn, padding: "11px 16px", fontSize: 14 }}>{copied === "embed" ? <CheckIcon size={14} /> : <Copy size={14} />} {copied === "embed" ? "Copied" : "Copy website code"}</button>
+              <button onClick={() => copy("link", link)} style={smallBtn}>{copied === "link" ? <CheckIcon size={13} /> : <Copy size={13} />} Copy link</button>
+              <button onClick={() => setPreviewOpen(true)} style={smallBtn}><ExternalLink size={13} /> See my page</button>
+            </div>
+          ) : (
+            <p style={{ fontSize: 11.5, color: P.textMuted, margin: 0 }}>{dirty ? "Save your changes to get the website code." : "Turn the page on and save to get the website code."}</p>
+          )}
+        </Card>
+      )}
 
       <Card style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 12 }}>
         <div>
@@ -2053,15 +2129,15 @@ function InstantQuotePanel() {
             <input value={slug} onChange={(e) => { setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "")); setDirty(true); setSaved(false); }} style={{ flex: 1, minWidth: 0, background: "transparent", border: "none", outline: "none", color: P.textPrimary, fontSize: 13 }} />
           </div>
         </Field>
-        {link && !dirty && enabled && (
+        {!solo && link && !dirty && enabled && (
           <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
             <button onClick={() => copy("link", link)} style={smallBtn}>{copied === "link" ? <CheckIcon size={13} /> : <Copy size={13} />} Copy link</button>
             <button onClick={() => setPreviewOpen(true)} style={smallBtn}><ExternalLink size={13} /> Open page</button>
             <button onClick={() => copy("embed", embed)} style={smallBtn}>{copied === "embed" ? <CheckIcon size={13} /> : <Copy size={13} />} Copy website code</button>
           </div>
         )}
-        {(dirty || !enabled) && <p style={{ fontSize: 11.5, color: P.textMuted, margin: "10px 0 0" }}>{dirty ? "Save your changes to get the link and website code." : "Turn the page on and save to get your link."}</p>}
-        <p style={{ fontSize: 11.5, color: P.textMuted, margin: "10px 0 0", lineHeight: 1.5 }}>Website code: paste it into an HTML / Embed block on your site (Wix, Squarespace, WordPress, Bluehost, GoDaddy, Shopify). Or just share the link.</p>
+        {!solo && (dirty || !enabled) && <p style={{ fontSize: 11.5, color: P.textMuted, margin: "10px 0 0" }}>{dirty ? "Save your changes to get the link and website code." : "Turn the page on and save to get your link."}</p>}
+        {!solo && <p style={{ fontSize: 11.5, color: P.textMuted, margin: "10px 0 0", lineHeight: 1.5 }}>Website code: paste it into an HTML / Embed block on your site (Wix, Squarespace, WordPress, Bluehost, GoDaddy, Shopify). Or just share the link.</p>}
       </Card>
 
       <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "0 0 10px" }}>Services and price ranges</div>
@@ -2115,7 +2191,7 @@ function InstantQuotePanel() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
           <div>
             <div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>Send a text when a request comes in</div>
-            <div style={{ fontSize: 11.5, color: P.textMuted, marginTop: 2, lineHeight: 1.45 }}>Fast replies win jobs. You'll also see every request in Customers and Follow-ups.</div>
+            <div style={{ fontSize: 11.5, color: P.textMuted, marginTop: 2, lineHeight: 1.45 }}>Fast replies win jobs. {solo ? "Every request is also listed under Requests." : "You'll also see every request in Customers and Follow-ups."}</div>
           </div>
           <Toggle on={!!cfg.alerts?.sms} onClick={() => touch({ ...cfg, alerts: { ...cfg.alerts, sms: !cfg.alerts?.sms, phone: cfg.alerts?.phone || biz?.phone || "" } })} />
         </div>
@@ -2156,7 +2232,7 @@ function InstantQuotePanel() {
         </div>
       </Card>
 
-      <div style={{ position: "sticky", bottom: 78, marginTop: 20, display: "flex", alignItems: "center", gap: 12, background: P.bgTop, border: `1px solid ${P.border}`, borderRadius: 12, padding: "10px 14px" }}>
+      <div style={{ position: "sticky", bottom: solo ? 12 : 78, marginTop: 20, display: "flex", alignItems: "center", gap: 12, background: P.bgTop, border: `1px solid ${P.border}`, borderRadius: 12, padding: "10px 14px" }}>
         <button onClick={save} disabled={saving || !dirty} style={{ ...smallBtn, opacity: saving || !dirty ? 0.5 : 1 }}>
           {saving ? <Loader2 size={13} className="animate-spin" /> : saved ? <CheckIcon size={13} /> : null} {saved ? "Saved" : "Save changes"}
         </button>
@@ -2269,6 +2345,73 @@ export default function AtlasSettings({ onNavigate, currentPage = "settings", on
       )}
 
       <style>{`@media (max-width: 767px) { .settings-content { margin-top: 46px; } }`}</style>
+    </div>
+  );
+}
+
+/* ---------------------------------- Quote-only product ---------------------------------- */
+
+function QuoteRequests() {
+  const { businessId } = useBusinessId();
+  const [rows, setRows] = useState<any[] | null>(null);
+  const [err, setErr] = useState("");
+  async function load() {
+    if (!businessId) return;
+    setErr("");
+    const { data, error } = await supabase.from("customers").select("id, name, phone, email, address, created_at, lead_context").eq("business_id", businessId).eq("source", "estimate_request").order("created_at", { ascending: false }).limit(100);
+    if (error) setErr(error.message); else setRows(data || []);
+  }
+  useEffect(() => { load(); }, [businessId]);
+  const linkBtn = { fontSize: 12.5, fontWeight: 700, color: P.accent, textDecoration: "none", background: P.accentSoft, border: `1px solid ${P.accent}`, borderRadius: 9, padding: "7px 13px" };
+  return (
+    <Panel title="Requests" sub="Everyone who sent a quote request from your website. You also get a text each time.">
+      <button onClick={load} style={{ background: "transparent", border: "none", color: P.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0, marginBottom: 12 }}>Refresh</button>
+      {err && <p style={{ fontSize: 12.5, color: P.danger }}>{err}</p>}
+      {rows && !rows.length && <Card style={{ padding: 20 }}><p style={{ margin: 0, fontSize: 13, color: P.textSecondary, lineHeight: 1.5 }}>No requests yet. When someone sends one from your website, it shows up here and you get a text.</p></Card>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {(rows || []).map((r) => {
+          const a = r.lead_context?.answers || {};
+          const price = r.lead_context?.kind === "open_request" ? "Needs a price from you" : (a.estimate_shown || "");
+          return (
+            <Card key={r.id} style={{ padding: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+                <div style={{ fontSize: 14.5, fontWeight: 700, color: P.textPrimary }}>{r.name}</div>
+                <div style={{ fontSize: 11, color: P.textMuted, whiteSpace: "nowrap" }}>{new Date(r.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
+              </div>
+              {price && <div style={{ fontSize: 13, fontWeight: 600, color: P.accent, marginTop: 4 }}>{price}</div>}
+              {a.requested_work && <div style={{ fontSize: 12.5, color: P.textSecondary, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-line" }}>{String(a.requested_work).split(" | ").join("\n")}</div>}
+              {a.open_request && <div style={{ fontSize: 12.5, color: P.textSecondary, marginTop: 6, lineHeight: 1.5 }}>"{a.open_request}"</div>}
+              {a.notes && <div style={{ fontSize: 12, color: P.textMuted, marginTop: 6 }}>Notes: {a.notes}</div>}
+              {r.address && <div style={{ fontSize: 12, color: P.textMuted, marginTop: 6 }}>{r.address}</div>}
+              <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                {r.phone && <a href={`tel:${r.phone}`} style={linkBtn}>Call</a>}
+                {r.phone && <a href={`sms:${r.phone}`} style={linkBtn}>Text</a>}
+                {r.email && <a href={`mailto:${r.email}`} style={linkBtn}>Email</a>}
+              </div>
+            </Card>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
+export function QuoteOnlyApp({ onSignOut }: { onSignOut?: () => void }) {
+  const [tab, setTab] = useState<"page" | "requests">("page");
+  const pill = (id: "page" | "requests", label: string) => (
+    <button onClick={() => setTab(id)} style={{ fontSize: 13, fontWeight: 600, padding: "8px 16px", borderRadius: 20, border: `1px solid ${tab === id ? P.accent : P.border}`, background: tab === id ? P.accentSoft : "transparent", color: tab === id ? P.accent : P.textSecondary, cursor: "pointer" }}>{label}</button>
+  );
+  return (
+    <div style={{ minHeight: "100vh", background: P.bg, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');`}</style>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: `1px solid ${P.border}` }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}><AtlasMark size={26} /><span style={{ fontSize: 15, fontWeight: 700, color: P.textPrimary }}>Atlas Instant Quote</span></div>
+        {onSignOut && <button onClick={onSignOut} style={{ background: "transparent", border: "none", color: P.textMuted, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>Sign out</button>}
+      </div>
+      <div style={{ maxWidth: 720, margin: "0 auto", padding: "18px 20px 60px" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>{pill("page", "My quote page")}{pill("requests", "Requests")}</div>
+        {tab === "page" ? <InstantQuotePanel solo /> : <QuoteRequests />}
+      </div>
     </div>
   );
 }

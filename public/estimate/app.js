@@ -496,13 +496,13 @@ function newItem(open){
     size:(CFG.sizes[0]||{}).id || "car",
     condition:(CFG.conditions[1]||CFG.conditions[0]||{}).id || "moderate",
     frequency:(CFG.frequencies[1]||CFG.frequencies[0]||{}).id || "few",
-    services:[], addons:[], detailsOpen:!!open, openCats:categories().slice(0,1) };
+    services:[], addons:[], detailsOpen:!!open, openCats:[] };
 }
 function prefill(){
   const q = new URLSearchParams(location.search), pick = k => (q.get(k)||"").slice(0,160);
   return { name:pick("name"), phone:pick("phone"), email:pick("email"), address:pick("address"), notes:pick("notes") };
 }
-let state = { screen:"form", items:[newItem(false)], contact:prefill(), contactOpen:false, touched:false, openReq:"", openOpen:false, other:false };
+let state = { screen:"form", items:[newItem(false)], contact:prefill(), contactOpen:false, touched:false, openReq:"", openOpen:false, other:false, otherKind:"" };
 let editor = { open:false, tab:"brand", openSvc:null };
 
 const vehMode = () => CFG.trade==="detailing" && CFG.sizes.length>1;
@@ -576,11 +576,13 @@ function itemBlock(v,i){
     <div class="vpick">${CFG.sizes.map((s,n)=>`
       <button class="vcard plain" aria-pressed="${v.size===s.id && !state.other}" data-act="size" data-i="${i}" data-v="${esc(s.id)}">
         <span><b>${esc(s.label)}</b>${s.hint?`<small>${esc(s.hint)}</small>`:""}</span></button>`).join("")}
-      ${veh && i===0 ? `<button class="vcard plain" style="grid-column:1/-1" aria-pressed="${state.other}" data-act="other"><span><b>Something else</b><small>Motorcycle, boat, RV, trailer</small></span></button>` : ""}</div>` : "";
-  const otherBox = `<div class="acc on" style="margin-top:14px;padding:18px"><div class="field" style="margin-bottom:0"><label class="f" for="copen">Tell us what you have and what you need</label>
-      <textarea id="copen" placeholder="Example: 24 ft boat, full detail and ceramic coating." data-open="1">${esc(state.openReq)}</textarea>
-      <div class="hint" style="margin-top:8px">No price needed. Add your details below and we'll send you a quote.</div></div></div>`;
-  if (state.other && i===0) return sizePick + otherBox;
+      ${veh && i===0 ? `<button class="vcard plain" style="grid-column:1/-1" aria-pressed="${state.other}" data-act="other"><span><b>Something Else</b><small>Motorcycle, Boat, RV</small></span></button>` : ""}</div>` : "";
+  const OTHER_KINDS = [["Motorcycle","Example: touring motorcycle, full detail and wax."],["Boat","Example: 24 ft boat, full detail and ceramic coating."],["RV","Example: 30 ft RV, exterior wash and wax."],["Something Else","Example: tell us what you have and what you need."]];
+  const kindPick = `<div class="vpick" style="margin-top:14px">${OTHER_KINDS.map(([k])=>`<button class="vcard plain" aria-pressed="${state.otherKind===k}" data-act="kind" data-v="${k}"><span><b>${k}</b></span></button>`).join("")}</div>`;
+  const kindPh = (OTHER_KINDS.find(x=>x[0]===state.otherKind)||[])[1] || "";
+  const otherBox = state.otherKind ? `<div class="acc on" style="margin-top:14px;padding:18px"><div class="field" style="margin-bottom:0"><label class="f" for="copen">${state.otherKind==="Something Else"?"Tell us what you have and what you need":`What do you need done on your ${state.otherKind==="RV"?"RV":state.otherKind.toLowerCase()}?`}</label>
+      <textarea id="copen" placeholder="${esc(kindPh)}" data-open="1">${esc(state.openReq)}</textarea>
+      <div class="hint" style="margin-top:8px">No price needed. Add your details below and we'll send you a quote.</div></div></div>` : "";  if (state.other && i===0) return sizePick + kindPick + otherBox;
 
   return `${sizePick}
     <div style="height:14px"></div>
@@ -943,7 +945,8 @@ document.addEventListener("click", e=>{
   if(act==="togglecontact"){ state.contactOpen=!state.contactOpen; render(); return; }
   if(act==="toggleopen"){ state.openOpen=!state.openOpen; render(); return; }
   if(act==="size"){ state.other=false; v.size=val; render(); return; }
-  if(act==="other"){ state.other=true; render(); const el=document.getElementById("copen"); if(el) el.focus({preventScroll:true}); return; }
+  if(act==="other"){ state.other=true; render(); return; }
+  if(act==="kind"){ state.otherKind=val; render(); const el=document.getElementById("copen"); if(el) el.focus({preventScroll:true}); return; }
   if(act==="cond"){ v.condition=val; render(); return; }
   if(act==="freq"){ v.frequency=val; render(); return; }
   if(act==="info"){ e.stopPropagation(); if(openInfo.has(val)) openInfo.delete(val); else openInfo.add(val); render(); return; }
@@ -1079,7 +1082,7 @@ document.getElementById("cta").addEventListener("click", ()=>{
 });
 
 function hostedPayload(){
-  return { slug:SLUG, contact:state.contact, sms_consent:!!state.smsConsent, request:hasOpen()?state.openReq.trim():"",
+  return { slug:SLUG, contact:state.contact, sms_consent:!!state.smsConsent, request:hasOpen()?((state.other&&state.otherKind&&state.otherKind!=="Something Else")?state.otherKind+": ":"")+state.openReq.trim():"",
     items: (state.other?[]:state.items).map(v=>({ vals:v.vals, size:v.size, condition:v.condition, frequency:v.frequency,
       services:v.services, addons:v.addons })) };
 }

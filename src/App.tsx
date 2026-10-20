@@ -8,7 +8,7 @@ import AtlasVehicles from "./AtlasVehicles";
 import AtlasCustomers from "./AtlasCustomersFinal";
 import AtlasSchedule from "./AtlasSchedule";
 import AtlasInvoices from "./AtlasInvoices";
-import AtlasSettings from "./AtlasSettings";
+import AtlasSettings, { QuoteOnlyApp } from "./AtlasSettings";
 import AtlasQuickQuotePro from "./AtlasQuickQuotePro";
 import AtlasFollowUps from "./AtlasFollowUps";
 import AtlasLeads from "./AtlasLeads";
@@ -136,6 +136,7 @@ export default function App() {
   const [quoteToast, setQuoteToast] = useState(null);
   const { businessId } = useBusinessId();
   const [role, setRole] = useState(undefined);
+  const [quoteOnly, setQuoteOnly] = useState(false);
 
   // Which team level this login has decides which pages show up. Unknown or
   // missing role falls back to the most limited level.
@@ -143,9 +144,17 @@ export default function App() {
     const uid = session?.user?.id;
     if (!uid) { setRole(undefined); return; }
     let cancelled = false;
-    supabase.from("business_members").select("role").eq("user_id", uid).order("created_at", { ascending: true }).limit(1).maybeSingle()
+    supabase.from("business_members").select("role, business_id, businesses(ui_prefs)").eq("user_id", uid).order("created_at", { ascending: true }).limit(1).maybeSingle()
       .then(({ data }) => {
         if (cancelled) return;
+        // Atlas Instant Quote sign-ups (link with ?signup=quote) get the quote-only screen.
+        const prefs = (data as any)?.businesses?.ui_prefs || {};
+        let qo = prefs.mode === "quote";
+        if (!qo && data?.role === "owner" && !prefs.mode && session?.user?.user_metadata?.product === "quote") {
+          qo = true;
+          supabase.from("businesses").update({ ui_prefs: { ...prefs, mode: "quote" } }).eq("id", data.business_id).then(() => {});
+        }
+        setQuoteOnly(qo);
         const r = data?.role || "employee";
         setCurrentRole(r);
         setRole(r);
@@ -254,6 +263,7 @@ export default function App() {
     supabase.auth.signOut();
     setPage("dashboard");
     setRole(undefined);
+    setQuoteOnly(false);
   }
 
   if (loading) return null;
@@ -267,6 +277,8 @@ export default function App() {
   }
 
   if (role === undefined) return null;
+
+  if (quoteOnly) return <QuoteOnlyApp onSignOut={handleSignOut} />;
 
   const Page = canSeePage(page) ? (PAGES[page] || AtlasDashboardFinal) : PAGES[firstPage(role)];
 
