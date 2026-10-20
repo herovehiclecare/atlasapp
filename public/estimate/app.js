@@ -464,6 +464,16 @@ function priceFor(svc, v){
   return { low:round5(low + spread*(Number(c.lo)||0)),
            high:round5((low + spread*(Number(c.hi)||0))*(1+up)), open:false };
 }
+const specialTitle = () => (CFG.specialsTitle || "").trim() || "Current Specials";
+function applySpecials(){
+  const d = new Date(), today = d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  const live = s => CFG.specialsOn && (!s.until || s.until >= today);
+  const specials = CFG.services.filter(s=>s.special && live(s)).map(s=>({ ...s, cat:specialTitle() }));
+  CFG.services = [...specials, ...CFG.services.filter(s=>!s.special)];
+}
+const isSpecialCat = cat => CFG.services.some(s=>s.special && s.cat===cat);
+const untilText = u => { const m=/^(d{4})-(d{2})-(d{2})$/.exec(u||""); if(!m) return "";
+  return new Date(+m[1],+m[2]-1,+m[3]).toLocaleDateString("en-US",{month:"short",day:"numeric"}); };
 const categories = () => [...new Set(CFG.services.map(s=>s.cat).filter(Boolean))];
 function catTotal(v, cat){
   let low=0, high=0, n=0, open=false;
@@ -517,8 +527,8 @@ const itemLabel = (v,i) => CFG.fields.map(f=>v.vals[f.k]).filter(Boolean).join("
   || (state.items.length>1 ? `${TRADES[CFG.trade]?.item||"Item"} ${i+1}`.replace(/^./,m=>m.toUpperCase()) : `Your ${TRADES[CFG.trade]?.item||"job"}`);
 
 // ============================================================ CUSTOMER SIDE
-function accordion({ open, name, meta, metaHas, count, body, act, i, val }){
-  return `<div class="acc${open?" on":""}">
+function accordion({ open, name, meta, metaHas, count, body, act, i, val, cls }){
+  return `<div class="acc${open?" on":""}${cls?" "+cls:""}">
     <button class="acchead" aria-expanded="${open}" data-act="${act}"${i!==undefined?` data-i="${i}"`:""}${val?` data-v="${esc(val)}"`:""}>
       <span class="accname">${esc(name)}</span>
       ${count?`<span class="count">${count}</span>`:""}
@@ -551,15 +561,15 @@ function itemBlock(v,i){
       const brief=s.desc || (incl.length?incl.slice(0,3).join(" · ")+(incl.length>3?" + "+(incl.length-3)+" more":""):"");
       const info=openInfo.has(s.name);
       const pic=/^https:\/\//i.test(s.photo||"")?`<span class="svcpic"><img src="${esc(s.photo)}" alt="" loading="lazy"></span>`:"";
-      const flag=s.popular?`<span class="pop">Most popular</span>`:"";
-      return `<button class="svc${s.popular?" hasflag":""}" aria-pressed="${on}" data-act="svc" data-i="${i}" data-v="${esc(s.name)}">
+      const flag=s.special?`<span class="pop">Special${s.until?" · ends "+esc(untilText(s.until)):""}</span>`:s.popular?`<span class="pop">Most popular</span>`:"";
+      return `<button class="svc${(s.popular||s.special)?" hasflag":""}" aria-pressed="${on}" data-act="svc" data-i="${i}" data-v="${esc(s.name)}">
         ${flag}${pic}
         <span class="pkgtop"><span class="box">${CHECK}</span>
         <span class="pkgmain"><span class="svcname">${esc(s.name)}</span><span class="svcprice">${p.open?"<small>from</small>"+money(p.low):(p.low===p.high?money(p.low):money(p.low)+"–"+money(p.high))}</span>${brief?`<span class="svcdesc">${esc(brief)}</span>`:""}${incl.length?`<span class="svcmore" data-act="info" data-i="${i}" data-v="${esc(s.name)}">${info?"Hide details":"What's included"} <span class="svcchev${info?" up":""}">▾</span></span>`:""}${info?`<span class="svcincl">${incl.map(x=>`<span class="svcli">${esc(x)}</span>`).join("")}<span class="svcwhy">Price depends on your vehicle's size and condition. We confirm the final price after reviewing your request.</span></span>`:""}</span></span></button>`;
     }).join("");
     return accordion({ open, name:cat, count:ct.n||0,
       meta: ct.n ? totText(ct) : "from "+money(catFrom(v,cat)),
-      metaHas:!!ct.n, body, act:"togglecat", i, val:cat });
+      metaHas:!!ct.n, body, act:"togglecat", i, val:cat, cls:isSpecialCat(cat)?"spec":"" });
   }).join("");
 
   const at = addonTotal(v);
@@ -1133,6 +1143,7 @@ async function boot(){
     if (!r.ok || !j.config) throw new Error("nf");
     const c = j.config, base = seedFromTrade(c.trade && TRADES[c.trade] ? c.trade : DEFAULTS.trade);
     CFG = { ...base, ...c, brand:{ ...base.brand, ...(c.brand||{}) }, copy:{ ...base.copy, ...(c.copy||{}) } };
+    applySpecials();
     state.items = [newItem(false)];
     render();
   } catch {

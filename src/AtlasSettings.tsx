@@ -2033,6 +2033,7 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
       ...cfg,
       services: cfg.services.map((s) => ({
         name: s.name.trim(), cat: (s.cat || "").trim(), desc: s.desc || "",
+        ...(s.special ? { special: true, until: s.until || "" } : {}),
         car: [Number(s.car[0]), s.car[1] == null ? null : Number(s.car[1])],
         suv: [s.suv?.[0] == null ? Number(s.car[0]) : Number(s.suv[0]), s.suv?.[1] == null ? null : Number(s.suv[1])],
       })),
@@ -2143,7 +2144,7 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
       <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "0 0 10px" }}>Services and price ranges</div>
       <p style={{ fontSize: 12, color: P.textSecondary, margin: "0 0 12px", lineHeight: 1.5 }}>Fill in a low and a high price. Cleaner vehicles quote near the low end, dirtier ones near the high end. Leave the high price blank and customers see "from $X".</p>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {cfg.services.map((s, i) => (
+        {cfg.services.map((s, i) => s.special ? null : (
           <Card key={i} style={{ padding: 14 }}>
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <input value={s.name} onChange={(e) => setService(i, { name: e.target.value })} placeholder="Service name" style={{ ...inputStyle, fontWeight: 700, flex: 2, minWidth: 0 }} />
@@ -2156,10 +2157,45 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
               <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>SUV/Truck - low</div><IqPrice value={s.suv?.[0]} onChange={(v) => setBand(i, "suv", 0, v)} /></div>
               <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>SUV/Truck - high</div><IqPrice value={s.suv?.[1]} onChange={(v) => setBand(i, "suv", 1, v)} placeholder="from" /></div>
             </div>
+            <textarea value={s.desc || ""} onChange={(e) => setService(i, { desc: e.target.value })} placeholder="Short description customers see" rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", marginTop: 10 }} />
           </Card>
         ))}
         <button onClick={() => touch({ ...cfg, services: [...cfg.services, { name: "", cat: "", desc: "", car: [null, null], suv: [null, null] }] })} style={ghostBtn}><Plus size={12} /> Add service</button>
       </div>
+
+      <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Current specials</div>
+      <Card style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>Show specials on my quote page</div>
+          <div style={{ fontSize: 11.5, color: P.textMuted, marginTop: 2, lineHeight: 1.45 }}>Adds a highlighted section at the top of your services. Turn it off any time and your specials are saved for later.</div>
+        </div>
+        <Toggle on={!!cfg.specialsOn} onClick={() => touch({ ...cfg, specialsOn: !cfg.specialsOn })} />
+      </Card>
+      {cfg.specialsOn && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <Field label="Section title"><input value={cfg.specialsTitle || ""} onChange={(e) => touch({ ...cfg, specialsTitle: e.target.value })} placeholder="Current Specials" style={inputStyle} /></Field>
+          {cfg.services.map((s, i) => !s.special ? null : (
+            <Card key={i} style={{ padding: 14 }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                <input value={s.name} onChange={(e) => setService(i, { name: e.target.value })} placeholder="Special name" style={{ ...inputStyle, fontWeight: 700, flex: 1, minWidth: 0 }} />
+                <button onClick={() => touch({ ...cfg, services: cfg.services.filter((_, idx) => idx !== i) })} title="Remove" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer" }}><Trash2 size={15} /></button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8 }}>
+                <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>Car - low</div><IqPrice value={s.car?.[0]} onChange={(v) => setBand(i, "car", 0, v)} /></div>
+                <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>Car - high</div><IqPrice value={s.car?.[1]} onChange={(v) => setBand(i, "car", 1, v)} placeholder="flat" /></div>
+                <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>SUV/Truck - low</div><IqPrice value={s.suv?.[0]} onChange={(v) => setBand(i, "suv", 0, v)} /></div>
+                <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>SUV/Truck - high</div><IqPrice value={s.suv?.[1]} onChange={(v) => setBand(i, "suv", 1, v)} placeholder="flat" /></div>
+              </div>
+              <textarea value={s.desc || ""} onChange={(e) => setService(i, { desc: e.target.value })} placeholder="What the special includes" rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", marginTop: 10 }} />
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>Ends on (optional, it hides itself after this day)</div>
+                <input type="date" value={s.until || ""} onChange={(e) => setService(i, { until: e.target.value })} style={{ ...inputStyle, maxWidth: 200 }} />
+              </div>
+            </Card>
+          ))}
+          <button onClick={() => touch({ ...cfg, services: [...cfg.services, { name: "", cat: "", desc: "", car: [null, null], suv: [null, null], special: true, until: "" }] })} style={ghostBtn}><Plus size={12} /> Add special</button>
+        </div>
+      )}
 
       <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Add-ons (flat price)</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
