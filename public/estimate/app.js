@@ -502,12 +502,15 @@ function prefill(){
   const q = new URLSearchParams(location.search), pick = k => (q.get(k)||"").slice(0,160);
   return { name:pick("name"), phone:pick("phone"), email:pick("email"), address:pick("address"), notes:pick("notes") };
 }
-let state = { screen:"form", items:[newItem(false)], contact:prefill(), contactOpen:false, touched:false, openReq:"", openOpen:false };
+let state = { screen:"form", items:[newItem(false)], contact:prefill(), contactOpen:false, touched:false, openReq:"", openOpen:false, other:false };
 let editor = { open:false, tab:"brand", openSvc:null };
 
-const anyPicked = () => state.items.some(v=>v.services.length||v.addons.length);
-const hasOpen = () => state.openReq.trim().length >= 3;
-const canSend = () => anyPicked() || hasOpen();
+const vehMode = () => CFG.trade==="detailing" && CFG.sizes.length>1;
+const anyPicked = () => !state.other && state.items.some(v=>v.services.length||v.addons.length);
+const hasOpen = () => (state.other || !vehMode()) && state.openReq.trim().length >= 3;
+const canSend = () => state.other ? hasOpen() : (anyPicked() || hasOpen());
+const ctaText = () => state.other ? "Request a quote" : "Send request";
+const totShown = () => state.other || (!anyPicked() && hasOpen()) ? "We'll quote it" : totText(grandTotal());
 const contactReady = () => { const c=state.contact;
   return c.name.trim().length>1 && (c.phone.trim().length>=7 || /\S+@\S+\.\S+/.test(c.email)); };
 const itemLabel = (v,i) => CFG.fields.map(f=>v.vals[f.k]).filter(Boolean).join(" ")
@@ -571,8 +574,13 @@ function itemBlock(v,i){
   const veh = CFG.trade==="detailing";
   const sizePick = CFG.sizes.length>1 ? `<div class="qhead" style="margin-top:${i?26:6}px">${veh?"What are you driving?":"Pick your size"}${multi?` <span style="color:var(--muted);font-weight:700;font-size:15px">· ${esc(itemLabel(v,i))}</span>`:""}</div>
     <div class="vpick">${CFG.sizes.map((s,n)=>`
-      <button class="vcard plain" aria-pressed="${v.size===s.id}" data-act="size" data-i="${i}" data-v="${esc(s.id)}">
-        <span><b>${esc(s.label)}</b>${s.hint?`<small>${esc(s.hint)}</small>`:""}</span></button>`).join("")}</div>` : "";
+      <button class="vcard plain" aria-pressed="${v.size===s.id && !state.other}" data-act="size" data-i="${i}" data-v="${esc(s.id)}">
+        <span><b>${esc(s.label)}</b>${s.hint?`<small>${esc(s.hint)}</small>`:""}</span></button>`).join("")}
+      ${veh && i===0 ? `<button class="vcard plain" style="grid-column:1/-1" aria-pressed="${state.other}" data-act="other"><span><b>Something else</b><small>Motorcycle, boat, RV, trailer</small></span></button>` : ""}</div>` : "";
+  const otherBox = `<div class="acc on" style="margin-top:14px;padding:18px"><div class="field" style="margin-bottom:0"><label class="f" for="copen">Tell us what you have and what you need</label>
+      <textarea id="copen" placeholder="Example: 24 ft boat, full detail and ceramic coating." data-open="1">${esc(state.openReq)}</textarea>
+      <div class="hint" style="margin-top:8px">No price needed. Add your details below and we'll send you a quote.</div></div></div>`;
+  if (state.other && i===0) return sizePick + otherBox;
 
   return `${sizePick}
     <div style="height:14px"></div>
@@ -611,6 +619,7 @@ function briefOf(s){
 }
 
 function pickedSummary(){
+  if (state.other) return "";
   return state.items.map((v,i)=>{
     const rows=[...v.services.map(n=>{const s=CFG.services.find(x=>x.name===n); if(!s)return"";
         const p=priceFor(s,v), incl=(Array.isArray(s.includes)?s.includes:[]).map(x=>String(x).trim()).filter(Boolean);
@@ -640,14 +649,14 @@ function formScreen(){
   </div>`:""}
 
   ${stepsBar(picked)}
-  ${state.items.map(itemBlock).join("")}
-  <button class="ghost" data-act="additem" style="margin-top:14px">+ Add another ${esc(TRADES[CFG.trade]?.item||"item")}</button>
+  ${state.other ? itemBlock(state.items[0],0) : state.items.map(itemBlock).join("")}
+  ${state.other?"":`<button class="ghost" data-act="additem" style="margin-top:14px">+ Add another ${esc(TRADES[CFG.trade]?.item||"item")}</button>`}
 
-  <div style="margin-top:14px">${accordion({ open:state.openOpen, name:"Something else?", count:0,
+  ${vehMode()?"":`<div style="margin-top:14px">${accordion({ open:state.openOpen, name:"Something else?", count:0,
     meta: hasOpen() ? "Added" : "Ask us", metaHas:hasOpen(), act:"toggleopen",
     body:`<div class="field" style="margin-bottom:0"><label class="f" for="copen">Another vehicle, a different service, or a question</label>
       <textarea id="copen" placeholder="Example: I also have a boat and want a price on a full detail." data-open="1">${esc(state.openReq)}</textarea>
-      <div class="hint" style="margin-top:8px">No price needed. Add your details below and we'll reply with a quote.</div></div>` })}</div>
+      <div class="hint" style="margin-top:8px">No price needed. Add your details below and we'll reply with a quote.</div></div>` })}</div>`}
 
   <div class="qhead">${esc(c.step2)}</div>
   ${accordion({ open:state.contactOpen, name:"Your details", count:0,
@@ -907,10 +916,10 @@ function render(){
   if (state.screen!=="form"){ bar.hidden = true; return; }
   bar.hidden = false;
   const t = grandTotal();
-  document.getElementById("totval").textContent = !anyPicked() && hasOpen() ? "We'll quote it" : totText(t);
+  document.getElementById("totval").textContent = totShown();
   const cta = document.getElementById("cta");
   cta.disabled = !canSend();
-  cta.textContent = "Send request";
+  cta.textContent = ctaText();
 }
 
 // ---------------------------------------------------------------- events
@@ -933,7 +942,8 @@ document.addEventListener("click", e=>{
   if(act==="togglecat"){ toggle(v.openCats,val); render(); return; }
   if(act==="togglecontact"){ state.contactOpen=!state.contactOpen; render(); return; }
   if(act==="toggleopen"){ state.openOpen=!state.openOpen; render(); return; }
-  if(act==="size"){ v.size=val; render(); return; }
+  if(act==="size"){ state.other=false; v.size=val; render(); return; }
+  if(act==="other"){ state.other=true; render(); const el=document.getElementById("copen"); if(el) el.focus({preventScroll:true}); return; }
   if(act==="cond"){ v.condition=val; render(); return; }
   if(act==="freq"){ v.frequency=val; render(); return; }
   if(act==="info"){ e.stopPropagation(); if(openInfo.has(val)) openInfo.delete(val); else openInfo.add(val); render(); return; }
@@ -1011,7 +1021,7 @@ document.addEventListener("input", e=>{
   if(el.dataset.open!==undefined){
     state.openReq=el.value;
     document.getElementById("cta").disabled = !canSend();
-    document.getElementById("totval").textContent = !anyPicked() && hasOpen() ? "We'll quote it" : totText(grandTotal());
+    document.getElementById("totval").textContent = totShown();
     return; }
   if(el.dataset.consent!==undefined){ state.smsConsent=el.checked; return; }
   if(el.dataset.e){
@@ -1064,13 +1074,13 @@ document.getElementById("cta").addEventListener("click", ()=>{
       if(!ok) throw new Error(j.error||"Something went wrong.");
       state.screen="done"; render(); window.scrollTo({top:0});
     })
-    .catch(err=>{ btn.disabled=false; btn.textContent="Send request";
+    .catch(err=>{ btn.disabled=false; btn.textContent=ctaText();
       state.sendError = (err && err.message) || "Couldn't send. Please call us instead."; render(); });
 });
 
 function hostedPayload(){
-  return { slug:SLUG, contact:state.contact, sms_consent:!!state.smsConsent, request:state.openReq.trim(),
-    items: state.items.map(v=>({ vals:v.vals, size:v.size, condition:v.condition, frequency:v.frequency,
+  return { slug:SLUG, contact:state.contact, sms_consent:!!state.smsConsent, request:hasOpen()?state.openReq.trim():"",
+    items: (state.other?[]:state.items).map(v=>({ vals:v.vals, size:v.size, condition:v.condition, frequency:v.frequency,
       services:v.services, addons:v.addons })) };
 }
 
