@@ -39,6 +39,9 @@ const clean = (s: unknown, max = 200) => String(s ?? "").trim().slice(0, max);
 const rangeText = (low: number, high: number, open: boolean) =>
   open && low === high ? `from ${money(low)}` : low === high ? money(low) : `${money(low)} - ${money(high)}${open ? "+" : ""}`;
 
+const ownerRange = (low: number, high: number) =>
+  low === high ? money(low) : `${money(low)} - ${money(high)} (middle ~${money(round5((low + high) / 2))})`;
+
 // Same maths as the page (app.js priceFor): condition picks the spot inside the business's own
 // low-high band; the timing question only ever lifts the top; a blank high means "from $X".
 function priceFor(svc: any, sizeId: string, cond: any, freq: any) {
@@ -311,7 +314,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             business_id: business.id,
             title: `New quote request: ${name.slice(0, 40)}`,
-            body: `${itemsOut.map((i) => `${i.label !== "Job" ? `${i.label}: ` : ""}${i.services.concat(i.addons).join(" + ")}`).join("; ")} - ${range}${phone ? ` - ${phone}` : ""}`,
+            body: `${itemsOut.map((i) => `${i.label !== "Job" ? `${i.label}: ` : ""}${i.services.concat(i.addons).join(" + ")}`).join("; ")} - ${ownerRange(totalLow, totalHigh)}${phone ? ` - ${phone}` : ""}`,
             url: "/",
             tag: "estimate-request",
           }),
@@ -334,14 +337,14 @@ Deno.serve(async (req) => {
             const head = [det || i.size, i.condition && `Condition: ${i.condition}`, i.timing && `Timing: ${i.timing}`]
               .filter(Boolean).join(" | ");
             const picks = i.services.map((s: string) => `  - ${s}`).concat(i.addons.map((a: string) => `  - Add-on: ${a}`)).join("\n");
-            return itemsOut.length > 1 ? `${head}\n${picks}\n  Est: ${rangeText(i.low, i.high, anyOpen)}` : `${head}\n${picks}`;
+            return itemsOut.length > 1 ? `${head}\n${picks}\n  Est: ${ownerRange(i.low, i.high)}` : `${head}\n${picks}`;
           }).join("\n");
           const msg = [
             `NEW QUOTE REQUEST - ${name.slice(0, 60)}`,
             phone && `Phone: ${phone}`,
             email && `Email: ${email}`,
             `Wants:\n${jobs}`,
-            `Estimate shown: ${range}`,
+            `Estimate: ${ownerRange(totalLow, totalHigh)}`,
             address && `Address: ${address}`,
             notes && `Notes: ${notes.slice(0, 300)}`,
             "Reply fast - they're waiting.",
