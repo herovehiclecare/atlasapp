@@ -54,7 +54,7 @@ const ownerRange = (low: number, high: number) =>
   low === high ? money(low) : `${money(low)} - ${money(high)} (middle ~${money(round5((low + high) / 2))})`;
 
 // Same maths as the page (app.js priceFor): condition picks the spot inside the business's own
-// low-high band; the timing question only ever lifts the top; a blank high means "from $X".
+// low-high band; the timing question only ever lifts the top; a blank high means "from $X"; equal low and high is a flat price.
 function priceFor(svc: any, sizeId: string, cond: any, freq: any) {
   const band = (sizeId === "suv" ? svc.suv : svc.car) || [0, null];
   const low = Number(band[0]) || 0;
@@ -66,6 +66,7 @@ function priceFor(svc: any, sizeId: string, cond: any, freq: any) {
     return { low: round5(low), high: round5(low + low * (hi * 0.18 + up)), open: true };
   }
   const high = Number(rawHigh) || low;
+  if (high === low) return { low, high, open: false };
   const spread = Math.max(0, high - low);
   return { low: round5(low + spread * lo), high: round5((low + spread * hi) * (1 + up)), open: false };
 }

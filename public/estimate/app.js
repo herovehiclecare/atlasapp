@@ -460,7 +460,9 @@ function priceFor(svc, v){
     const ch = CFG.conditions.length ? (Number(c.hi)||0) : 0;
     return { low:round5(low), high:round5(low + low*(ch*0.18 + up)), open:true };
   }
-  const high = Number(rawHigh) || low, spread = Math.max(0, high-low);
+  const high = Number(rawHigh) || low;
+  if (high === low) return { low, high, open:false };
+  const spread = Math.max(0, high-low);
   return { low:round5(low + spread*(Number(c.lo)||0)),
            high:round5((low + spread*(Number(c.hi)||0))*(1+up)), open:false };
 }
