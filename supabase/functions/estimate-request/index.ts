@@ -311,7 +311,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             business_id: business.id,
             title: `New quote request: ${name.slice(0, 40)}`,
-            body: `${itemsOut.map((i) => i.services.concat(i.addons).join(" + ")).join("; ")} - ${range}${phone ? ` - ${phone}` : ""}`,
+            body: `${itemsOut.map((i) => `${i.label !== "Job" ? `${i.label}: ` : ""}${i.services.concat(i.addons).join(" + ")}`).join("; ")} - ${range}${phone ? ` - ${phone}` : ""}`,
             url: "/",
             tag: "estimate-request",
           }),
