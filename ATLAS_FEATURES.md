@@ -48,5 +48,8 @@ Come back to these after the design look and style is settled.
 - Shopify $39 Done-For-You Setup offer.
 - Delete the "John Doe TEST" lead after Andre confirms the new text format.
 - Upgrade path from Instant Quote only to the full CRM (today Andre removes ui_prefs.mode in the database by hand).
-- Decide the Instant Quote price. Recommended: $147 one-time self-serve, $247 with done-for-you setup. Selling guide: Desktop Atlas Plan 06-Atlas-Instant-Quote-How-To-Sell.md. Ask before creating the Shopify product.
+- Instant Quote Shopify product is built as a DRAFT ($147 self-serve / $247 we set it up). Andre to review, then say go to publish. Hidden setup page (unpublished): atlas-instant-quote-setup. Selling guide: Desktop Atlas Plan 06-Atlas-Instant-Quote-How-To-Sell.md.
+- COME BACK TO: the customer walk-through (sit down with Andre and rehearse the 7 steps and the done-for-you process).
+- Sign-up link is open to anyone (free, no payment gate). Keep it off public pages; send it only after purchase. If it leaks, add an access code.
+- Atlas design look and sub-branding: still to discuss with Andre (the demo image uses the green Atlas look with a generic 'Your Business Name').
 - Andre does one real quote-only sign-up on the live site with a different email (local test passed; the browser tool cannot create real accounts).
