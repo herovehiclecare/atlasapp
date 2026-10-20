@@ -60,6 +60,7 @@ const SECTIONS = [
   { id: "integrations", label: "Integrations", Icon: Plug },
   { id: "taxes", label: "Taxes", Icon: Percent },
   { id: "employees", label: "Employees", Icon: UserCog },
+  { id: "team", label: "Team Logins", Icon: Users },
   { id: "hours", label: "Business Hours", Icon: Clock },
   { id: "notifications", label: "Notifications", Icon: Bell },
   { id: "automations", label: "Automations", Icon: MessageSquare },
@@ -1347,6 +1348,117 @@ function EmployeesPanel() {
   );
 }
 
+/* ---------------------------------- Team Logins ---------------------------------- */
+
+const ATLAS_APP_URL = "https://atlasapp-two.vercel.app";
+
+function TeamPanel() {
+  const { businessId, businessName } = useBusinessId();
+  const [members, setMembers] = useState([]);
+  const [invites, setInvites] = useState([]);
+  const [me, setMe] = useState("");
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState("");
+
+  const myRole = members.find((m) => m.user_id === me)?.role;
+  const isOwner = myRole === "owner";
+
+  async function load() {
+    if (!businessId) return;
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    setMe(user?.id || "");
+    const [m, i] = await Promise.all([
+      supabase.rpc("list_team", { target: businessId }),
+      supabase.from("team_invites").select("id, email, created_at").eq("business_id", businessId).is("accepted_at", null).order("created_at", { ascending: true }),
+    ]);
+    if (m.error) setError(m.error.message); else setMembers(m.data || []);
+    setInvites(i.data || []);
+    setLoading(false);
+  }
+  useEffect(() => { load(); }, [businessId]);
+
+  async function invite(e) {
+    e.preventDefault();
+    const clean = email.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(clean)) { setError("That email address doesn't look right."); return; }
+    if (members.some((m) => (m.email || "").toLowerCase() === clean)) { setError("That person already has a login."); return; }
+    setBusy(true); setError("");
+    const { error: insertError } = await supabase.from("team_invites").insert({ business_id: businessId, email: clean, role: "employee" });
+    setBusy(false);
+    if (insertError) { setError(insertError.code === "23505" ? "That email is already invited." : insertError.message); return; }
+    setEmail("");
+    load();
+  }
+  async function revoke(id) {
+    setInvites((l) => l.filter((x) => x.id !== id));
+    const { error: delError } = await supabase.from("team_invites").delete().eq("id", id);
+    if (delError) { setError(delError.message); load(); }
+  }
+  async function removeMember(userId) {
+    if (!window.confirm("Remove this person's access to Atlas?")) return;
+    const { error: delError } = await supabase.from("business_members").delete().eq("business_id", businessId).eq("user_id", userId);
+    if (delError) setError(delError.message);
+    load();
+  }
+  async function copyMessage(addr) {
+    const text = `Hi! I added you to ${businessName || "our business"} on Atlas.\n1) Open ${ATLAS_APP_URL}\n2) Tap "Create account" and use this exact email: ${addr}\n3) Tap the confirmation link Atlas emails you, then log in.\nYou'll land straight in our account.`;
+    try { await navigator.clipboard.writeText(text); setCopied(addr); setTimeout(() => setCopied(""), 2000); } catch { setError("Couldn't copy. Select and copy the steps manually."); }
+  }
+
+  const pill = { fontSize: 10.5, fontWeight: 700, borderRadius: 99, padding: "3px 8px" };
+  return (
+    <Panel title="Team Logins" sub="Give your staff their own login to Atlas. They see the same customers, leads and schedule as you.">
+      {error && <p style={{ fontSize: 12.5, color: P.danger, margin: "0 0 12px" }}>{error}</p>}
+      {loading ? (
+        <p style={{ fontSize: 13, color: P.textMuted }}>Loading…</p>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {members.map((m) => (
+            <Card key={m.user_id} style={{ padding: "12px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: P.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {m.email}{m.user_id === me ? " (you)" : ""}
+              </div>
+              <span style={{ ...pill, background: m.role === "owner" ? P.accentSoft : "rgba(91,184,255,0.13)", color: m.role === "owner" ? P.accent : "#5BB8FF" }}>{m.role === "owner" ? "Owner" : "Staff"}</span>
+              {isOwner && m.role !== "owner" && (
+                <button onClick={() => removeMember(m.user_id)} aria-label="Remove access" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", flexShrink: 0 }}><Trash2 size={15} /></button>
+              )}
+            </Card>
+          ))}
+          {invites.map((v) => (
+            <Card key={v.id} style={{ padding: "12px 14px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: P.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.email}</div>
+                <span style={{ ...pill, background: "rgba(245,166,35,0.14)", color: "#F5A623" }}>Invited</span>
+                {isOwner && <button onClick={() => revoke(v.id)} aria-label="Cancel invite" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", flexShrink: 0 }}><Trash2 size={15} /></button>}
+              </div>
+              <button onClick={() => copyMessage(v.email)} style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: `1px solid ${P.border}`, color: P.textSecondary, borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                {copied === v.email ? <><CheckIcon size={13} /> Copied</> : <><Copy size={13} /> Copy sign-up steps to send</>}
+              </button>
+            </Card>
+          ))}
+          {isOwner ? (
+            <form onSubmit={invite} style={{ display: "flex", gap: 8, marginTop: 6 }}>
+              <input type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Their email address" style={{ ...inputStyle, flex: 1 }} />
+              <button type="submit" disabled={busy || !email.trim()} style={{ display: "flex", alignItems: "center", gap: 6, background: P.accentSoft, border: `1px solid ${P.accent}`, color: P.accent, borderRadius: 9, padding: "0 14px", fontSize: 13, fontWeight: 700, cursor: busy || !email.trim() ? "default" : "pointer", opacity: busy || !email.trim() ? 0.6 : 1, whiteSpace: "nowrap" }}>
+                <Plus size={14} /> Invite
+              </button>
+            </form>
+          ) : (
+            <p style={{ fontSize: 12.5, color: P.textMuted, margin: "6px 0 0" }}>Only the owner can invite or remove people.</p>
+          )}
+          <p style={{ fontSize: 12, color: P.textMuted, margin: "6px 0 0", lineHeight: 1.5 }}>
+            After you invite someone, send them the sign-up steps. They create their account with that exact email and land in your Atlas. Staff can't change business settings.
+          </p>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 /* ---------------------------------- Business Hours ---------------------------------- */
 
 function HoursPanel() {
@@ -2038,7 +2150,7 @@ function InstantQuotePanel() {
 const PANELS = {
   profile: ProfilePanel, services: ServicesPanel, instantquote: InstantQuotePanel, booking: BookingPanel, page: PublicPagePanel,
   integrations: IntegrationsPanel, taxes: TaxesPanel,
-  employees: EmployeesPanel, hours: HoursPanel, notifications: NotificationsPanel, automations: AutomationsPanel, customize: CustomizePanel,
+  employees: EmployeesPanel, team: TeamPanel, hours: HoursPanel, notifications: NotificationsPanel, automations: AutomationsPanel, customize: CustomizePanel,
   account: AccountPanel,
 };
 
