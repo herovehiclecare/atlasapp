@@ -2305,9 +2305,9 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
                           <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>SUV/Truck - high</div><IqPrice value={s.suv?.[1]} onChange={(v) => setBand(i, "suv", 1, v)} placeholder="from" /></div>
                         </div>
                         <textarea value={s.desc || ""} onChange={(e) => setService(i, { desc: e.target.value })} placeholder="Short description customers see" rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", marginTop: 10 }} />
-                        {cfg.addons.some((a) => (a.name || "").trim()) && (
+                        {cfg.suggestOn !== false && cfg.addons.some((a) => (a.name || "").trim()) && (
                           <div style={{ marginTop: 12 }}>
-                            <div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 6 }}>Suggested add-ons (customers see these when they pick this service)</div>
+                            <div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 6 }}>Suggested add-ons (offered after the quote, when this service is picked)</div>
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
                               {cfg.addons.filter((a) => (a.name || "").trim()).map((a) => {
                                 const on = Array.isArray(s.suggest) && s.suggest.includes(a.name);
@@ -2411,6 +2411,13 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
       )}
 
       <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Add-ons (flat price)</div>
+      <Card style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: P.textPrimary }}>Suggest add-ons at the end of the quote</div>
+          <div style={{ fontSize: 11.5, color: P.textMuted, marginTop: 2, lineHeight: 1.45 }}>After a customer sees their price, a short "Want to add anything?" row offers the add-ons you pick for their service. Turn it off and the quote stays clean. Your picks are saved.</div>
+        </div>
+        <Toggle on={cfg.suggestOn !== false} onClick={() => touch({ ...cfg, suggestOn: cfg.suggestOn === false })} />
+      </Card>
       <Card style={{ padding: 0, overflow: "hidden" }}>
         <div onClick={() => toggleCat("__addons")} role="button" aria-expanded={isCatOpen("__addons")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 14px", cursor: "pointer" }}>
           <ChevronDown size={16} color={P.textMuted} style={{ transform: isCatOpen("__addons") ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s ease", flexShrink: 0 }} />

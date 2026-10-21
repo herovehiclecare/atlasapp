@@ -548,14 +548,20 @@ function accordion({ open, name, meta, metaHas, count, body, act, i, val, cls })
     </button>${open?`<div class="accbody">${body}</div>`:""}</div>`;
 }
 
-function suggestBlock(s,v,i,on,tp){
-  if(!on || tp || !Array.isArray(s.suggest)) return "";
-  const list = s.suggest.map(n=>CFG.addons.find(a=>a.name===n)).filter(Boolean);
-  if(!list.length) return "";
-  return `<div class="sugg"><span class="sugl">Goes well with this</span><div class="sugr">${list.map(a=>{
-    const p=v.addons.includes(a.name);
-    return `<button class="sg" aria-pressed="${p}" data-act="addon" data-i="${i}" data-v="${esc(a.name)}"><span class="sgp">${p?"✓":"+"}</span>${esc(a.name)} <b>+${money(a.price)}</b></button>`;
-  }).join("")}</div></div>`;
+function suggestEnd(){
+  if(state.other || CFG.suggestOn===false) return "";
+  const blocks=state.items.map((v,i)=>{
+    if(isType(v.size)) return "";
+    const names=[];
+    v.services.forEach(n=>{const s=(CFG.services||[]).find(x=>x.name===n); (s&&Array.isArray(s.suggest)?s.suggest:[]).forEach(a=>{ if(!names.includes(a)) names.push(a); }); });
+    const list=names.map(n=>CFG.addons.find(a=>a.name===n)).filter(Boolean);
+    if(!list.length) return "";
+    return (state.items.length>1?`<div class="vlabel">${esc(itemLabel(v,i))}</div>`:"")+`<div class="sugr">${list.map(a=>{
+      const p=v.addons.includes(a.name);
+      return `<button class="sg" aria-pressed="${p}" data-act="addon" data-i="${i}" data-v="${esc(a.name)}"><span class="sgp">${p?"✓":"+"}</span>${esc(a.name)} <b>+${money(a.price)}</b></button>`;
+    }).join("")}</div>`;
+  }).join("");
+  return blocks?`<div class="sugg"><span class="sugl">Want to add anything?</span>${blocks}</div>`:"";
 }
 
 function itemBlock(v,i){
@@ -586,7 +592,7 @@ function itemBlock(v,i){
       return `<button class="svc${(s.popular||s.special)?" hasflag":""}" aria-pressed="${on}" data-act="svc" data-i="${i}" data-v="${esc(s.name)}">
         ${flag}${pic}
         <span class="pkgtop"><span class="box">${CHECK}</span>
-        <span class="pkgmain"><span class="svcname">${esc(s.name)}</span><span class="svcprice">${p.open?"<small>from</small>"+money(p.low):(p.low===p.high?money(p.low):money(p.low)+"–"+money(p.high))}</span>${brief?`<span class="svcdesc">${esc(brief)}</span>`:""}${incl.length?`<span class="svcmore" data-act="info" data-i="${i}" data-v="${esc(s.name)}">${info?"Hide details":"What's included"} <span class="svcchev${info?" up":""}">▾</span></span>`:""}${info?`<span class="svcincl">${incl.map(x=>`<span class="svcli">${esc(x)}</span>`).join("")}<span class="svcwhy">${tp?"":"Price depends on your vehicle's size and condition. "}We confirm the final price after reviewing your request.</span></span>`:""}</span></span></button>${suggestBlock(s,v,i,on,tp)}`;
+        <span class="pkgmain"><span class="svcname">${esc(s.name)}</span><span class="svcprice">${p.open?"<small>from</small>"+money(p.low):(p.low===p.high?money(p.low):money(p.low)+"–"+money(p.high))}</span>${brief?`<span class="svcdesc">${esc(brief)}</span>`:""}${incl.length?`<span class="svcmore" data-act="info" data-i="${i}" data-v="${esc(s.name)}">${info?"Hide details":"What's included"} <span class="svcchev${info?" up":""}">▾</span></span>`:""}${info?`<span class="svcincl">${incl.map(x=>`<span class="svcli">${esc(x)}</span>`).join("")}<span class="svcwhy">${tp?"":"Price depends on your vehicle's size and condition. "}We confirm the final price after reviewing your request.</span></span>`:""}</span></span></button>`;
     }).join("");
     return accordion({ open, name:cat, count:ct.n||0,
       meta: ct.n ? totText(ct) : "from "+money(catFrom(v,cat)),
@@ -718,7 +724,7 @@ function formScreen(){
   ${picked?`<div class="acc on" style="padding:18px;margin-top:16px">
     <div class="secnum" style="margin:0 0 2px">What you're requesting</div>
     ${pickedSummary()}
-    <div class="pkt"><span>Estimated total</span><b>${totText(t)}</b></div></div>`:""}
+    <div class="pkt"><span>Estimated total</span><b>${totText(t)}</b></div></div>${suggestEnd()}`:""}
 
   ${state.sendError?`<div class="err" style="margin:14px 0 0">${esc(state.sendError)}</div>`:""}
   <div class="note"><b>${esc(c.disclaimerTitle)}</b> ${esc(B().name)} ${esc(c.disclaimer)}</div>
