@@ -10,7 +10,7 @@
     },
     {
       "source": "/e/:slug",
-      "destination": "/estimate/index.html"
+      "destination": "/api/estimate-page?slug=:slug"
     }
   ]
 }
