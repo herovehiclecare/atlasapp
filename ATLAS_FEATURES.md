@@ -85,3 +85,7 @@ Come back to these after the design look and style is settled.
 **Plain read:** per buyer the cost is tiny. Fixed cost to run it safely with paying buyers is about $45/month (Supabase Pro + Vercel Pro). That is covered by roughly one $147 sale a month. Rough capacity on Pro is hundreds of buyers before the limits matter (estimate, not measured).
 
 **To-Do before real volume:** upgrade Supabase to Pro (stops pausing) and confirm Vercel is on Pro. Not done yet, needs Andre's yes and his billing.
+
+## Troubleshooting and buyer support (2026-10-21)
+- Docs: `ATLAS_BUYER_LOOKUP.md` (look up a buyer in Supabase) and `ATLAS_TROUBLESHOOTING.md` (what fixes itself, common problems, gaps). Copies on Desktop Atlas Plan: 05-How-To-Look-Up-A-Buyer.md, 07-Troubleshooting-Guide.md.
+- To-do (needs Andre's go where noted): upgrade Supabase to Pro and confirm Vercel Pro (billing, needs yes); daily health check that pushes to Andre's phone if a quote page is down; failed-request alert to Andre; "Test my quote page" button in buyer Settings; banner nudging buyers to turn on phone notifications; admin page inside Atlas once there are real buyers; Andre signs up one real test account (delete later).
