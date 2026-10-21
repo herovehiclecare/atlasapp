@@ -2002,7 +2002,26 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
     if (!window.confirm("Remove this vehicle type and all of its services?")) return;
     touch({ ...cfg, types: (cfg.types || []).filter((t) => t.id !== id), services: cfg.services.filter((sv) => sv.type !== id) });
   }
-  function setAddon(i, patch) { touch({ ...cfg, addons: cfg.addons.map((a, idx) => (idx === i ? { ...a, ...patch } : a)) }); }
+  function setAddon(i, patch) {
+    const old = cfg.addons[i]?.name;
+    const renamed = patch.name !== undefined && old && patch.name !== old;
+    const services = renamed
+      ? cfg.services.map((s) => (Array.isArray(s.suggest) && s.suggest.includes(old) ? { ...s, suggest: s.suggest.map((n) => (n === old ? patch.name : n)) } : s))
+      : cfg.services;
+    touch({ ...cfg, services, addons: cfg.addons.map((a, idx) => (idx === i ? { ...a, ...patch } : a)) });
+  }
+  function removeAddon(i) {
+    const old = cfg.addons[i]?.name;
+    touch({
+      ...cfg,
+      services: cfg.services.map((s) => (Array.isArray(s.suggest) && s.suggest.includes(old) ? { ...s, suggest: s.suggest.filter((n) => n !== old) } : s)),
+      addons: cfg.addons.filter((_, idx) => idx !== i),
+    });
+  }
+  function toggleSuggest(i, name) {
+    const cur = Array.isArray(cfg.services[i].suggest) ? cfg.services[i].suggest : [];
+    setService(i, { suggest: cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name] });
+  }
 
   const isReg = (s) => !s.special && !s.type;
   const catNames: string[] = cfg ? [...new Set<string>(cfg.services.filter(isReg).map((s) => s.cat || ""))] : [];
@@ -2132,6 +2151,7 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
         name: s.name.trim(), cat: (s.cat || "").trim() || (s.type ? "Services" : ""), desc: s.desc || "",
         ...(s.special ? { special: true, until: s.until || "" } : {}),
         ...(s.type ? { type: s.type, pm: pmOf(s) } : {}),
+        ...(!s.type && !s.special && Array.isArray(s.suggest) && s.suggest.length ? { suggest: s.suggest } : {}),
         car: [Number(s.car[0]), s.car[1] == null ? null : Number(s.car[1])],
         suv: [s.suv?.[0] == null ? Number(s.car[0]) : Number(s.suv[0]), s.suv?.[1] == null ? null : Number(s.suv[1])],
       })),
@@ -2285,6 +2305,19 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
                           <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>SUV/Truck - high</div><IqPrice value={s.suv?.[1]} onChange={(v) => setBand(i, "suv", 1, v)} placeholder="from" /></div>
                         </div>
                         <textarea value={s.desc || ""} onChange={(e) => setService(i, { desc: e.target.value })} placeholder="Short description customers see" rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", marginTop: 10 }} />
+                        {cfg.addons.some((a) => (a.name || "").trim()) && (
+                          <div style={{ marginTop: 12 }}>
+                            <div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 6 }}>Suggested add-ons (customers see these when they pick this service)</div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                              {cfg.addons.filter((a) => (a.name || "").trim()).map((a) => {
+                                const on = Array.isArray(s.suggest) && s.suggest.includes(a.name);
+                                return (
+                                  <button key={a.name} onClick={() => toggleSuggest(i, a.name)} style={{ fontSize: 12, fontWeight: 600, padding: "6px 12px", borderRadius: 20, border: `1px solid ${on ? P.accent : P.border}`, background: on ? P.accentSoft : "transparent", color: on ? P.accent : P.textSecondary, cursor: "pointer" }}>{on ? "✓ " : "+ "}{a.name}</button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -2394,7 +2427,7 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
                   <input value={a.name} onChange={(e) => setAddon(i, { name: e.target.value })} placeholder="Add-on name" style={{ ...inputStyle, flex: 1, minWidth: 0, fontWeight: 700 }} />
                   <button onClick={() => moveAddon(i, -1)} disabled={i === 0} title="Move add-on up" style={arrowBtn(i > 0)}><ChevronUp size={18} /></button>
                   <button onClick={() => moveAddon(i, 1)} disabled={i === cfg.addons.length - 1} title="Move add-on down" style={arrowBtn(i < cfg.addons.length - 1)}><ChevronDown size={18} /></button>
-                  <button onClick={() => touch({ ...cfg, addons: cfg.addons.filter((_, idx) => idx !== i) })} title="Remove" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", padding: 2, display: "flex" }}><Trash2 size={15} /></button>
+                  <button onClick={() => removeAddon(i)} title="Remove" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", padding: 2, display: "flex" }}><Trash2 size={15} /></button>
                 </div>
                 <div style={{ width: 130 }}><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>Price</div><IqPrice value={a.price} onChange={(v) => setAddon(i, { price: v })} /></div>
                 <textarea value={a.desc || ""} onChange={(e) => setAddon(i, { desc: e.target.value })} placeholder="Full description customers see for this add-on" rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />

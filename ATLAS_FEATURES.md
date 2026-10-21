@@ -65,7 +65,7 @@ Come back to these after the design look and style is settled.
 
 ## Update 2026-10-21 (Instant Quote settings + sales page video)
 - Instant Quote settings: services now sit in closed category dropdowns (grouped by each service's category). Open one to rename it, edit/add/remove services, and move services or whole categories up and down. Add-ons are their own closed dropdown with up/down arrows. "Add category" creates a new one. Save errors open all categories so the problem service is visible. No data model change.
-- Not built yet: suggested add-ons per service (like Urable). Would need an add-on list per service plus an "also add?" prompt on the quote page.
+- Suggested add-ons per service (built 2026-10-21): in Settings > Instant Quote, each service has "Suggested add-ons" chips (pick from your add-on list). On the quote page, when a customer picks that service, a "Goes well with this" row of tap chips appears right under it. Tapping adds the add-on to the quote. Renaming or deleting an add-on updates the suggestions. Not shown for boat/RV/motorcycle services or specials.
 - Sales page mockup: business name centered, "Mobile service / Fully insured" pill removed; "See your quote in minutes" heading removed from How it works.
 - Walkthrough video: bigger captions (FontSize 19 bold) and zoomed website slides. Landscape video is still small on a portrait phone.
 - Rendering pitfall: mobile-width graphics must be rendered with shot4.mjs (mobile:false). shot3.mjs mobile emulation renders them at half scale.

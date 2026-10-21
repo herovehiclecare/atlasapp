@@ -548,6 +548,16 @@ function accordion({ open, name, meta, metaHas, count, body, act, i, val, cls })
     </button>${open?`<div class="accbody">${body}</div>`:""}</div>`;
 }
 
+function suggestBlock(s,v,i,on,tp){
+  if(!on || tp || !Array.isArray(s.suggest)) return "";
+  const list = s.suggest.map(n=>CFG.addons.find(a=>a.name===n)).filter(Boolean);
+  if(!list.length) return "";
+  return `<div class="sugg"><span class="sugl">Goes well with this</span><div class="sugr">${list.map(a=>{
+    const p=v.addons.includes(a.name);
+    return `<button class="sg" aria-pressed="${p}" data-act="addon" data-i="${i}" data-v="${esc(a.name)}"><span class="sgp">${p?"✓":"+"}</span>${esc(a.name)} <b>+${money(a.price)}</b></button>`;
+  }).join("")}</div></div>`;
+}
+
 function itemBlock(v,i){
   const multi = state.items.length>1, t = itemTotal(v), tp = isType(v.size);
   const half = CFG.fields.filter(f=>f.half), rest = CFG.fields.filter(f=>!f.half);
@@ -576,7 +586,7 @@ function itemBlock(v,i){
       return `<button class="svc${(s.popular||s.special)?" hasflag":""}" aria-pressed="${on}" data-act="svc" data-i="${i}" data-v="${esc(s.name)}">
         ${flag}${pic}
         <span class="pkgtop"><span class="box">${CHECK}</span>
-        <span class="pkgmain"><span class="svcname">${esc(s.name)}</span><span class="svcprice">${p.open?"<small>from</small>"+money(p.low):(p.low===p.high?money(p.low):money(p.low)+"–"+money(p.high))}</span>${brief?`<span class="svcdesc">${esc(brief)}</span>`:""}${incl.length?`<span class="svcmore" data-act="info" data-i="${i}" data-v="${esc(s.name)}">${info?"Hide details":"What's included"} <span class="svcchev${info?" up":""}">▾</span></span>`:""}${info?`<span class="svcincl">${incl.map(x=>`<span class="svcli">${esc(x)}</span>`).join("")}<span class="svcwhy">${tp?"":"Price depends on your vehicle's size and condition. "}We confirm the final price after reviewing your request.</span></span>`:""}</span></span></button>`;
+        <span class="pkgmain"><span class="svcname">${esc(s.name)}</span><span class="svcprice">${p.open?"<small>from</small>"+money(p.low):(p.low===p.high?money(p.low):money(p.low)+"–"+money(p.high))}</span>${brief?`<span class="svcdesc">${esc(brief)}</span>`:""}${incl.length?`<span class="svcmore" data-act="info" data-i="${i}" data-v="${esc(s.name)}">${info?"Hide details":"What's included"} <span class="svcchev${info?" up":""}">▾</span></span>`:""}${info?`<span class="svcincl">${incl.map(x=>`<span class="svcli">${esc(x)}</span>`).join("")}<span class="svcwhy">${tp?"":"Price depends on your vehicle's size and condition. "}We confirm the final price after reviewing your request.</span></span>`:""}</span></span></button>${suggestBlock(s,v,i,on,tp)}`;
     }).join("");
     return accordion({ open, name:cat, count:ct.n||0,
       meta: ct.n ? totText(ct) : "from "+money(catFrom(v,cat)),
