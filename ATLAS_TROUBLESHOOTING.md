@@ -63,7 +63,7 @@ No upgrade yet. Revisit when we start actively selling Instant Quote.
 **What "paused" means:** on the free plan, Supabase switches a project off after about 1 week with no activity. While off, every quote page and the Atlas app stop working until someone clicks Restore in the Supabase dashboard. Data is kept. It is not deleted.
 
 **Free workaround until we upgrade:** keep the project active. Detail Hero's live quote form on detailhero.net/get-a-quote probably does this by itself when people visit it, but that is not guaranteed in a slow week. Options, easiest first:
-1. A weekly phone reminder for Andre: open Atlas and the Detail Hero quote page (takes 30 seconds).
-2. An automatic daily ping: a scheduled job on Vercel that loads the quote page data. Small code change, Andre approves first.
+1. CHOSEN (Andre, 2026-10-21): two repeating weekly phone reminders (for example Monday and Thursday) to open Atlas and the Detail Hero quote page (30 seconds). Set on the iPhone Reminders app, because Atlas follow-ups do not repeat.
+2. NOT doing: an automatic daily ping (Andre said no). Revisit only if a reminder is ever missed.
 
 **If it ever pauses:** Supabase dashboard > project `fqggnekepfzxrkuazpiy` > Restore project. Wait a few minutes, then check the quote page loads.
