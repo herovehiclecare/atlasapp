@@ -70,3 +70,18 @@ Come back to these after the design look and style is settled.
 - Sales page mockup: business name centered, "Mobile service / Fully insured" pill removed; "See your quote in minutes" heading removed from How it works.
 - Walkthrough video: bigger captions (FontSize 19 bold) and zoomed website slides. Landscape video is still small on a portrait phone.
 - Rendering pitfall: mobile-width graphics must be rendered with shot4.mjs (mobile:false). shot3.mjs mobile emulation renders them at half scale.
+
+---
+
+## Hosting costs and why Instant Quote is worth the price (internal note, 2026-10-21)
+**Why it is not a "just ask AI to build it" job.** Instant Quote is hosted by us. Behind the form on a buyer's website there is a database for their prices and requests, a server that recalculates prices so customers can't change them, phone push alerts, a per-business quote link and settings, and ongoing hosting and fixes. A buyer who tried to build this alone would need to set up and pay for their own database, server and alerts. Our sales line: "We keep it running. You never host or fix anything." (Keep standalone copy to "one payment"; never mention a monthly fee.)
+
+**What it costs us (published pricing checked 2026-10-21, re-check before relying on it):**
+- Supabase (database, edge functions): our org is on the FREE plan. Free = 500 MB database, 50,000 monthly users, 500,000 function calls/month, but projects PAUSE after 1 week of no activity. Pro = $25/month: 8 GB, 2 million function calls, never pauses.
+- Vercel (website/app hosting): plan not confirmed in this check. The Hobby plan is for personal, non-commercial use only, so a selling business should be on Pro ($20/month, 1 TB transfer).
+- Our whole database today (Detail Hero CRM plus quote pages) is 14 MB with 1 business.
+- Phone push alerts: no per-alert fee. Email alerts (not used) would need a Resend account.
+
+**Plain read:** per buyer the cost is tiny. Fixed cost to run it safely with paying buyers is about $45/month (Supabase Pro + Vercel Pro). That is covered by roughly one $147 sale a month. Rough capacity on Pro is hundreds of buyers before the limits matter (estimate, not measured).
+
+**To-Do before real volume:** upgrade Supabase to Pro (stops pausing) and confirm Vercel is on Pro. Not done yet, needs Andre's yes and his billing.
