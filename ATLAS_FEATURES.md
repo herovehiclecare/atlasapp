@@ -62,3 +62,10 @@ Come back to these after the design look and style is settled.
 - 2026-10-21: Removed the red/yellow/green browser-window dots from ALL promo images and the walkthrough video (Andre: "a lot of AI sites use this, I don't want it anywhere"). RULE: never draw those dots on any graphic or video. Old unused files with dots were deleted. Sales page images/video cache-busted. Motorcycle/Boat/RV card now says owners can add their own vehicle types with their own services and prices.
 - 2026-10-21: LINK PREVIEW BRANDING LIVE. /e/<slug> is now served by api/estimate-page.js, which writes the business's own name, tagline, logo (og:image + icons) and theme colour into the page for iMessage/Slack/Facebook previews. Title reads "Get Your Quote — <Business Name>". Embeds (iframe, bare mode) unchanged. If a business has no logo uploaded, the preview shows just the title.
 - 2026-10-21: estimate-request edge function v16 DEPLOYED (Andre said yes): vehicle types (boat/RV/motorcycle) are now priced server-side. Not yet tested with a real typed lead; first real boat request should be checked in Requests (size shows the type name).
+
+## Update 2026-10-21 (Instant Quote settings + sales page video)
+- Instant Quote settings: services now sit in closed category dropdowns (grouped by each service's category). Open one to rename it, edit/add/remove services, and move services or whole categories up and down. Add-ons are their own closed dropdown with up/down arrows. "Add category" creates a new one. Save errors open all categories so the problem service is visible. No data model change.
+- Not built yet: suggested add-ons per service (like Urable). Would need an add-on list per service plus an "also add?" prompt on the quote page.
+- Sales page mockup: business name centered, "Mobile service / Fully insured" pill removed; "See your quote in minutes" heading removed from How it works.
+- Walkthrough video: bigger captions (FontSize 19 bold) and zoomed website slides. Landscape video is still small on a portrait phone.
+- Rendering pitfall: mobile-width graphics must be rendered with shot4.mjs (mobile:false). shot3.mjs mobile emulation renders them at half scale.
