@@ -449,7 +449,16 @@ function applyAppIdentity(){
 // ---------------------------------------------------------------- pricing
 // Condition decides where inside the business's own low-high band a job sits.
 // Frequency only ever lifts the top, so the floor can't drop below what they set.
+const typeList = () => Array.isArray(CFG.types) ? CFG.types.filter(t=>t && t.id && t.label) : [];
+const isType = id => !!id && typeList().some(t=>t.id===id);
+const svcsFor = v => CFG.services.filter(s=>(s.type||"") === (isType(v&&v.size) ? v.size : ""));
 function priceFor(svc, v){
+  if (svc.type) {
+    const b = svc.car || [0,null], lo = Number(b[0]) || 0;
+    if (b[1] == null || b[1] === "") return { low:lo, high:lo, open:true };
+    const hi = Number(b[1]) || lo;
+    return { low:Math.min(lo,hi), high:Math.max(lo,hi), open:false };
+  }
   const tier = v.size === "suv" ? "suv" : "car";
   const band = svc[tier] || [0,null];
   const low = Number(band[0]) || 0, rawHigh = band[1];
@@ -476,10 +485,10 @@ function applySpecials(){
 const isSpecialCat = cat => CFG.services.some(s=>s.special && s.cat===cat);
 const untilText = u => { const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(u||""); if(!m) return "";
   return new Date(+m[1],+m[2]-1,+m[3]).toLocaleDateString("en-US",{month:"short",day:"numeric"}); };
-const categories = () => [...new Set(CFG.services.map(s=>s.cat).filter(Boolean))];
+const categories = v => [...new Set(svcsFor(v).map(s=>s.cat).filter(Boolean))];
 function catTotal(v, cat){
   let low=0, high=0, n=0, open=false;
-  CFG.services.filter(s=>s.cat===cat).forEach(s=>{
+  svcsFor(v).filter(s=>s.cat===cat).forEach(s=>{
     if(!v.services.includes(s.name)) return;
     const p=priceFor(s,v); low+=p.low; high+=p.high; open=open||p.open; n++;
   });
@@ -492,7 +501,7 @@ function addonTotal(v){
 }
 function itemTotal(v){
   let low=0, high=0, open=false;
-  categories().forEach(c=>{ const t=catTotal(v,c); low+=t.low; high+=t.high; open=open||t.open; });
+  categories(v).forEach(c=>{ const t=catTotal(v,c); low+=t.low; high+=t.high; open=open||t.open; });
   const a=addonTotal(v); low+=a.low; high+=a.high;
   return { low, high, open };
 }
@@ -500,7 +509,7 @@ const grandTotal = () => state.items.reduce((a,v)=>{ const t=itemTotal(v);
   return { low:a.low+t.low, high:a.high+t.high, open:a.open||t.open }; }, {low:0,high:0,open:false});
 function rangeText(t){ if(!t.low && !t.high) return "—"; if(t.low===t.high) return money(t.low); return money(t.low)+" – "+money(t.high); }
 function totText(t){ if(!t.low && !t.high) return "—"; if(t.open && t.high<=t.low) return "from "+money(t.low); return rangeText(t)+(t.open?"+":""); }
-const catFrom = (v,cat) => { const r=CFG.services.filter(s=>s.cat===cat).map(s=>priceFor(s,v).low); return r.length?Math.min(...r):0; };
+const catFrom = (v,cat) => { const r=svcsFor(v).filter(s=>s.cat===cat).map(s=>priceFor(s,v).low); return r.length?Math.min(...r):0; };
 
 // ---------------------------------------------------------------- state
 function newItem(open){
@@ -540,7 +549,7 @@ function accordion({ open, name, meta, metaHas, count, body, act, i, val, cls })
 }
 
 function itemBlock(v,i){
-  const multi = state.items.length>1, t = itemTotal(v);
+  const multi = state.items.length>1, t = itemTotal(v), tp = isType(v.size);
   const half = CFG.fields.filter(f=>f.half), rest = CFG.fields.filter(f=>!f.half);
   const fieldInput = f => `<div class="field"><label class="f" for="${f.k}${v.id}">${esc(f.label)}</label>
     <input type="text" id="${f.k}${v.id}" ${f.numeric?'inputmode="numeric"':''}${f.max?` maxlength="${f.max}"`:''}
@@ -549,15 +558,15 @@ function itemBlock(v,i){
   const details = `
     ${half.length?`<div class="row">${half.map(fieldInput).join("")}</div>`:""}
     ${rest.map(fieldInput).join("")}
-    ${CFG.conditions.length?`<div class="field"><label class="f">${esc(CFG.conditionQ)}</label><div class="chips">${CFG.conditions.map(c=>`
+    ${CFG.conditions.length && !tp?`<div class="field"><label class="f">${esc(CFG.conditionQ)}</label><div class="chips">${CFG.conditions.map(c=>`
       <button class="chip" aria-pressed="${v.condition===c.id}" data-act="cond" data-i="${i}" data-v="${esc(c.id)}">${esc(c.label)}${c.hint?`<small>${esc(c.hint)}</small>`:""}</button>`).join("")}</div></div>`:""}
-    ${CFG.frequencies.length?`<div class="field" style="margin-bottom:0"><label class="f">${esc(CFG.frequencyQ)}</label><div class="chips">${CFG.frequencies.map(f=>`
+    ${CFG.frequencies.length && !tp?`<div class="field" style="margin-bottom:0"><label class="f">${esc(CFG.frequencyQ)}</label><div class="chips">${CFG.frequencies.map(f=>`
       <button class="chip" aria-pressed="${v.frequency===f.id}" data-act="freq" data-i="${i}" data-v="${esc(f.id)}">${esc(f.label)}</button>`).join("")}</div></div>`:""}
     ${multi?`<div style="text-align:right;margin-top:14px"><button class="remove" data-act="rmitem" data-i="${i}">Remove this ${esc(TRADES[CFG.trade]?.item||"item")}</button></div>`:""}`;
 
-  const cats = categories().map(cat=>{
+  const cats = categories(v).map(cat=>{
     const ct = catTotal(v,cat), open = v.openCats.includes(cat);
-    const body = CFG.services.filter(s=>s.cat===cat).map(s=>{
+    const body = svcsFor(v).filter(s=>s.cat===cat).map(s=>{
       const p=priceFor(s,v), on=v.services.includes(s.name);
       const incl=(Array.isArray(s.includes)?s.includes:[]).map(x=>String(x).trim()).filter(Boolean);
       const brief=s.desc || (incl.length?incl.slice(0,3).join(" · ")+(incl.length>3?" + "+(incl.length-3)+" more":""):"");
@@ -567,7 +576,7 @@ function itemBlock(v,i){
       return `<button class="svc${(s.popular||s.special)?" hasflag":""}" aria-pressed="${on}" data-act="svc" data-i="${i}" data-v="${esc(s.name)}">
         ${flag}${pic}
         <span class="pkgtop"><span class="box">${CHECK}</span>
-        <span class="pkgmain"><span class="svcname">${esc(s.name)}</span><span class="svcprice">${p.open?"<small>from</small>"+money(p.low):(p.low===p.high?money(p.low):money(p.low)+"–"+money(p.high))}</span>${brief?`<span class="svcdesc">${esc(brief)}</span>`:""}${incl.length?`<span class="svcmore" data-act="info" data-i="${i}" data-v="${esc(s.name)}">${info?"Hide details":"What's included"} <span class="svcchev${info?" up":""}">▾</span></span>`:""}${info?`<span class="svcincl">${incl.map(x=>`<span class="svcli">${esc(x)}</span>`).join("")}<span class="svcwhy">Price depends on your vehicle's size and condition. We confirm the final price after reviewing your request.</span></span>`:""}</span></span></button>`;
+        <span class="pkgmain"><span class="svcname">${esc(s.name)}</span><span class="svcprice">${p.open?"<small>from</small>"+money(p.low):(p.low===p.high?money(p.low):money(p.low)+"–"+money(p.high))}</span>${brief?`<span class="svcdesc">${esc(brief)}</span>`:""}${incl.length?`<span class="svcmore" data-act="info" data-i="${i}" data-v="${esc(s.name)}">${info?"Hide details":"What's included"} <span class="svcchev${info?" up":""}">▾</span></span>`:""}${info?`<span class="svcincl">${incl.map(x=>`<span class="svcli">${esc(x)}</span>`).join("")}<span class="svcwhy">${tp?"":"Price depends on your vehicle's size and condition. "}We confirm the final price after reviewing your request.</span></span>`:""}</span></span></button>`;
     }).join("");
     return accordion({ open, name:cat, count:ct.n||0,
       meta: ct.n ? totText(ct) : "from "+money(catFrom(v,cat)),
@@ -584,13 +593,18 @@ function itemBlock(v,i){
   }).join("");
 
   const veh = CFG.trade==="detailing";
-  const sizePick = CFG.sizes.length>1 ? `<div class="qhead" style="margin-top:${i?26:6}px">${veh?"What are you driving?":"Pick your size"}${multi?` <span style="color:var(--muted);font-weight:700;font-size:15px">· ${esc(itemLabel(v,i))}</span>`:""}</div>
+  const types = typeList(), coveredKinds = types.map(t=>t.label.trim().toLowerCase());
+  const sizePick = (CFG.sizes.length>1 || types.length) ? `<div class="qhead" style="margin-top:${i?26:6}px">${veh?"What are you driving?":"Pick your size"}${multi?` <span style="color:var(--muted);font-weight:700;font-size:15px">· ${esc(itemLabel(v,i))}</span>`:""}</div>
     <div class="vpick">${CFG.sizes.map((s,n)=>`
       <button class="vcard plain" aria-pressed="${v.size===s.id && !state.other}" data-act="size" data-i="${i}" data-v="${esc(s.id)}">
         <span><b>${esc(s.label)}</b>${s.hint?`<small>${esc(s.hint)}</small>`:""}</span></button>`).join("")}
-      ${veh && i===0 ? `<button class="vcard plain" style="grid-column:1/-1" aria-pressed="${state.other}" data-act="other"><span><b>Something Else</b><small>Motorcycle, Boat, RV</small></span></button>` : ""}</div>` : "";
+      ${types.map(t=>`
+      <button class="vcard plain" aria-pressed="${v.size===t.id && !state.other}" data-act="size" data-i="${i}" data-v="${esc(t.id)}">
+        <span><b>${esc(t.label)}</b>${t.hint?`<small>${esc(t.hint)}</small>`:""}</span></button>`).join("")}
+      ${veh && i===0 ? `<button class="vcard plain" style="grid-column:1/-1" aria-pressed="${state.other}" data-act="other"><span><b>Something Else</b><small>${esc(["Motorcycle","Boat","RV"].filter(k=>!coveredKinds.includes(k.toLowerCase())).join(", ")||"Anything not listed")}</small></span></button>` : ""}</div>` : "";
   const OTHER_KINDS = [["Motorcycle","Example: touring motorcycle, full detail and wax."],["Boat","Example: 24 ft boat, full detail and ceramic coating."],["RV","Example: 30 ft RV, exterior wash and wax."],["Something Else","Example: tell us what you have and what you need."]];
-  const kindPick = `<div class="vpick" style="margin-top:14px">${OTHER_KINDS.map(([k])=>`<button class="vcard plain" aria-pressed="${state.otherKind===k}" data-act="kind" data-v="${k}"><span><b>${k}</b></span></button>`).join("")}</div>`;
+  const otherKinds = OTHER_KINDS.filter(([k])=>!coveredKinds.includes(k.toLowerCase()));
+  const kindPick = `<div class="vpick" style="margin-top:14px">${otherKinds.map(([k])=>`<button class="vcard plain" aria-pressed="${state.otherKind===k}" data-act="kind" data-v="${k}"><span><b>${k}</b></span></button>`).join("")}</div>`;
   const kindPh = (OTHER_KINDS.find(x=>x[0]===state.otherKind)||[])[1] || "";
   const otherBox = state.otherKind ? `<div class="acc on" style="margin-top:14px;padding:18px"><div class="field" style="margin-bottom:0"><label class="f" for="copen">${state.otherKind==="Something Else"?"Tell us what you have and what you need":`What do you need done on your ${state.otherKind==="RV"?"RV":state.otherKind.toLowerCase()}?`}</label>
       <textarea id="copen" placeholder="${esc(kindPh)}" data-open="1">${esc(state.openReq)}</textarea>
@@ -604,7 +618,7 @@ function itemBlock(v,i){
     <div class="qhead">Choose your package</div>
     <p class="qsub">Tap a package to add it. Your price updates as you go.</p>
     ${cats}
-    ${CFG.addons.length?accordion({ open:v.openCats.includes("__addons"), name:"Add-Ons", count:at.n||0,
+    ${CFG.addons.length && !tp?accordion({ open:v.openCats.includes("__addons"), name:"Add-Ons", count:at.n||0,
       meta: at.n ? "+"+money(at.low) : "from "+money(Math.min(...CFG.addons.map(a=>Number(a.price)||0))),
       metaHas:!!at.n, body:addonBody, act:"togglecat", i, val:"__addons" }):""}`;
 }
@@ -635,7 +649,7 @@ function briefOf(s){
 function pickedSummary(){
   if (state.other) return "";
   return state.items.map((v,i)=>{
-    const rows=[...v.services.map(n=>{const s=CFG.services.find(x=>x.name===n); if(!s)return"";
+    const rows=[...v.services.map(n=>{const s=svcsFor(v).find(x=>x.name===n); if(!s)return"";
         const p=priceFor(s,v), incl=(Array.isArray(s.includes)?s.includes:[]).map(x=>String(x).trim()).filter(Boolean);
         return `<div class="pk"><div class="pkh"><span>${esc(n)}</span><b>${p.open?"from "+money(p.low):(p.low===p.high?money(p.low):money(p.low)+"–"+money(p.high))}</b></div>${s.desc?`<div class="pkd">${esc(s.desc)}</div>`:""}${incl.length?`<ul class="pkl">${incl.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:""}</div>`;}),
       ...v.addons.map(n=>{const a=CFG.addons.find(x=>x.name===n); if(!a)return"";
@@ -652,7 +666,7 @@ function stepsBar(picked){
 
 function formScreen(){
   const t = grandTotal(), picked = anyPicked(), c = CFG.copy;
-  const cond = CFG.conditions.find(x=>x.id===state.items[0]?.condition);
+  const cond = isType(state.items[0]?.size) ? null : CFG.conditions.find(x=>x.id===state.items[0]?.condition);
   return `
   <h1>${esc(c.headline)}</h1>
   ${c.sub?`<p class="lede">${esc(c.sub)}</p>`:""}
@@ -956,7 +970,9 @@ document.addEventListener("click", e=>{
   if(act==="togglecat"){ toggle(v.openCats,val); render(); return; }
   if(act==="togglecontact"){ state.contactOpen=!state.contactOpen; render(); return; }
   if(act==="toggleopen"){ state.openOpen=!state.openOpen; render(); return; }
-  if(act==="size"){ state.other=false; v.size=val; render(); return; }
+  if(act==="size"){ state.other=false;
+    if ((isType(v.size)?v.size:"") !== (isType(val)?val:"")) { v.services=[]; v.addons=[]; v.openCats=[]; }
+    v.size=val; render(); return; }
   if(act==="other"){ state.other=true; render(); return; }
   if(act==="kind"){ state.otherKind=val; render(); const el=document.getElementById("copen"); if(el) el.focus({preventScroll:true}); return; }
   if(act==="cond"){ v.condition=val; render(); return; }

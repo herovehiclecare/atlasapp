@@ -56,6 +56,14 @@ const ownerRange = (low: number, high: number) =>
 // Same maths as the page (app.js priceFor): condition picks the spot inside the business's own
 // low-high band; the timing question only ever lifts the top; a blank high means "from $X"; equal low and high is a flat price.
 function priceFor(svc: any, sizeId: string, cond: any, freq: any) {
+  // Vehicle-type services (boat, RV, motorcycle...) show the owner's price exactly as written.
+  if (svc.type) {
+    const b = svc.car || [0, null];
+    const lo = Number(b[0]) || 0;
+    if (b[1] == null || b[1] === "") return { low: lo, high: lo, open: true };
+    const hi = Number(b[1]) || lo;
+    return { low: Math.min(lo, hi), high: Math.max(lo, hi), open: false };
+  }
   const band = (sizeId === "suv" ? svc.suv : svc.car) || [0, null];
   const low = Number(band[0]) || 0;
   const rawHigh = band[1];
@@ -226,6 +234,7 @@ Deno.serve(async (req) => {
     const conditions: any[] = Array.isArray(cfg.conditions) ? cfg.conditions : [];
     const frequencies: any[] = Array.isArray(cfg.frequencies) ? cfg.frequencies : [];
     const sizes: any[] = Array.isArray(cfg.sizes) ? cfg.sizes : [];
+    const types: any[] = Array.isArray(cfg.types) ? cfg.types.filter((t: any) => t && t.id && t.label) : [];
     const fields: any[] = Array.isArray(cfg.fields) ? cfg.fields : [];
 
     const itemsIn = Array.isArray(body?.items) ? body.items.slice(0, MAX_ITEMS) : [];
@@ -236,13 +245,15 @@ Deno.serve(async (req) => {
     const itemsOut: any[] = [];
 
     for (const raw of itemsIn) {
-      const sizeId = sizes.find((s) => s.id === raw?.size)?.id ?? sizes[0]?.id ?? "car";
+      const typeHit = types.find((t) => t.id === raw?.size);
+      const typeId: string = typeHit ? typeHit.id : "";
+      const sizeId = typeHit ? typeHit.id : (sizes.find((s) => s.id === raw?.size)?.id ?? sizes[0]?.id ?? "car");
       const cond = conditions.find((c) => c.id === raw?.condition) ?? conditions[1] ?? conditions[0];
       const freq = frequencies.find((f) => f.id === raw?.frequency) ?? frequencies[1] ?? frequencies[0];
 
       const picked = (Array.isArray(raw?.services) ? raw.services : []).slice(0, MAX_PICKS)
-        .map((n: string) => services.find((s) => s.name === n)).filter(Boolean);
-      const pickedAddons = (Array.isArray(raw?.addons) ? raw.addons : []).slice(0, MAX_PICKS)
+        .map((n: string) => services.find((s) => s.name === n && (s.type || "") === typeId)).filter(Boolean);
+      const pickedAddons = typeId ? [] : (Array.isArray(raw?.addons) ? raw.addons : []).slice(0, MAX_PICKS)
         .map((n: string) => addons.find((a) => a.name === n)).filter(Boolean);
       if (!picked.length && !pickedAddons.length) continue;
 
@@ -251,7 +262,8 @@ Deno.serve(async (req) => {
         const v = clean(raw?.vals?.[f.k], 120);
         if (v) vals[f.label] = v;
       }
-      const label = Object.values(vals).join(" ") || "Job";
+      const baseLabel = Object.values(vals).join(" ") || "Job";
+      const label = typeHit ? (baseLabel === "Job" ? typeHit.label : `${typeHit.label} - ${baseLabel}`) : baseLabel;
 
       let iLow = 0;
       let iHigh = 0;
@@ -273,9 +285,9 @@ Deno.serve(async (req) => {
       itemsOut.push({
         label,
         details: vals,
-        size: sizes.find((s) => s.id === sizeId)?.label ?? sizeId,
-        condition: cond?.label ?? null,
-        timing: freq?.label ?? null,
+        size: typeHit ? typeHit.label : (sizes.find((s) => s.id === sizeId)?.label ?? sizeId),
+        condition: typeId ? null : (cond?.label ?? null),
+        timing: typeId ? null : (freq?.label ?? null),
         services: picked.map((s: any) => s.name),
         addons: pickedAddons.map((a: any) => a.name),
         low: iLow,

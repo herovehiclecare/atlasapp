@@ -1972,6 +1972,28 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
     band[pos] = v;
     setService(i, { [size]: band });
   }
+  const pmOf = (s) => s.pm || (s.car?.[1] == null ? "from" : s.car[0] === s.car[1] ? "fixed" : "range");
+  function setMode(i, m) {
+    const lo = cfg.services[i].car?.[0] ?? null;
+    const hi = cfg.services[i].car?.[1] ?? null;
+    setService(i, { pm: m, car: m === "range" ? [lo, hi === lo ? null : hi] : m === "fixed" ? [lo, lo] : [lo, null] });
+  }
+  function setTypedPrice(i, pos, v) {
+    const m = pmOf(cfg.services[i]);
+    if (m === "range") return setBand(i, "car", pos, v);
+    setService(i, { car: m === "fixed" ? [v, v] : [v, null] });
+  }
+  function setType(id, patch) { touch({ ...cfg, types: (cfg.types || []).map((t) => (t.id === id ? { ...t, ...patch } : t)) }); }
+  function addType(label) {
+    const base = "t_" + (label.toLowerCase().replace(/[^a-z0-9]+/g, "") || "type");
+    let id = base, n = 1;
+    while ((cfg.types || []).some((t) => t.id === id)) id = base + ++n;
+    touch({ ...cfg, types: [...(cfg.types || []), { id, label, hint: "" }], services: [...cfg.services, { name: "", cat: "Services", desc: "", car: [null, null], suv: [null, null], type: id, pm: "range" }] });
+  }
+  function removeType(id) {
+    if (!window.confirm("Remove this vehicle type and all of its services?")) return;
+    touch({ ...cfg, types: (cfg.types || []).filter((t) => t.id !== id), services: cfg.services.filter((sv) => sv.type !== id) });
+  }
   function setAddon(i, patch) { touch({ ...cfg, addons: cfg.addons.map((a, idx) => (idx === i ? { ...a, ...patch } : a)) }); }
 
   async function startSetup() {
@@ -2021,8 +2043,14 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
     setError("");
     const clean = slug.trim().toLowerCase();
     if (!IQ_SLUG_RE.test(clean)) { setError("Web address can only use letters, numbers and dashes (for example: my-detailing)."); return; }
-    const names = cfg.services.map((s) => (s.name || "").trim().toLowerCase());
-    if (names.some((n) => !n)) { setError("Every service needs a name."); return; }
+    const names = cfg.services.map((s) => `${s.type || ""}|${(s.name || "").trim().toLowerCase()}`);
+    if (cfg.services.some((s) => !(s.name || "").trim())) { setError("Every service needs a name."); return; }
+    const types = cfg.types || [];
+    const tl = types.map((t) => (t.label || "").trim().toLowerCase());
+    if (tl.some((l) => !l)) { setError("Give each vehicle type a name (example: Boat)."); return; }
+    if (new Set(tl).size !== tl.length) { setError("Two vehicle types have the same name. Make each one different."); return; }
+    if (types.some((t) => !cfg.services.some((s) => s.type === t.id))) { setError("Each vehicle type needs at least one service."); return; }
+    if (cfg.services.some((s) => s.type && pmOf(s) === "range" && (s.car?.[1] == null || Number(s.car[1]) < Number(s.car[0])))) { setError("Price range: add a high price that is at least the low price, or choose Fixed price or Starting at."); return; }
     if (new Set(names).size !== names.length) { setError("Two services have the same name. Make each one different."); return; }
     if (cfg.services.some((s) => s.car?.[0] == null)) { setError("Every service needs at least a starting price for a car."); return; }
     if (enabled && !cfg.services.length) { setError("Add at least one service before turning the page on."); return; }
@@ -2033,11 +2061,13 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
     const fixed = {
       ...cfg,
       services: cfg.services.map((s) => ({
-        name: s.name.trim(), cat: (s.cat || "").trim(), desc: s.desc || "",
+        name: s.name.trim(), cat: (s.cat || "").trim() || (s.type ? "Services" : ""), desc: s.desc || "",
         ...(s.special ? { special: true, until: s.until || "" } : {}),
+        ...(s.type ? { type: s.type, pm: pmOf(s) } : {}),
         car: [Number(s.car[0]), s.car[1] == null ? null : Number(s.car[1])],
         suv: [s.suv?.[0] == null ? Number(s.car[0]) : Number(s.suv[0]), s.suv?.[1] == null ? null : Number(s.suv[1])],
       })),
+      types: types.map((t) => ({ id: t.id, label: t.label.trim(), hint: (t.hint || "").trim() })),
       addons: cfg.addons.filter((a) => (a.name || "").trim()).map((a) => ({ name: a.name.trim(), price: Number(a.price) || 0, desc: (a.desc || "").trim() })),
     };
     setSaving(true);
@@ -2145,7 +2175,7 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
       <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "0 0 10px" }}>Services and price ranges</div>
       <p style={{ fontSize: 12, color: P.textSecondary, margin: "0 0 12px", lineHeight: 1.5 }}>Fill in a low and a high price. Cleaner vehicles quote near the low end, dirtier ones near the high end. Leave the high price blank and customers see "from $X".</p>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {cfg.services.map((s, i) => s.special ? null : (
+        {cfg.services.map((s, i) => s.special || s.type ? null : (
           <Card key={i} style={{ padding: 14 }}>
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <input value={s.name} onChange={(e) => setService(i, { name: e.target.value })} placeholder="Service name" style={{ ...inputStyle, fontWeight: 700, flex: 2, minWidth: 0 }} />
@@ -2162,6 +2192,49 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
           </Card>
         ))}
         <button onClick={() => touch({ ...cfg, services: [...cfg.services, { name: "", cat: "", desc: "", car: [null, null], suv: [null, null] }] })} style={ghostBtn}><Plus size={12} /> Add service</button>
+      </div>
+
+      <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Other vehicle types (boat, RV, motorcycle)</div>
+      <p style={{ fontSize: 12, color: P.textSecondary, margin: "0 0 12px", lineHeight: 1.5 }}>Do boats, RVs or motorcycles too? Add them here with their own services and prices. Each one becomes its own button on your quote page. Pick a price style for each service: a range, one fixed price, or "starting at".</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {(cfg.types || []).map((t) => (
+          <Card key={t.id} style={{ padding: 14, borderColor: P.accent }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <input value={t.label} onChange={(e) => setType(t.id, { label: e.target.value })} placeholder="Vehicle type (example: Boat)" style={{ ...inputStyle, fontWeight: 700, flex: 1, minWidth: 0 }} />
+              <input value={t.hint || ""} onChange={(e) => setType(t.id, { hint: e.target.value })} placeholder="Short note (example: Up to 40 ft)" style={{ ...inputStyle, flex: 1, minWidth: 0, color: P.textSecondary }} />
+              <button onClick={() => removeType(t.id)} title="Remove this vehicle type" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer" }}><Trash2 size={15} /></button>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {cfg.services.map((s, i) => s.type !== t.id ? null : (
+                <div key={i} style={{ border: `1px solid ${P.border}`, borderRadius: 10, padding: 12 }}>
+                  <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                    <input value={s.name} onChange={(e) => setService(i, { name: e.target.value })} placeholder="Service name" style={{ ...inputStyle, fontWeight: 700, flex: 2, minWidth: 0 }} />
+                    <input value={s.cat || ""} onChange={(e) => setService(i, { cat: e.target.value })} placeholder="Group" style={{ ...inputStyle, flex: 1, minWidth: 0, color: P.textSecondary }} />
+                    <button onClick={() => touch({ ...cfg, services: cfg.services.filter((_, idx) => idx !== i) })} title="Remove" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer" }}><Trash2 size={15} /></button>
+                  </div>
+                  <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
+                    {[["range", "Price range"], ["fixed", "Fixed price"], ["from", "Starting at"]].map(([m, l]) => (
+                      <button key={m} onClick={() => setMode(i, m)} style={{ fontSize: 12, fontWeight: 600, padding: "6px 12px", borderRadius: 20, border: `1px solid ${pmOf(s) === m ? P.accent : P.border}`, background: pmOf(s) === m ? P.accentSoft : "transparent", color: pmOf(s) === m ? P.accent : P.textSecondary, cursor: "pointer" }}>{l}</button>
+                    ))}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8 }}>
+                    <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>{pmOf(s) === "range" ? "Low price" : pmOf(s) === "fixed" ? "Price" : "Starting at"}</div><IqPrice value={s.car?.[0]} onChange={(v) => setTypedPrice(i, 0, v)} /></div>
+                    {pmOf(s) === "range" && <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>High price</div><IqPrice value={s.car?.[1]} onChange={(v) => setTypedPrice(i, 1, v)} /></div>}
+                  </div>
+                  <textarea value={s.desc || ""} onChange={(e) => setService(i, { desc: e.target.value })} placeholder="Short description customers see" rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", marginTop: 10 }} />
+                </div>
+              ))}
+              <button onClick={() => touch({ ...cfg, services: [...cfg.services, { name: "", cat: "Services", desc: "", car: [null, null], suv: [null, null], type: t.id, pm: "range" }] })} style={ghostBtn}><Plus size={12} /> Add {t.label || "vehicle"} service</button>
+            </div>
+          </Card>
+        ))}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 12, color: P.textMuted }}>Add a vehicle type:</span>
+          {["Motorcycle", "Boat", "RV"].filter((k) => !(cfg.types || []).some((t) => (t.label || "").trim().toLowerCase() === k.toLowerCase())).map((k) => (
+            <button key={k} onClick={() => addType(k)} style={ghostBtn}><Plus size={12} /> {k}</button>
+          ))}
+          <button onClick={() => addType("")} style={ghostBtn}><Plus size={12} /> Other</button>
+        </div>
       </div>
 
       <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Current specials</div>

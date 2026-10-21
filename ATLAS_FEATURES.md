@@ -9,6 +9,7 @@ Status: LIVE, BUILT (not yet switched on), PLANNED.
 - LIVE - Fixed-price services: a service with no range shows one exact price (no range, no "+"). Services with a range show the range.
 - LIVE - Customer's year / make / model captured on every request.
 - LIVE - "Something Else" tile (Motorcycle, Boat, RV) at the top of the quote page: tap it, pick Motorcycle / Boat / RV / Something Else, then describe the job. It arrives as a lead with no price, with the same phone alert and text.
+- LIVE - Vehicle types (Boat, RV, Motorcycle, anything): in Settings > Instant Quote the owner adds a type with its own services, descriptions and prices (a range, one fixed price, or "starting at"). Each type becomes its own tile on the quote page, with its own price list; boat-only or RV-only shops can run the whole page this way. Typed jobs skip the condition and timing questions and the car add-ons. "Something Else" stays as the catch-all for anything not covered. The server prices typed jobs from the owner's saved prices.
 - LIVE - Price groups (like Mobile Maintenance) start closed on the quote page; the customer taps to open.
 - LIVE - Current Specials on the quote page (off by default; the public accordion and the editor list both start closed): owner turns on "Show specials on my quote page" in Settings > Instant Quote, adds specials (name, description, price as a range or one flat price, optional end date). They show first under a "Current Specials" bar (title editable), same look as the other services with a "Special - ends <date>" tag, and disappear by themselves after the end date. Flat price (same low and high) is exact on the page and on the lead.
 - LIVE - Standalone Atlas Instant Quote (one-time purchase, quote page only): customer signs up at https://atlasapp-two.vercel.app/?signup=quote, enters business name (phone optional, shown on their page), edits the example prices, presses Copy website code, pastes it into their site. Edits later happen in the same screen and the site updates itself. Requests arrive as a phone notification (free) plus a Requests list; customers do NOT use Atlas's text number. The full CRM stays an optional upgrade.
@@ -44,7 +45,6 @@ Come back to these after the design look and style is settled.
 - Settings screen for the "popular" flag and service photos on the quote page.
 - Test Team Logins end to end with a real second login (invite, sign up, land in shop at right level).
 - Data-level lockdown: Manager/Staff are blocked in the app screens today. Later, also lock invoices/quotes at the database so a tech-savvy staffer can't read them through the API.
-- "Add a vehicle type" in Settings > Instant Quote: owner adds Boat, Motorcycle, RV and so on, each with its own services and low-high prices. Each becomes its own tile on the quote page; "Something Else" stays as the catch-all. Also makes the page work for other trades and shops (proposed by Andre; build after the design look and style is settled).
 - Messenger auto-reply set-up check in Meta Business Suite.
 - Shopify $39 Done-For-You Setup offer.
 - Delete the "John Doe TEST" lead after Andre confirms the new text format.
