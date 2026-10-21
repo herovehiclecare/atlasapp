@@ -1927,6 +1927,13 @@ function PhoneNotificationsCard({ businessId }) {
   );
 }
 
+function IqCatName({ value, onCommit, style }: { value: string; onCommit: (v: string) => void; style: any }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => { setDraft(value); }, [value]);
+  const commit = () => { const v = draft.trim(); if (!v) setDraft(value); else onCommit(v); };
+  return <input value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={commit} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} placeholder="Category name" style={style} />;
+}
+
 function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
   const { businessId } = useBusinessId();
   const [soloName, setSoloName] = useState("");
@@ -1943,6 +1950,7 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
   const [copied, setCopied] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [specialsOpen, setSpecialsOpen] = useState(false);
+  const [openCats, setOpenCats] = useState<string[]>([]);
   const logoRef = useRef(null);
 
   useEffect(() => {
@@ -1996,6 +2004,66 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
   }
   function setAddon(i, patch) { touch({ ...cfg, addons: cfg.addons.map((a, idx) => (idx === i ? { ...a, ...patch } : a)) }); }
 
+  const isReg = (s) => !s.special && !s.type;
+  const catNames: string[] = cfg ? [...new Set<string>(cfg.services.filter(isReg).map((s) => s.cat || ""))] : [];
+  const isCatOpen = (k: string) => openCats.includes("*") || openCats.includes(k);
+  function toggleCat(k: string) {
+    const all = [...catNames, "__addons"];
+    setOpenCats((cur) => {
+      const base = cur.includes("*") ? all : cur;
+      return base.includes(k) ? base.filter((x) => x !== k) : [...base, k];
+    });
+  }
+  function showAllCats() { setOpenCats(["*"]); }
+  function renameCat(oldName: string, nextName: string) {
+    if (nextName === oldName) return;
+    if (catNames.includes(nextName)) { setError("You already have a category with that name."); return; }
+    setError("");
+    touch({ ...cfg, services: cfg.services.map((s) => (isReg(s) && (s.cat || "") === oldName ? { ...s, cat: nextName } : s)) });
+    setOpenCats((cur) => cur.map((x) => (x === oldName ? nextName : x)));
+  }
+  function moveCat(name: string, dir: number) {
+    const order = [...catNames];
+    const a = order.indexOf(name), b = a + dir;
+    if (a < 0 || b < 0 || b >= order.length) return;
+    [order[a], order[b]] = [order[b], order[a]];
+    const regular = order.flatMap((g) => cfg.services.filter((s) => isReg(s) && (s.cat || "") === g));
+    touch({ ...cfg, services: [...regular, ...cfg.services.filter((s) => !isReg(s))] });
+  }
+  function removeCat(name: string) {
+    if (!window.confirm(`Remove the "${name || "Other services"}" category and every service in it?`)) return;
+    touch({ ...cfg, services: cfg.services.filter((s) => !(isReg(s) && (s.cat || "") === name)) });
+  }
+  function addCategory() {
+    let name = "New category", n = 1;
+    while (catNames.includes(name)) name = `New category ${++n}`;
+    touch({ ...cfg, services: [...cfg.services, { name: "", cat: name, desc: "", car: [null, null], suv: [null, null] }] });
+    setOpenCats((cur) => [...(cur.includes("*") ? [...catNames, "__addons"] : cur), name]);
+  }
+  function addServiceTo(cat: string) {
+    const lastIdx = cfg.services.reduce((acc, s, i) => (isReg(s) && (s.cat || "") === cat ? i : acc), -1);
+    const next = [...cfg.services];
+    next.splice(lastIdx + 1, 0, { name: "", cat, desc: "", car: [null, null], suv: [null, null] });
+    touch({ ...cfg, services: next });
+  }
+  function moveService(i: number, dir: number) {
+    const cat = cfg.services[i].cat || "";
+    let j = i + dir;
+    while (j >= 0 && j < cfg.services.length && !(isReg(cfg.services[j]) && (cfg.services[j].cat || "") === cat)) j += dir;
+    if (j < 0 || j >= cfg.services.length) return;
+    const next = [...cfg.services];
+    [next[i], next[j]] = [next[j], next[i]];
+    touch({ ...cfg, services: next });
+  }
+  function moveAddon(i: number, dir: number) {
+    const j = i + dir;
+    if (j < 0 || j >= cfg.addons.length) return;
+    const next = [...cfg.addons];
+    [next[i], next[j]] = [next[j], next[i]];
+    touch({ ...cfg, addons: next });
+  }
+  const arrowBtn = (enabled: boolean) => ({ background: "transparent", border: "none", color: enabled ? P.textSecondary : P.border, cursor: enabled ? "pointer" : "default", padding: 2, display: "flex" });
+
   async function startSetup() {
     setError("");
     const { data } = await supabase.from("services").select("name, category, description, price_car_low, price_car_high, price_suv_low, price_suv_high").eq("business_id", businessId).order("sort_order", { ascending: true });
@@ -2044,15 +2112,15 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
     const clean = slug.trim().toLowerCase();
     if (!IQ_SLUG_RE.test(clean)) { setError("Web address can only use letters, numbers and dashes (for example: my-detailing)."); return; }
     const names = cfg.services.map((s) => `${s.type || ""}|${(s.name || "").trim().toLowerCase()}`);
-    if (cfg.services.some((s) => !(s.name || "").trim())) { setError("Every service needs a name."); return; }
+    if (cfg.services.some((s) => !(s.name || "").trim())) { showAllCats(); setError("Every service needs a name."); return; }
     const types = cfg.types || [];
     const tl = types.map((t) => (t.label || "").trim().toLowerCase());
     if (tl.some((l) => !l)) { setError("Give each vehicle type a name (example: Boat)."); return; }
     if (new Set(tl).size !== tl.length) { setError("Two vehicle types have the same name. Make each one different."); return; }
     if (types.some((t) => !cfg.services.some((s) => s.type === t.id))) { setError("Each vehicle type needs at least one service."); return; }
-    if (cfg.services.some((s) => s.type && pmOf(s) === "range" && (s.car?.[1] == null || Number(s.car[1]) < Number(s.car[0])))) { setError("Price range: add a high price that is at least the low price, or choose Fixed price or Starting at."); return; }
-    if (new Set(names).size !== names.length) { setError("Two services have the same name. Make each one different."); return; }
-    if (cfg.services.some((s) => s.car?.[0] == null)) { setError("Every service needs at least a starting price for a car."); return; }
+    if (cfg.services.some((s) => s.type && pmOf(s) === "range" && (s.car?.[1] == null || Number(s.car[1]) < Number(s.car[0])))) { showAllCats(); setError("Price range: add a high price that is at least the low price, or choose Fixed price or Starting at."); return; }
+    if (new Set(names).size !== names.length) { showAllCats(); setError("Two services have the same name. Make each one different."); return; }
+    if (cfg.services.some((s) => s.car?.[0] == null)) { showAllCats(); setError("Every service needs at least a starting price for a car."); return; }
     if (enabled && !cfg.services.length) { setError("Add at least one service before turning the page on."); return; }
     if (cfg.alerts?.sms) {
       const digits = String(cfg.alerts.phone || "").replace(/\D/g, "");
@@ -2175,23 +2243,58 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
       <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "0 0 10px" }}>Services and price ranges</div>
       <p style={{ fontSize: 12, color: P.textSecondary, margin: "0 0 12px", lineHeight: 1.5 }}>Fill in a low and a high price. Cleaner vehicles quote near the low end, dirtier ones near the high end. Leave the high price blank and customers see "from $X".</p>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {cfg.services.map((s, i) => s.special || s.type ? null : (
-          <Card key={i} style={{ padding: 14 }}>
-            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-              <input value={s.name} onChange={(e) => setService(i, { name: e.target.value })} placeholder="Service name" style={{ ...inputStyle, fontWeight: 700, flex: 2, minWidth: 0 }} />
-              <input value={s.cat || ""} onChange={(e) => setService(i, { cat: e.target.value })} placeholder="Group" style={{ ...inputStyle, flex: 1, minWidth: 0, color: P.textSecondary }} />
-              <button onClick={() => touch({ ...cfg, services: cfg.services.filter((_, idx) => idx !== i) })} title="Remove" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer" }}><Trash2 size={15} /></button>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8 }}>
-              <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>Car - low</div><IqPrice value={s.car?.[0]} onChange={(v) => setBand(i, "car", 0, v)} /></div>
-              <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>Car - high</div><IqPrice value={s.car?.[1]} onChange={(v) => setBand(i, "car", 1, v)} placeholder="from" /></div>
-              <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>SUV/Truck - low</div><IqPrice value={s.suv?.[0]} onChange={(v) => setBand(i, "suv", 0, v)} /></div>
-              <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>SUV/Truck - high</div><IqPrice value={s.suv?.[1]} onChange={(v) => setBand(i, "suv", 1, v)} placeholder="from" /></div>
-            </div>
-            <textarea value={s.desc || ""} onChange={(e) => setService(i, { desc: e.target.value })} placeholder="Short description customers see" rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", marginTop: 10 }} />
-          </Card>
-        ))}
-        <button onClick={() => touch({ ...cfg, services: [...cfg.services, { name: "", cat: "", desc: "", car: [null, null], suv: [null, null] }] })} style={ghostBtn}><Plus size={12} /> Add service</button>
+        {catNames.map((cat, ci) => {
+          const open = isCatOpen(cat);
+          const idxs = cfg.services.map((s, i) => (isReg(s) && (s.cat || "") === cat ? i : -1)).filter((i) => i >= 0);
+          return (
+            <Card key={cat || "__none"} style={{ padding: 0, overflow: "hidden" }}>
+              <div onClick={() => toggleCat(cat)} role="button" aria-expanded={open} style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 14px", cursor: "pointer" }}>
+                <ChevronDown size={16} color={P.textMuted} style={{ transform: open ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s ease", flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: P.textPrimary, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cat || "Other services"}</div>
+                  <div style={{ fontSize: 11.5, color: P.textMuted, marginTop: 1 }}>{idxs.length} {idxs.length === 1 ? "service" : "services"}</div>
+                </div>
+                <div style={{ display: "flex", gap: 2 }} onClick={(e) => e.stopPropagation()}>
+                  <button onClick={() => moveCat(cat, -1)} disabled={ci === 0} title="Move category up" style={arrowBtn(ci > 0)}><ChevronUp size={18} /></button>
+                  <button onClick={() => moveCat(cat, 1)} disabled={ci === catNames.length - 1} title="Move category down" style={arrowBtn(ci < catNames.length - 1)}><ChevronDown size={18} /></button>
+                </div>
+              </div>
+              {open && (
+                <div style={{ padding: "0 14px 14px", display: "flex", flexDirection: "column", gap: 10, borderTop: `1px solid ${P.border}` }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-end", marginTop: 12 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>Category name</div>
+                      <IqCatName value={cat} onCommit={(v) => renameCat(cat, v)} style={{ ...inputStyle, fontWeight: 700 }} />
+                    </div>
+                    <button onClick={() => removeCat(cat)} title="Remove this category" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", padding: "10px 6px" }}><Trash2 size={15} /></button>
+                  </div>
+                  {idxs.map((i, k) => {
+                    const s = cfg.services[i];
+                    return (
+                      <div key={i} style={{ border: `1px solid ${P.border}`, borderRadius: 10, padding: 12 }}>
+                        <div style={{ display: "flex", gap: 6, marginBottom: 10, alignItems: "center" }}>
+                          <input value={s.name} onChange={(e) => setService(i, { name: e.target.value })} placeholder="Service name" style={{ ...inputStyle, fontWeight: 700, flex: 1, minWidth: 0 }} />
+                          <button onClick={() => moveService(i, -1)} disabled={k === 0} title="Move service up" style={arrowBtn(k > 0)}><ChevronUp size={18} /></button>
+                          <button onClick={() => moveService(i, 1)} disabled={k === idxs.length - 1} title="Move service down" style={arrowBtn(k < idxs.length - 1)}><ChevronDown size={18} /></button>
+                          <button onClick={() => touch({ ...cfg, services: cfg.services.filter((_, idx) => idx !== i) })} title="Remove" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", padding: 2, display: "flex" }}><Trash2 size={15} /></button>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 8 }}>
+                          <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>Car - low</div><IqPrice value={s.car?.[0]} onChange={(v) => setBand(i, "car", 0, v)} /></div>
+                          <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>Car - high</div><IqPrice value={s.car?.[1]} onChange={(v) => setBand(i, "car", 1, v)} placeholder="from" /></div>
+                          <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>SUV/Truck - low</div><IqPrice value={s.suv?.[0]} onChange={(v) => setBand(i, "suv", 0, v)} /></div>
+                          <div><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>SUV/Truck - high</div><IqPrice value={s.suv?.[1]} onChange={(v) => setBand(i, "suv", 1, v)} placeholder="from" /></div>
+                        </div>
+                        <textarea value={s.desc || ""} onChange={(e) => setService(i, { desc: e.target.value })} placeholder="Short description customers see" rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit", marginTop: 10 }} />
+                      </div>
+                    );
+                  })}
+                  <button onClick={() => addServiceTo(cat)} style={ghostBtn}><Plus size={12} /> Add service to {cat || "this category"}</button>
+                </div>
+              )}
+            </Card>
+          );
+        })}
+        <button onClick={addCategory} style={ghostBtn}><Plus size={12} /> Add category</button>
       </div>
 
       <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Other vehicle types (boat, RV, motorcycle)</div>
@@ -2275,19 +2378,32 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
       )}
 
       <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Add-ons (flat price)</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {cfg.addons.map((a, i) => (
-          <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input value={a.name} onChange={(e) => setAddon(i, { name: e.target.value })} placeholder="Add-on name" style={{ ...inputStyle, flex: 1, minWidth: 0 }} />
-              <div style={{ width: 110 }}><IqPrice value={a.price} onChange={(v) => setAddon(i, { price: v })} /></div>
-              <button onClick={() => touch({ ...cfg, addons: cfg.addons.filter((_, idx) => idx !== i) })} style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer" }}><Trash2 size={15} /></button>
-            </div>
-            <textarea value={a.desc || ""} onChange={(e) => setAddon(i, { desc: e.target.value })} placeholder="Full description customers see for this add-on" rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        <div onClick={() => toggleCat("__addons")} role="button" aria-expanded={isCatOpen("__addons")} style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 14px", cursor: "pointer" }}>
+          <ChevronDown size={16} color={P.textMuted} style={{ transform: isCatOpen("__addons") ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform 0.15s ease", flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: P.textPrimary }}>Add-ons</div>
+            <div style={{ fontSize: 11.5, color: P.textMuted, marginTop: 1 }}>{cfg.addons.length} {cfg.addons.length === 1 ? "add-on" : "add-ons"}</div>
           </div>
-        ))}
-        <button onClick={() => touch({ ...cfg, addons: [...cfg.addons, { name: "", price: null, desc: "" }] })} style={ghostBtn}><Plus size={12} /> Add add-on</button>
-      </div>
+        </div>
+        {isCatOpen("__addons") && (
+          <div style={{ padding: "12px 14px 14px", display: "flex", flexDirection: "column", gap: 10, borderTop: `1px solid ${P.border}` }}>
+            {cfg.addons.map((a, i) => (
+              <div key={i} style={{ border: `1px solid ${P.border}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <input value={a.name} onChange={(e) => setAddon(i, { name: e.target.value })} placeholder="Add-on name" style={{ ...inputStyle, flex: 1, minWidth: 0, fontWeight: 700 }} />
+                  <button onClick={() => moveAddon(i, -1)} disabled={i === 0} title="Move add-on up" style={arrowBtn(i > 0)}><ChevronUp size={18} /></button>
+                  <button onClick={() => moveAddon(i, 1)} disabled={i === cfg.addons.length - 1} title="Move add-on down" style={arrowBtn(i < cfg.addons.length - 1)}><ChevronDown size={18} /></button>
+                  <button onClick={() => touch({ ...cfg, addons: cfg.addons.filter((_, idx) => idx !== i) })} title="Remove" style={{ background: "transparent", border: "none", color: P.textMuted, cursor: "pointer", padding: 2, display: "flex" }}><Trash2 size={15} /></button>
+                </div>
+                <div style={{ width: 130 }}><div style={{ fontSize: 10.5, fontWeight: 600, color: P.textMuted, marginBottom: 4 }}>Price</div><IqPrice value={a.price} onChange={(v) => setAddon(i, { price: v })} /></div>
+                <textarea value={a.desc || ""} onChange={(e) => setAddon(i, { desc: e.target.value })} placeholder="Full description customers see for this add-on" rows={2} style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }} />
+              </div>
+            ))}
+            <button onClick={() => touch({ ...cfg, addons: [...cfg.addons, { name: "", price: null, desc: "" }] })} style={ghostBtn}><Plus size={12} /> Add add-on</button>
+          </div>
+        )}
+      </Card>
 
       <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Tell me about new requests</div>
       <PhoneNotificationsCard businessId={businessId} />
