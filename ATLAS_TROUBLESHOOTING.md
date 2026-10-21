@@ -50,3 +50,20 @@ Written 2026-10-21 from the real code. Pair it with `ATLAS_BUYER_LOOKUP.md` (how
 
 ## Rule of thumb
 Fix the cause for the one buyer first. If the same question comes up twice, add it to this sheet. If it comes up three times, build the automatic fix.
+
+## Decision: stay on the free plans for now (Andre, 2026-10-21)
+No upgrade yet. Revisit when we start actively selling Instant Quote.
+
+**Upgrade to Supabase Pro ($25/mo) and Vercel Pro ($20/mo) when any of these happen:**
+- The first real buyer pays (they are relying on the page being up).
+- A quote page ever goes down because the project paused.
+- The database nears 500 MB (it is 14 MB now) or function calls near 500,000 a month.
+- Vercel asks for a commercial plan (Hobby is non-commercial only).
+
+**What "paused" means:** on the free plan, Supabase switches a project off after about 1 week with no activity. While off, every quote page and the Atlas app stop working until someone clicks Restore in the Supabase dashboard. Data is kept. It is not deleted.
+
+**Free workaround until we upgrade:** keep the project active. Detail Hero's live quote form on detailhero.net/get-a-quote probably does this by itself when people visit it, but that is not guaranteed in a slow week. Options, easiest first:
+1. A weekly phone reminder for Andre: open Atlas and the Detail Hero quote page (takes 30 seconds).
+2. An automatic daily ping: a scheduled job on Vercel that loads the quote page data. Small code change, Andre approves first.
+
+**If it ever pauses:** Supabase dashboard > project `fqggnekepfzxrkuazpiy` > Restore project. Wait a few minutes, then check the quote page loads.
