@@ -4,13 +4,13 @@ import {
   LayoutGrid, Calendar, Users, Car, Receipt, Settings as SettingsIcon, Sparkles,
   MoreHorizontal, Pencil, Camera, Plus, Trash2, Building2, Tag, Percent,
   UserCog, Clock, Bell, SlidersHorizontal, ChevronRight, Lock, Eye, EyeOff,
-  CalendarCheck, Globe, Copy, Check as CheckIcon, Image as ImageIcon, Plug, Loader2, ExternalLink, X, AlertCircle, ListChecks, ChevronUp, ChevronDown, MessageSquare,
+  CalendarCheck, Globe, Copy, Check as CheckIcon, Image as ImageIcon, Plug, Loader2, ExternalLink, X, AlertCircle, ListChecks, ChevronUp, ChevronDown, MessageSquare, Send,
 } from "lucide-react";
 import { Inbox as LeadsIcon } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { useBusinessId } from "./useBusinessId";
 import { pushSupport, currentSubscription, enablePush, disablePush } from "./push";
-import { resizeImageToDataUrl, useLiveClock, formatDateTime } from "./lib";
+import { resizeImageToDataUrl, useLiveClock, formatDateTime, uploadImages } from "./lib";
 
 const P = {
   bg: "#06100C", bgTop: "#0B1813", surface: "#0F1B15", surfaceHover: "#132018",
@@ -1950,6 +1950,10 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
   const [copied, setCopied] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [specialsOpen, setSpecialsOpen] = useState(false);
+  const [baBefore, setBaBefore] = useState(null);
+  const [baAfter, setBaAfter] = useState(null);
+  const [baCaption, setBaCaption] = useState("");
+  const [baBusy, setBaBusy] = useState(false);
   const [openCats, setOpenCats] = useState<string[]>([]);
   const logoRef = useRef(null);
 
@@ -2171,6 +2175,24 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
 
   const link = slug ? `${window.location.origin}/e/${slug}` : "";
   const embed = link ? `<div class="atlas-quote-embed" style="max-width:600px;margin:0 auto;">\n  <iframe src="${link}" title="Get your quote" loading="lazy" scrolling="no" style="width:100%;height:820px;border:0;display:block;border-radius:18px;overflow:hidden;"></iframe>\n</div>\n<script>\n(function () {\n  var wrap = document.currentScript.previousElementSibling;\n  var frame = wrap && wrap.querySelector("iframe");\n  if (!frame) return;\n  window.addEventListener("message", function (e) {\n    var d = e.data;\n    if (!d || d.atlasEstimate !== "height") return;\n    if (frame.contentWindow && e.source !== frame.contentWindow) return;\n    var h = Number(d.height);\n    if (h > 0) frame.style.height = Math.max(520, Math.ceil(h)) + "px";\n  });\n})();\n</script>` : "";
+  // Opens the phone's share sheet (Messages, WhatsApp, email...). Falls back to a text message.
+  async function sendLink() {
+    const text = `Get your quote from ${biz?.name || "us"}: ${link}`;
+    try { if (navigator.share) { await navigator.share({ title: biz?.name || "Get your quote", text: `Get your quote from ${biz?.name || "us"}`, url: link }); return; } } catch (e) { if (e?.name === "AbortError") return; }
+    window.location.href = `sms:?&body=${encodeURIComponent(text)}`;
+  }
+
+  async function addBaPair() {
+    if (!baBefore || !baAfter || !businessId) return;
+    setBaBusy(true); setError("");
+    try {
+      const [b, a] = await uploadImages(supabase, "invoice-photos", `${businessId}/gallery`, [baBefore, baAfter]);
+      touch({ ...cfg, gallery: [...(cfg.gallery || []), { before: b, after: a, caption: baCaption.trim() }].slice(0, 8) });
+      setBaBefore(null); setBaAfter(null); setBaCaption("");
+    } catch (e) { setError("Could not upload those photos. Try smaller pictures."); }
+    setBaBusy(false);
+  }
+
   function copy(what, text) {
     navigator.clipboard?.writeText(text);
     setCopied(what);
@@ -2226,6 +2248,7 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button onClick={() => copy("embed", embed)} style={{ ...smallBtn, padding: "11px 16px", fontSize: 14 }}>{copied === "embed" ? <CheckIcon size={14} /> : <Copy size={14} />} {copied === "embed" ? "Copied" : "Copy website code"}</button>
               <button onClick={() => copy("link", link)} style={smallBtn}>{copied === "link" ? <CheckIcon size={13} /> : <Copy size={13} />} Copy link</button>
+              <button onClick={sendLink} style={smallBtn}><Send size={13} /> Send my link</button>
               <button onClick={() => setPreviewOpen(true)} style={smallBtn}><ExternalLink size={13} /> See my page</button>
             </div>
           ) : (
@@ -2252,6 +2275,7 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
         {!solo && link && !dirty && enabled && (
           <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
             <button onClick={() => copy("link", link)} style={smallBtn}>{copied === "link" ? <CheckIcon size={13} /> : <Copy size={13} />} Copy link</button>
+              <button onClick={sendLink} style={smallBtn}><Send size={13} /> Send my link</button>
             <button onClick={() => setPreviewOpen(true)} style={smallBtn}><ExternalLink size={13} /> Open page</button>
             <button onClick={() => copy("embed", embed)} style={smallBtn}>{copied === "embed" ? <CheckIcon size={13} /> : <Copy size={13} />} Copy website code</button>
           </div>
@@ -2409,6 +2433,29 @@ function InstantQuotePanel({ solo = false }: { solo?: boolean } = {}) {
           <button onClick={() => touch({ ...cfg, services: [...cfg.services, { name: "", cat: "", desc: "", car: [null, null], suv: [null, null], special: true, until: "" }] })} style={ghostBtn}><Plus size={12} /> Add special</button>
         </div>
       )}
+
+      <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Before &amp; After photos</div>
+      <Card style={{ padding: 16, marginBottom: 10, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ fontSize: 11.5, color: P.textMuted, lineHeight: 1.45 }}>Show customers your work. Each pair shows side by side under "Our work" near the bottom of your quote page. Up to 8 pairs.</div>
+        {(cfg.gallery || []).map((p, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, border: `1px solid ${P.border}`, borderRadius: 10, padding: 8 }}>
+            <img src={p.before} alt="Before" style={{ width: 64, height: 48, objectFit: "cover", borderRadius: 6 }} />
+            <img src={p.after} alt="After" style={{ width: 64, height: 48, objectFit: "cover", borderRadius: 6 }} />
+            <input value={p.caption || ""} onChange={(e) => touch({ ...cfg, gallery: cfg.gallery.map((g, j) => (j === i ? { ...g, caption: e.target.value } : g)) })} placeholder="Caption (optional)" style={{ ...inputStyle, flex: 1, minWidth: 0 }} />
+            <button onClick={() => touch({ ...cfg, gallery: cfg.gallery.filter((_, j) => j !== i) })} title="Remove pair" style={{ background: "transparent", border: "none", color: P.danger, cursor: "pointer", padding: 4 }}><Trash2 size={16} /></button>
+          </div>
+        ))}
+        {(cfg.gallery || []).length < 8 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <label style={{ ...ghostBtn, cursor: "pointer" }}>{baBefore ? "Before: " + baBefore.name.slice(0, 18) : "Choose before photo"}<input type="file" accept="image/*" onChange={(e) => setBaBefore(e.target.files?.[0] || null)} style={{ display: "none" }} /></label>
+              <label style={{ ...ghostBtn, cursor: "pointer" }}>{baAfter ? "After: " + baAfter.name.slice(0, 18) : "Choose after photo"}<input type="file" accept="image/*" onChange={(e) => setBaAfter(e.target.files?.[0] || null)} style={{ display: "none" }} /></label>
+            </div>
+            <input value={baCaption} onChange={(e) => setBaCaption(e.target.value)} placeholder="Caption (optional), example: Full detail on a 2021 Highlander" style={inputStyle} />
+            <button onClick={addBaPair} disabled={!baBefore || !baAfter || baBusy} style={{ ...smallBtn, alignSelf: "flex-start", opacity: !baBefore || !baAfter || baBusy ? 0.5 : 1 }}>{baBusy ? "Uploading…" : "Add this pair"}</button>
+          </div>
+        )}
+      </Card>
 
       <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: P.textMuted, margin: "24px 0 10px" }}>Add-ons (flat price)</div>
       <Card style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 12 }}>
@@ -2628,18 +2675,38 @@ function QuoteRequests() {
   const { businessId } = useBusinessId();
   const [rows, setRows] = useState<any[] | null>(null);
   const [err, setErr] = useState("");
+  const [fus, setFus] = useState<Record<string, any>>({});
   async function load() {
     if (!businessId) return;
     setErr("");
     const { data, error } = await supabase.from("customers").select("id, name, phone, email, address, created_at, lead_context").eq("business_id", businessId).eq("source", "estimate_request").order("created_at", { ascending: false }).limit(100);
-    if (error) setErr(error.message); else setRows(data || []);
+    if (error) { setErr(error.message); return; }
+    setRows(data || []);
+    // Open follow-ups for these requests (each new request makes one, due the day it came in).
+    const { data: f } = await supabase.from("follow_ups").select("id, due_date, status, customer_ids").eq("business_id", businessId).neq("status", "done").limit(300);
+    const map: Record<string, any> = {};
+    (f || []).forEach((x) => (x.customer_ids || []).forEach((cid) => { if (!map[cid] || (x.due_date || "") < (map[cid].due_date || "")) map[cid] = x; }));
+    setFus(map);
   }
+  const today = new Date().toLocaleDateString("en-CA");
+  const dayLabel = (d) => { if (!d) return ""; if (d < today) return "Overdue"; if (d === today) return "Today"; const t = new Date(); t.setDate(t.getDate() + 1); return d === t.toLocaleDateString("en-CA") ? "Tomorrow" : new Date(d + "T12:00").toLocaleDateString(undefined, { month: "short", day: "numeric" }); };
+  async function fuDone(fu) {
+    await supabase.from("follow_ups").update({ status: "done", completed_at: new Date().toISOString() }).eq("id", fu.id);
+    load();
+  }
+  async function fuLater(fu, days) {
+    const t = new Date(); t.setDate(t.getDate() + days);
+    await supabase.from("follow_ups").update({ due_date: t.toLocaleDateString("en-CA") }).eq("id", fu.id);
+    load();
+  }
+  const dueCount = Object.values(fus).filter((x: any) => x.due_date && x.due_date <= today).length;
   useEffect(() => { load(); }, [businessId]);
   const linkBtn = { fontSize: 12.5, fontWeight: 700, color: P.accent, textDecoration: "none", background: P.accentSoft, border: `1px solid ${P.accent}`, borderRadius: 9, padding: "7px 13px" };
   return (
-    <Panel title="Requests" sub="Everyone who sent a quote request from your website. You also get a text each time.">
+    <Panel title="Requests" sub="Everyone who sent a quote request from your website, with who to follow up with today.">
       <button onClick={load} style={{ background: "transparent", border: "none", color: P.textMuted, fontSize: 12, fontWeight: 600, cursor: "pointer", padding: 0, marginBottom: 12 }}>Refresh</button>
       {err && <p style={{ fontSize: 12.5, color: P.danger }}>{err}</p>}
+      {dueCount > 0 && <Card style={{ padding: "12px 14px", marginBottom: 12, border: `1px solid ${P.accent}` }}><div style={{ fontSize: 13.5, fontWeight: 700, color: P.accent }}>{dueCount} {dueCount === 1 ? "person is" : "people are"} due for a follow-up today</div><div style={{ fontSize: 12, color: P.textMuted, marginTop: 2 }}>Reach out, then tap Done. Not ready? Move it to tomorrow or 3 days.</div></Card>}
       {rows && !rows.length && <Card style={{ padding: 20 }}><p style={{ margin: 0, fontSize: 13, color: P.textSecondary, lineHeight: 1.5 }}>No requests yet. When someone sends one from your website, it shows up here and you get a text.</p></Card>}
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
         {(rows || []).map((r) => {
@@ -2652,6 +2719,7 @@ function QuoteRequests() {
                 <div style={{ fontSize: 11, color: P.textMuted, whiteSpace: "nowrap" }}>{new Date(r.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
               </div>
               {price && <div style={{ fontSize: 13, fontWeight: 600, color: P.accent, marginTop: 4 }}>{price}</div>}
+              {fus[r.id] && <div style={{ display: "inline-block", marginTop: 6, fontSize: 11, fontWeight: 700, borderRadius: 99, padding: "3px 9px", background: fus[r.id].due_date && fus[r.id].due_date <= today ? P.accentSoft : "transparent", color: fus[r.id].due_date && fus[r.id].due_date < today ? P.danger : P.accent, border: `1px solid ${P.border}` }}>Follow up: {dayLabel(fus[r.id].due_date) || "Anytime"}</div>}
               {a.requested_work && <div style={{ fontSize: 12.5, color: P.textSecondary, marginTop: 6, lineHeight: 1.5, whiteSpace: "pre-line" }}>{String(a.requested_work).split(" | ").join("\n")}</div>}
               {a.open_request && <div style={{ fontSize: 12.5, color: P.textSecondary, marginTop: 6, lineHeight: 1.5 }}>"{a.open_request}"</div>}
               {a.notes && <div style={{ fontSize: 12, color: P.textMuted, marginTop: 6 }}>Notes: {a.notes}</div>}
@@ -2660,6 +2728,9 @@ function QuoteRequests() {
                 {r.phone && <a href={`tel:${r.phone}`} style={linkBtn}>Call</a>}
                 {r.phone && <a href={`sms:${r.phone}`} style={linkBtn}>Text</a>}
                 {r.email && <a href={`mailto:${r.email}`} style={linkBtn}>Email</a>}
+                {fus[r.id] && <button onClick={() => fuDone(fus[r.id])} style={{ ...linkBtn, cursor: "pointer" }}>Done</button>}
+                {fus[r.id] && <button onClick={() => fuLater(fus[r.id], 1)} style={{ ...linkBtn, cursor: "pointer", background: "transparent" }}>Tomorrow</button>}
+                {fus[r.id] && <button onClick={() => fuLater(fus[r.id], 3)} style={{ ...linkBtn, cursor: "pointer", background: "transparent" }}>In 3 days</button>}
               </div>
             </Card>
           );

@@ -728,8 +728,20 @@ function formScreen(){
 
   ${state.sendError?`<div class="err" style="margin:14px 0 0">${esc(state.sendError)}</div>`:""}
   <div class="note"><b>${esc(c.disclaimerTitle)}</b> ${esc(B().name)} ${esc(c.disclaimer)}</div>
+  ${galleryBlock()}
   ${contactFooter()}
   <footer><span class="pwr">Powered by ${ATLASMARK} <b>Atlas</b></span></footer>`;
+}
+
+// Owner's before & after pairs. Only https images, so a bad config can't inject anything.
+function galleryBlock(){
+  const ok = u => /^https:\/\//i.test(u||"");
+  const g = (Array.isArray(CFG.gallery)?CFG.gallery:[]).filter(p=>ok(p.before)&&ok(p.after)).slice(0,8);
+  if(!g.length) return "";
+  return `<div class="qhead" style="margin-top:22px">Our work</div>
+  <div class="ba">${g.map(p=>`<figure class="bapair">
+    <div class="bapics"><span><img src="${esc(p.before)}" alt="Before" loading="lazy"><i>Before</i></span><span><img src="${esc(p.after)}" alt="After" loading="lazy"><i>After</i></span></div>
+    ${p.caption?`<figcaption>${esc(p.caption)}</figcaption>`:""}</figure>`).join("")}</div>`;
 }
 
 function doneScreen(){
